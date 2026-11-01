@@ -1,0 +1,10 @@
+# Third-party benchmark code (never committed)
+benchmarks/
+
+# Android packages
+*.apk
+
+# Build output
+build/
+.gradle/
+local.properties
