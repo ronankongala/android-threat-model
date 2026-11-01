@@ -170,14 +170,15 @@ CWE and MASVS titles are copied from `docs/threat-models/standards-reference.md`
 | OWASP MASVS v2 | MASVS-PLATFORM-1 | The app uses IPC mechanisms securely. | Verified | Direct. Both the sticky send and the unprotected receiver are IPC weaknesses. |
 | OWASP MASTG test | MASTG-TEST-0366 | Exported And Unprotected Broadcast Receivers That Expose Sensitive Functionality | Verified | Partial. Covers BenignPartner's unprotected receiver, not the sticky send in Benign. |
 | OWASP MASTG test | MASTG-TEST-0029 | Testing for Sensitive Functionality Exposure Through IPC | Verified | Partial. Deprecated, kept for reference only. |
-| OWASP MASWE | MASWE-0063 | Insecure Broadcast Receivers | Verified | Partial. Covers the receiver side only. Beta, ID may change. |
+| OWASP MASWE | MASWE-0032 | Insecure Intents | Verified | Direct. Benign `MainActivity.java` line 22 sends the phone number with `sendStickyBroadcast(i)`; the page names "using sticky broadcasts, which any app can read and replace" as insecure intent handling. Controls shown on the page: MASVS-PLATFORM-1, MASVS-STORAGE-2. |
+| OWASP MASWE | MASWE-0018 | Lack of Authentication or Authorization on App Components | Verified | Partial. Covers BenignPartner's `MyReceiver`, registered with no permission and declared `exported="true"` (BenignPartner manifest lines 21 to 23); the page also lists sticky broadcasts under "Over-Broad Data Grants". Partial because the root cause is the sticky send in Benign, which MASWE-0032 covers. Controls shown on the page: MASVS-AUTH-1, MASVS-PLATFORM-1, MASVS-STORAGE-2. |
 
 CWE-345 (Insufficient Verification of Data Authenticity) was considered and is DISCOURAGED in `standards-reference.md`, so it is not in the table.
 
 CWE-346 (Origin Validation Error), the child of CWE-345 between it and CWE-940, was removed from the table: for `MyReceiver` it says the same thing as CWE-940 in more general terms and adds nothing.
 
 Candidates to check (not in the table):
-- A MASWE or MASTG v2 entry that covers sensitive data sent in implicit or sticky broadcasts (the sender side). No ID has been verified.
+- A MASTG v2 test that covers sensitive data sent in implicit or sticky broadcasts (the sender side). No ID has been verified.
 
 MITRE ATT&CK for Mobile: No direct match. No technique on attack.mitre.org was verified that describes rewriting another app's sticky broadcast.
 
