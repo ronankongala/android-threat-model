@@ -21,3 +21,6 @@ tools/apktool.jar
 __pycache__/
 .pytest_cache/
 .venv/
+
+# Evaluation scratch output (tools/evaluate.py)
+data/eval-tmp/
