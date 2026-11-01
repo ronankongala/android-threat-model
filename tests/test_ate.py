@@ -4,6 +4,11 @@ Fixture: the api27 debug APK of the Benign app of
 ICC/DynamicRegBroadcastReceiver-UnrestrictedAccess-Lean, built during the smoke
 test (docs/notes/SETUP_LOG.md). The tests are skipped if that APK is missing.
 
+Layer 3 tests (call_graph.py, taint_analyzer.py) use the Benign apps of
+Storage/SQLlite-RawQuery-SQLInjection-Lean and
+Storage/InternalStorage-DirectoryTraversal-Lean, plus the smoke test fixture,
+whose receiver forwards an intent extra to startActivity.
+
 Layer 2 tests (code_analyzer.py) use the Benign api27 APK of the Ghera benchmark
 that exhibits each pattern (PATTERN_FIXTURES). A test is skipped when its APK
 has not been built.
@@ -20,9 +25,11 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, 'src'))
 
 import apk  # noqa: E402
+import call_graph  # noqa: E402
 import code_analyzer  # noqa: E402
 import report  # noqa: E402
 import surface  # noqa: E402
+import taint_analyzer  # noqa: E402
 
 APK_REL = os.path.join('app', 'build', 'outputs', 'apk', 'api27', 'debug', 'app-api27-debug.apk')
 
@@ -145,3 +152,34 @@ def test_surface_merges_code_findings(decode_dir):
     assert any(f['cwe'] == 'CWE-327' for f in merged)
     md = report.to_markdown(merged, 'ecb')
     assert 'Cipher;->getInstance' in md
+
+
+# Layer 3: data flow analysis
+
+TAINT_FIXTURES = {
+    'sqlite_rawquery': ('Storage/SQLlite-RawQuery-SQLInjection-Lean', 'CWE-89'),
+    'directory_traversal': ('Storage/InternalStorage-DirectoryTraversal-Lean', 'CWE-22'),
+    'receiver_extra_to_activity': ('ICC/DynamicRegBroadcastReceiver-UnrestrictedAccess-Lean', 'CWE-926'),
+}
+
+
+def test_call_graph_maps_callers_and_callees(decode_dir):
+    manifest = decode_dir(FIXTURE_APK)
+    graph, reverse = call_graph.build(manifest['decoded_dir'])
+    assert graph, 'empty call graph'
+    for caller, callees in graph.items():
+        for callee in callees:
+            assert caller in reverse[callee]
+
+
+@pytest.mark.parametrize('case', sorted(TAINT_FIXTURES))
+def test_taint_flow_detected(case, decode_dir):
+    bench, cwe = TAINT_FIXTURES[case]
+    manifest = decode_dir(ghera_apk(bench))
+    found = [f for f in taint_analyzer.analyze(manifest['decoded_dir']) if f['cwe'] == cwe]
+    assert found, 'no taint finding with %s' % cwe
+    f = found[0]
+    assert f['issue'] == 'taint-flow'
+    assert f['confidence'] in ('high', 'medium', 'low')
+    assert f['source_line'] and f['sink_line']
+    assert 'source L' in f['evidence'] and 'sink L' in f['evidence']
