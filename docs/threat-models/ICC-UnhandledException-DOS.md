@@ -145,14 +145,15 @@ CWE, MASVS, MASTG and MASWE titles are copied from `docs/threat-models/standards
 | CWE | CWE-476 | NULL Pointer Dereference | Verified | Direct. `getStringExtra("s2")` returns `null` for the Malicious intent and `MainActivity.java` line 29 calls `b.length()` on it. Usage ALLOWED. |
 | CWE | CWE-248 | Uncaught Exception | Verified | Direct. The `NullPointerException` from line 29 is not caught anywhere in `MainActivity.java`, so it ends the process. This is the README's framing ("do not handle unchecked exceptions"). Usage ALLOWED. |
 | OWASP MASVS v2 | MASVS-CODE-4 | The app validates and sanitizes all untrusted inputs. | Verified | Direct. The extras from another app are used without validation (`MainActivity.java` lines 27 to 29). |
-| OWASP MASVS v2 | MASVS-PLATFORM-1 | The app uses IPC mechanisms securely. | Verified | Partial. The input arrives through an intent from another app, but the fault is input handling, not the IPC mechanism. |
+| OWASP MASWE | MASWE-0050 | Unsafe Handling of Untrusted Data | Verified | Partial. The extras `s1` and `s2` from another app's intent reach `length()` without validation (`MainActivity.java` lines 27 to 29); the page names received intents as untrusted data and lists "Missing Validation at Trust Boundaries". Partial because the page's sinks are injection, path traversal and parsing flaws, while here the effect is a crash. Controls shown on the page: MASVS-CODE-4. |
 
 CWE-20 (Improper Input Validation) was considered and is DISCOURAGED in `standards-reference.md`, so it is not in the table; CWE-476 is the more specific entry used instead.
 
-OWASP MASTG test and OWASP MASWE: No direct match among the IDs in the reference file. MASTG-TEST-0364 and MASWE-0018 are about components that expose sensitive functionality without access control; here the exposed effect is a crash, and adding a permission is not the remedy (`MainActivity` is the launcher). The broadcast receiver test MASTG-TEST-0366 does not apply, since the benchmark has no receiver.
+MASVS-PLATFORM-1 is not in the table: the input arrives through an intent, but the weakness is input handling, not the IPC mechanism.
+
+OWASP MASTG test: No direct match among the IDs in the reference file. MASTG-TEST-0364 and MASWE-0018 are about components that expose sensitive functionality without access control; here the exposed effect is a crash, and adding a permission is not the remedy (`MainActivity` is the launcher). The broadcast receiver test MASTG-TEST-0366 does not apply, since the benchmark has no receiver.
 
 Candidates to check (not in the table):
-- MASWE-0050 (Unsafe Handling of Untrusted Data), listed on the MASWE index page. Not in the reference file.
 - CWE-395 for the Secure app's choice to catch `NullPointerException` instead of checking for `null` (section 9). Not in the reference file and not reviewed.
 
 MITRE ATT&CK for Mobile: No direct match. No technique on attack.mitre.org was verified that describes crashing another app through malformed intent extras.
