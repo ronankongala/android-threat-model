@@ -141,23 +141,26 @@ flowchart TD
 ## 7. Standards mapping
 
 Confidence values:
-- **Verified**: the ID and title were checked against the official page on 2026-10-31, and the mapping to this benchmark is direct.
-- **Needs check**: the ID or title could not be confirmed against the official page, or the mapping is indirect or debatable.
+- **Verified**: the ID and title were checked against the official page.
+- **Needs check**: the ID or title could not be confirmed against the official page.
 
-| Standard | ID | Title | Confidence |
-|----------|----|-------|------------|
-| CWE | CWE-925 | Improper Verification of Intent by Broadcast Receiver | Verified |
-| CWE | CWE-926 | Improper Export of Android Application Components | Verified |
-| CWE | CWE-927 | Use of Implicit Intent for Sensitive Communication (applies to Benign's own diagnostic broadcast, not the main exploit) | Verified |
-| OWASP MASVS v2 | MASVS-PLATFORM-1 | The app uses IPC mechanisms securely. | Needs check |
-| OWASP MASTG test | MASTG-TEST-0029 | Testing for Sensitive Functionality Exposure Through IPC | Verified |
-| OWASP MASTG test | MASTG-TEST-0366 | Exported And Unprotected Broadcast Receivers That Expose Sensitive Functionality | Needs check |
-| MITRE ATT&CK for Mobile | T1404 | Exploitation for Privilege Escalation | Needs check |
+Fit values:
+- **Direct**: the standard describes this benchmark's weakness or test as it is.
+- **Partial**: the standard covers part of this benchmark, or covers it only with a caveat given in the Fit cell.
 
-Notes:
-- MASVS-PLATFORM-1: the official control page could not be read, so neither the ID nor the title was confirmed.
-- MASTG-TEST-0366: the ID and title appear in the MASTG site navigation under MASVS-PLATFORM, but the test page itself was not read.
-- T1404: the ID and title are confirmed on attack.mitre.org. The mapping is debatable because the benchmark is a confused deputy (one app abusing another app's privileges), not an exploit that elevates privileges at the OS level.
+| Standard | ID | Title | Confidence | Fit |
+|----------|----|-------|------------|-----|
+| CWE | CWE-926 | Improper Export of Android Application Components | Verified | Direct. A dynamically registered receiver is exported by default. |
+| CWE | CWE-925 | Improper Verification of Intent by Broadcast Receiver | Verified | Partial. The official description is about receivers that trust system intents, while this receiver listens for a custom action. |
+| CWE | CWE-927 | Use of Implicit Intent for Sensitive Communication | Verified | Partial. Applies only to Benign's own diagnostic broadcast. |
+| OWASP MASVS v2 | MASVS-PLATFORM-1 | The app uses IPC mechanisms securely. | Verified | Direct |
+| OWASP MASTG test | MASTG-TEST-0366 | Exported And Unprotected Broadcast Receivers That Expose Sensitive Functionality | Verified | Direct. Primary test. |
+| OWASP MASTG test | MASTG-TEST-0029 | Testing for Sensitive Functionality Exposure Through IPC | Verified | Partial. Deprecated, superseded by MASTG v2 tests, kept for reference. |
+| OWASP MASWE | MASWE-0063 | Insecure Broadcast Receivers | Verified | Direct. Beta, ID may change. |
+
+MITRE ATT&CK for Mobile: no direct match. T1404 (Exploitation for Privilege Escalation) was considered and rejected because it covers exploitation of software vulnerabilities to gain higher privileges, mostly root exploits, while this is a confused deputy between two apps with no OS vulnerability.
+
+All IDs and titles were checked against the official pages on 2026-10-31.
 
 ## 8. Evidence
 
@@ -260,4 +263,3 @@ The fix blocks the benchmark exploit but leaves residual risk:
 
 - The README says the email is sent "when the user leaves the particular activity", but in the Lean code the broadcast is sent when the Send email button is tapped. The model follows the code.
 - On API 23 and later, the Secure app also needs a runtime grant of its own dangerous permission `edu.ksu.cs.perm` before its own broadcast reaches its receiver. Check whether the Secure app's Send email button still works on the `ghera27` emulator; the smoke test only checked the Malicious path.
-- Confirm MASVS-PLATFORM-1, MASTG-TEST-0366, and the T1404 mapping, then update their confidence.

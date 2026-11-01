@@ -104,17 +104,22 @@ flowchart TD
 ## 7. Standards mapping
 
 Confidence values:
-- **Verified**: the ID and title were checked against the official source, and the mapping to this benchmark is direct.
-- **Needs check**: the ID or title has not been confirmed against the official source, or the mapping is indirect or debatable.
+- **Verified**: the ID and title were checked against the official source.
+- **Needs check**: the ID or title has not been confirmed against the official source.
 
-Do not invent IDs. If no suitable ID is known, write "None identified".
+Fit values:
+- **Direct**: the standard describes this benchmark's weakness or test as it is.
+- **Partial**: the standard covers part of this benchmark, or covers it only with a caveat. Give the caveat in the Fit cell.
 
-| Standard | ID | Title | Confidence |
-|----------|----|-------|------------|
-| CWE | | | |
-| OWASP MASVS v2 | | | |
-| OWASP MASTG test | | | |
-| MITRE ATT&CK for Mobile | | | |
+Do not invent IDs. List a standard only if the fit is Direct or Partial. If nothing fits, write "No direct match" and explain why.
+
+| Standard | ID | Title | Confidence | Fit |
+|----------|----|-------|------------|-----|
+| CWE | | | | |
+| OWASP MASVS v2 | | | | |
+| OWASP MASTG test | | | | |
+| OWASP MASWE | | | | |
+| MITRE ATT&CK for Mobile | | | | |
 
 ## 8. Evidence
 
