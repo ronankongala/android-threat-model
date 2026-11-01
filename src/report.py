@@ -2,17 +2,20 @@
 
 write(findings, name, out_dir) creates
   <out_dir>/<name>-report.json   the findings list as JSON
-  <out_dir>/<name>-report.md     a table: Component, Type, Issue, CWE, Confidence
-and returns the two paths.
+  <out_dir>/<name>-report.md     a table: Component, Type, Issue, CWE, Confidence, Evidence
+and returns the two paths. Evidence is the line of code that triggered a code
+finding (blank for manifest findings).
 """
 import json
 import os
 
 COLUMNS = (('Component', 'component'), ('Type', 'component_type'), ('Issue', 'issue'),
-           ('CWE', 'cwe'), ('Confidence', 'confidence'))
+           ('CWE', 'cwe'), ('Confidence', 'confidence'), ('Evidence', 'evidence'))
 
 
 def _cell(value):
+    if value is None:
+        return ''
     return str(value).replace('|', '\\|').replace('\n', ' ')
 
 
@@ -24,7 +27,10 @@ def to_markdown(findings, name):
     lines.append('| ' + ' | '.join(h for h, _ in COLUMNS) + ' |')
     lines.append('|' + '|'.join('---' for _ in COLUMNS) + '|')
     for f in findings:
-        lines.append('| ' + ' | '.join(_cell(f.get(k, '')) for _, k in COLUMNS) + ' |')
+        cells = [_cell(f.get(k, '')) for _, k in COLUMNS]
+        if cells[-1]:
+            cells[-1] = '`%s`' % cells[-1].replace('`', "'")
+        lines.append('| ' + ' | '.join(cells) + ' |')
     return '\n'.join(lines) + '\n'
 
 

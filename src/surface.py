@@ -3,7 +3,7 @@
 find(apk) returns a list of findings, each a dict with:
   component, component_type, issue, cwe, confidence (high, medium or low)
 
-Rules read only the manifest dict, never decompiled code. Of the ten issue
+The rules in this file read only the manifest dict. Of the ten issue
 kinds in CWE below, four can be seen in a manifest and have rules here:
 
   exported-no-permission  exported component with no permission
@@ -17,11 +17,18 @@ kinds in CWE below, four can be seen in a manifest and have rules here:
 
 The other six (dynamic-receiver-no-permission, missing-certificate-validation,
 sql-no-parameterization, js-enabled-webview, hardcoded-key, weak-cipher) are
-properties of code, not of the manifest. They are listed so that later
-code-level rules report the same CWE, but no rule emits them yet.
+properties of code, not of the manifest. They are listed for their CWE IDs;
+the code rules in code_analyzer.py report these weaknesses under their own
+pattern names (for example ecb_mode for weak-cipher).
 
 CWE IDs are those used in docs/threat-models/ (see standards-reference.md).
+
+find(apk, decoded_dir) also runs the smali rules in code_analyzer.py on the
+apktool output folder and merges their findings with the manifest findings.
+Code findings carry extra keys (file, line, pattern, evidence). The merged list
+keeps one finding per (component, cwe): the one with the highest confidence.
 """
+import code_analyzer
 
 CWE = {
     'exported-no-permission': 'CWE-926',
@@ -115,8 +122,34 @@ def _cleartext(apk):
     return None
 
 
-def find(apk):
-    """Return the list of findings for the manifest dict `apk`."""
+def merge(*lists):
+    """Concatenate finding lists, keeping one finding per (component, cwe).
+
+    The finding with the highest confidence wins; on a tie the earlier one is
+    kept. Order follows the first appearance of each (component, cwe).
+    """
+    rank = {c: i for i, c in enumerate(CONFIDENCE)}
+    best = {}
+    for findings in lists:
+        for f in findings:
+            key = (f.get('component'), f.get('cwe'))
+            cur = best.get(key)
+            if cur is None or rank.get(f.get('confidence'), 99) < rank.get(cur.get('confidence'), 99):
+                best[key] = f
+    return list(best.values())
+
+
+def find(apk, decoded_dir=None):
+    """Return the findings for the manifest dict `apk`, plus code findings when
+    `decoded_dir` (or apk['decoded_dir']) names the apktool output folder."""
+    decoded_dir = decoded_dir or apk.get('decoded_dir')
+    findings = _manifest_findings(apk)
+    if decoded_dir:
+        findings = merge(findings, code_analyzer.analyze(decoded_dir))
+    return findings
+
+
+def _manifest_findings(apk):
     findings = []
     for comp in apk.get('components', []):
         for issue, rule in (('exported-no-permission', _exported_no_permission),

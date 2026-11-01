@@ -208,17 +208,27 @@ def parse_manifest(manifest_path, sdk=None):
     }
 
 
-def decode(apk_path):
-    """Decode `apk_path` into a temporary folder and return the manifest dict."""
+def decode(apk_path, workdir=None):
+    """Decode `apk_path` and return the manifest dict.
+
+    Without `workdir` the apktool output goes to a temporary folder that is
+    removed before returning. With `workdir`, apktool writes to
+    <workdir>/decoded, the folder is kept for code analysis (smali files), and
+    the manifest dict gets a 'decoded_dir' key; the caller removes it.
+    """
     if not os.path.isfile(apk_path):
         raise ApkError('APK not found: %s' % apk_path)
-    tmp = tempfile.mkdtemp(prefix='ate-')
+    tmp = workdir or tempfile.mkdtemp(prefix='ate-')
     out_dir = os.path.join(tmp, 'decoded')
     try:
         run_apktool(os.path.abspath(apk_path), out_dir)
         manifest = os.path.join(out_dir, 'AndroidManifest.xml')
         if not os.path.exists(manifest):
             raise ApkError('apktool wrote no AndroidManifest.xml')
-        return parse_manifest(manifest, _sdk_info(out_dir))
+        result = parse_manifest(manifest, _sdk_info(out_dir))
+        if workdir:
+            result['decoded_dir'] = out_dir
+        return result
     finally:
-        shutil.rmtree(tmp, ignore_errors=True)
+        if not workdir:
+            shutil.rmtree(tmp, ignore_errors=True)

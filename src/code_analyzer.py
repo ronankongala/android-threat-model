@@ -1,0 +1,675 @@
+"""Code level findings from the smali that apktool writes.
+
+analyze(decoded_dir) returns a list of findings, each a dict with:
+  component       dotted class name (inner classes keep the $)
+  component_type  always 'class'
+  file            smali path relative to decoded_dir, forward slashes
+  line            1-based line number in that file
+  pattern, issue  the pattern name (the two keys hold the same value)
+  cwe             CWE ID for the pattern (see PATTERNS)
+  confidence      high, medium or low
+  evidence        the smali line that triggered the finding, stripped
+
+Every smali* folder is read, but library classes (android/support/, androidx/,
+kotlin/, com/google/ and any class in an android.* package) are skipped so only
+the app's own code is analyzed.
+
+Each method (.method ... .end method) is read top to bottom with a simple
+register model: constant strings and ints, byte and char arrays made from
+literals (const-string then getBytes/toCharArray, fill-array-data, Base64.decode
+of a literal), string resources, static fields set once from a constant, Intent
+and StringBuilder objects, and values read from incoming intents. Branches are
+not followed, so the model is a heuristic. Methods whose parameters reach an
+IV, key or PBE sink get a summary, and a call that passes a constant into such a
+parameter reports the sink at medium confidence.
+
+Patterns:
+  ecb_mode                     Cipher.getInstance with ECB, or bare AES/DES/DESede
+  constant_iv                  IvParameterSpec built from a constant byte array
+  hardcoded_key                SecretKeySpec (or a seeded KeyGenerator) from a constant
+  hardcoded_key_pbe            PBEKeySpec with a constant salt (low when only the
+                               password is constant)
+  empty_trustmanager           X509TrustManager whose check*Trusted is empty
+  hostname_not_verified        HostnameVerifier.verify that returns true, or
+                               ALLOW_ALL_HOSTNAME_VERIFIER
+  insecure_ssl_socket_factory  SSLCertificateSocketFactory.getInsecure, or
+                               createSocket on an InetAddress (no hostname check)
+  js_enabled                   WebSettings.setJavaScriptEnabled(true)
+  webview_file_access          setAllowFileAccess* / setAllowUniversalAccess* (true)
+  sql_injection_raw            rawQuery/execSQL on a string built by concatenation
+  sql_injection_no_args        query/update/delete with a selection but null args
+  directory_traversal          file created from a name read from an intent
+  clipboard_sensitive          text from an input field put on the clipboard
+  dynamic_code_load            DexClassLoader / PathClassLoader created
+  sticky_broadcast             sendStickyBroadcast / sendStickyOrderedBroadcast
+  implicit_broadcast           sendBroadcast with an Intent that names no target
+  pending_intent_empty         PendingIntent wrapping an empty Intent
+  pending_intent_implicit      PendingIntent wrapping an Intent with only an action
+  no_validity_check            onReceive starts a component without checking the action
+  unique_ids                   device identifiers (IMEI, serial, ANDROID_ID)
+"""
+import os
+import re
+
+PATTERNS = {
+    'ecb_mode': 'CWE-327',
+    'constant_iv': 'CWE-329',
+    'hardcoded_key': 'CWE-321',
+    'hardcoded_key_pbe': 'CWE-760',
+    'empty_trustmanager': 'CWE-295',
+    'hostname_not_verified': 'CWE-297',
+    'insecure_ssl_socket_factory': 'CWE-295',
+    'js_enabled': 'CWE-749',
+    'webview_file_access': 'CWE-829',
+    'sql_injection_raw': 'CWE-89',
+    'sql_injection_no_args': 'CWE-89',
+    'directory_traversal': 'CWE-22',
+    'clipboard_sensitive': 'CWE-200',
+    'dynamic_code_load': 'CWE-494',
+    'sticky_broadcast': 'CWE-927',
+    'implicit_broadcast': 'CWE-927',
+    'pending_intent_empty': 'CWE-927',
+    'pending_intent_implicit': 'CWE-927',
+    'no_validity_check': 'CWE-925',
+    'unique_ids': 'CWE-359',
+}
+
+CONFIDENCE = ('high', 'medium', 'low')
+
+LIBRARY_PREFIXES = ('android/', 'androidx/', 'kotlin/', 'com/google/')
+PASSES = 3   # rounds for static fields and method summaries to settle
+
+INVOKE_RE = re.compile(r'^(invoke-\S+)\s+\{([^}]*)\},\s*(\S+)$')
+METHOD_REF_RE = re.compile(r'^(\S+?;)->([^(]+)\(([^)]*)\)(\S+)$')
+FIELD_REF_RE = re.compile(r'(\S+?;->[^:\s]+:\S+)')
+TYPE_RE = re.compile(r'\[*(?:L[^;]+;|[ZBSCIJFDV])')
+CONST_STRING_RE = re.compile(r'^const-string(?:/jumbo)?\s+(\w+),\s*"(.*)"$')
+FIELD_INIT_RE = re.compile(r'^\.field\s.*?([\w$]+):(\S+)\s*=\s*"(.*)"$')
+METHOD_DECL_RE = re.compile(r'^\.method\s+(.*?)([^\s(]+)\(([^)]*)\)(\S+)$')
+
+# Opcodes whose first register is read, not written.
+NO_DEST = ('if-', 'aput', 'iput', 'sput', 'return', 'throw', 'monitor-', 'goto',
+           'packed-switch', 'sparse-switch', 'fill-array-data', 'nop', 'check-cast')
+
+INTENT_EXPLICIT = ('setClass', 'setClassName', 'setComponent', 'setPackage', 'setSelector')
+CONTEXT_START = ('startService', 'startForegroundService', 'startActivity',
+                 'startActivities', 'startActivityForResult', 'bindService')
+TAINT_SOURCES = ('getStringExtra', 'getExtras', 'getExtra', 'getBundleExtra',
+                 'getCharSequenceExtra')
+SINK_KINDS = {'iv': 'constant_iv', 'key': 'hardcoded_key', 'pbe_salt': 'hardcoded_key_pbe',
+              'pbe_pass': 'hardcoded_key_pbe'}
+
+
+# ---------------------------------------------------------------- parsing
+
+def _is_library(rel):
+    return rel.startswith(LIBRARY_PREFIXES)
+
+
+def _class_files(decoded_dir):
+    for entry in sorted(os.listdir(decoded_dir)):
+        root = os.path.join(decoded_dir, entry)
+        if not entry.startswith('smali') or not os.path.isdir(root):
+            continue
+        for dirpath, _, files in os.walk(root):
+            for name in sorted(files):
+                if not name.endswith('.smali'):
+                    continue
+                path = os.path.join(dirpath, name)
+                if _is_library(os.path.relpath(path, root).replace(os.sep, '/')):
+                    continue
+                yield path
+
+
+def _dotted(descriptor):
+    return descriptor[1:-1].replace('/', '.') if descriptor.startswith('L') else descriptor
+
+
+def _types(desc):
+    return TYPE_RE.findall(desc)
+
+
+def _parse_class(path, decoded_dir):
+    with open(path, encoding='utf-8', errors='replace') as f:
+        lines = f.read().splitlines()
+    cls = {'file': os.path.relpath(path, decoded_dir).replace(os.sep, '/'),
+           'name': None, 'super': None, 'implements': [], 'field_inits': {}, 'methods': []}
+    method = None
+    for no, raw in enumerate(lines, 1):
+        text = raw.strip()
+        if method is not None:
+            if text == '.end method':
+                cls['methods'].append(method)
+                method = None
+            elif text and not text.startswith('#'):
+                method['body'].append((no, text))
+            continue
+        if text.startswith('.class '):
+            cls['name'] = text.split()[-1]
+        elif text.startswith('.super '):
+            cls['super'] = text.split()[-1]
+        elif text.startswith('.implements '):
+            cls['implements'].append(text.split()[-1])
+        elif text.startswith('.field '):
+            m = FIELD_INIT_RE.match(text)
+            if m and m.group(2) == 'Ljava/lang/String;' and ' static ' in text + ' ':
+                cls['field_inits']['%s->%s:%s' % (cls['name'], m.group(1), m.group(2))] = m.group(3)
+        elif text.startswith('.method '):
+            m = METHOD_DECL_RE.match(text)
+            if m:
+                method = {'name': m.group(2), 'desc': m.group(3), 'ret': m.group(4),
+                          'static': ' static ' in ' ' + m.group(1), 'line': no,
+                          'decl': text, 'body': []}
+    if cls['name'] and _is_library(cls['name'][1:]):
+        return None
+    return cls if cls['name'] else None
+
+
+def _regs(spec):
+    spec = spec.strip()
+    if not spec:
+        return []
+    if '..' in spec:
+        a, b = [s.strip() for s in spec.split('..')]
+        return ['%s%d' % (a[0], i) for i in range(int(a[1:]), int(b[1:]) + 1)]
+    return [r.strip() for r in spec.split(',')]
+
+
+def _int(token):
+    try:
+        return int(token, 0)
+    except ValueError:
+        return None
+
+
+def _code(body):
+    """Instructions only: no directives, labels or array/switch payload data."""
+    out, skip = [], False
+    for no, text in body:
+        if text.startswith(('.array-data', '.packed-switch', '.sparse-switch')):
+            skip = True
+            continue
+        if text.startswith('.end'):
+            skip = False
+            continue
+        if skip or text.startswith(('.', ':')):
+            continue
+        out.append((no, text))
+    return out
+
+
+# ---------------------------------------------------------------- values
+
+def _const_strength(v):
+    """'high' or 'medium' when v is a constant string or array, else None."""
+    if v and v[0] == 'str':
+        return v[2]
+    if v and v[0] == 'lit':
+        return v[1]
+    if v and v[0] == 'zero':   # new byte[n] never filled: all zeros
+        return 'medium'
+    return None
+
+
+def _is_null(v):
+    return v == ('int', 0)
+
+
+def _tainted(v, objs):
+    if not v:
+        return False
+    if v[0] == 'taint':
+        return True
+    if v[0] == 'concat':
+        return v[1]
+    if v[0] == 'obj':
+        return 'tainted' in objs[v[1]]['flags']
+    return False
+
+
+class _Method:
+    """Runs the register model over one method and reports what it sees."""
+
+    def __init__(self, ctx, cls, method):
+        self.ctx, self.cls, self.m = ctx, cls, method
+        self.regs, self.objs, self.last = {}, [], None
+        self.sig = '%s->%s(%s)%s' % (cls['name'], method['name'], method['desc'], method['ret'])
+        k = 0
+        if not method['static']:
+            self.regs['p0'] = ('this',)
+            k = 1
+        for t in _types(method['desc']):
+            self.regs['p%d' % k] = ('param', k)
+            k += 2 if t in ('J', 'D') else 1
+        self.seen = set()       # names of methods invoked so far
+        self.action_read = False
+        self.action_checked = False
+        self.arrays = {}        # label -> line of fill-array-data payload
+
+    def report(self, pattern, conf, no, text):
+        self.ctx.emit(self.cls, pattern, conf, no, text)
+
+    def new_obj(self, kind):
+        self.objs.append({'kind': kind, 'flags': set()})
+        return ('obj', len(self.objs) - 1)
+
+    def obj(self, v, kind=None):
+        if v and v[0] == 'obj' and (kind is None or self.objs[v[1]]['kind'] == kind):
+            return self.objs[v[1]]
+        return None
+
+    def run(self):
+        for no, text in _code(self.m['body']):
+            parts = text.split(None, 1)
+            op = parts[0]
+            rest = parts[1] if len(parts) > 1 else ''
+            if op.startswith('invoke-'):
+                m = INVOKE_RE.match(text)
+                if m:
+                    self.last = None
+                    self.invoke(no, text, _regs(m.group(2)), m.group(3))
+                continue
+            self.simple(no, text, op, rest)
+
+    def simple(self, no, text, op, rest):
+        ops = [o.strip() for o in rest.split(',')]
+        dest = ops[0] if ops else None
+        if op.startswith('move-result'):
+            self.regs[dest] = self.last
+            self.last = None
+        elif op.startswith('const-string'):
+            m = CONST_STRING_RE.match(text)
+            if m:
+                self.regs[m.group(1)] = ('str', m.group(2), 'high')
+        elif op.startswith('const') and not op.startswith('const-class'):
+            n = _int(ops[1]) if len(ops) > 1 else None
+            self.regs[dest] = ('int', n) if n is not None else None
+        elif op.startswith('move') and not op.startswith('move-exception'):
+            self.regs[dest] = self.regs.get(ops[1]) if len(ops) > 1 else None
+        elif op == 'new-array':
+            self.regs[dest] = ('zero', object())   # unique, so it can be found by identity
+        elif op == 'fill-array-data':
+            self.regs[dest] = ('lit', 'high')
+        elif op == 'new-instance':
+            t = ops[1] if len(ops) > 1 else ''
+            if t == 'Landroid/content/Intent;':
+                self.regs[dest] = self.new_obj('intent')
+            elif t in ('Ljava/lang/StringBuilder;', 'Ljava/lang/StringBuffer;'):
+                self.regs[dest] = self.new_obj('sb')
+            else:
+                self.regs[dest] = ('new', t)
+        elif op.startswith('sget'):
+            m = FIELD_REF_RE.search(rest)
+            ref = m.group(1) if m else ''
+            self.regs[dest] = self.ctx.fields.get(ref)
+            if ref.endswith('->ALLOW_ALL_HOSTNAME_VERIFIER:Lorg/apache/http/conn/ssl/X509HostnameVerifier;'):
+                self.report('hostname_not_verified', 'medium', no, text)
+        elif op.startswith('sput'):
+            m = FIELD_REF_RE.search(rest)
+            if m:
+                self.ctx.field_write(m.group(1), self.regs.get(dest), self.m['name'] == '<clinit>')
+        elif op.startswith(NO_DEST):
+            pass
+        elif dest:
+            self.regs[dest] = None
+
+    # -- invokes
+
+    def invoke(self, no, text, regs, ref):
+        m = METHOD_REF_RE.match(ref)
+        if not m:
+            return
+        owner, name, desc, ret = m.groups()
+        vals = [self.regs.get(r) for r in regs]
+        static = text.startswith('invoke-static')
+        types = _types(desc)
+        args, pos = [], 0 if static else 1     # one value per declared parameter
+        for t in types:
+            args.append(vals[pos] if pos < len(vals) else None)
+            pos += 2 if t in ('J', 'D') else 1
+        recv = None if static or not vals else vals[0]
+        self.crypto(no, text, owner, name, desc, args)
+        self.tls(no, text, owner, name, desc)
+        self.webview(no, text, owner, name, args)
+        self.sql(no, text, owner, name, types, args)
+        self.files(no, text, owner, name, types, args)
+        self.icc(no, text, owner, name, desc, args, recv)
+        self.misc(no, text, owner, name, args)
+        self.summaries(owner + '->' + name + '(' + desc + ')' + ret, vals)
+        self.flow(owner, name, desc, ret, args, recv, vals)
+        self.seen.add(name)
+
+    def flow(self, owner, name, desc, ret, args, recv, vals):
+        """Track values through the calls the patterns care about."""
+        if name == '<init>':
+            o = self.obj(recv, 'intent')
+            if o is not None:
+                if 'Ljava/lang/Class;' in desc or 'Landroid/content/ComponentName;' in desc:
+                    o['flags'].add('explicit')
+                elif desc.startswith('Landroid/content/Intent;'):
+                    o['flags'].add('unknown')
+                elif desc.startswith('Ljava/lang/String;'):
+                    o['flags'].add('action')
+            o = self.obj(recv, 'sb')
+            if o is not None and args:
+                o['flags'].add('appended')
+                if _tainted(args[0], self.objs):
+                    o['flags'].add('tainted')
+            if owner == 'Ljava/lang/String;' and args and recv and recv[0] == 'new':
+                if _const_strength(args[0]):
+                    self.set_reg_value(recv, ('str', None, _const_strength(args[0])))
+            return
+        if ret == 'V':
+            # Arrays handed to other code (SecureRandom.nextBytes and so on) may be filled.
+            for v in vals:
+                if v and v[0] == 'zero':
+                    self.mark_filled(v)
+            return
+        if owner == 'Ljava/lang/String;' and name in ('getBytes', 'toCharArray'):
+            if recv and recv[0] == 'str':
+                self.last = ('lit', recv[2])
+            elif recv and recv[0] in ('param', 'taint', 'concat'):
+                self.last = recv
+        elif owner == 'Landroid/util/Base64;' and name == 'decode' and args:
+            if args[0] and args[0][0] == 'str':
+                self.last = ('lit', args[0][2])
+        elif owner == 'Landroid/content/res/Resources;' and name == 'getString' and desc == 'I':
+            self.last = ('str', None, 'medium')
+        elif name in TAINT_SOURCES or (name == 'getString' and owner == 'Landroid/os/Bundle;'
+                                      and _tainted(recv, self.objs)):
+            self.last = ('taint',)
+        elif self.obj(recv, 'intent') is not None and ret == 'Landroid/content/Intent;':
+            o = self.obj(recv, 'intent')
+            if name in INTENT_EXPLICIT:
+                o['flags'].add('explicit')
+            elif name == 'setAction':
+                o['flags'].add('action')
+            elif name in ('setData', 'setDataAndType'):
+                o['flags'].add('action')
+            self.last = recv
+        elif self.obj(recv, 'sb') is not None and name in ('append', 'insert'):
+            o = self.obj(recv, 'sb')
+            o['flags'].add('appended')
+            if any(_tainted(a, self.objs) for a in args):
+                o['flags'].add('tainted')
+            self.last = recv
+        elif self.obj(recv, 'sb') is not None and name == 'toString':
+            o = self.obj(recv, 'sb')
+            self.last = ('concat', 'tainted' in o['flags'])
+        elif owner == 'Ljava/lang/String;' and name in ('concat', 'format'):
+            self.last = ('concat', any(_tainted(v, self.objs) for v in vals))
+        elif owner == 'Ljava/lang/String;' and name in ('trim', 'toString', 'valueOf') and vals:
+            self.last = vals[0] if vals[0] and vals[0][0] in ('str', 'taint', 'concat') else None
+
+    def set_reg_value(self, old, new):
+        for r, v in list(self.regs.items()):
+            if v is old:
+                self.regs[r] = new
+
+    def mark_filled(self, value):
+        for r, v in list(self.regs.items()):
+            if v is value:
+                self.regs[r] = None
+
+    # -- pattern checks
+
+    def sink(self, kind, conf_value, no, text, pbe_low=False):
+        """A constant reaching a sink is a finding; a parameter reaching it goes
+        into this method's summary."""
+        pattern = SINK_KINDS[kind]
+        strength = _const_strength(conf_value)
+        if strength:
+            self.report(pattern, 'low' if pbe_low else strength, no, text)
+        elif conf_value and conf_value[0] == 'param':
+            self.ctx.add_summary(self.sig, conf_value[1], kind, self.cls, no, text)
+
+    def crypto(self, no, text, owner, name, desc, args):
+        if owner == 'Ljavax/crypto/Cipher;' and name == 'getInstance' and args:
+            v = args[0]
+            if v and v[0] == 'str' and v[1] is not None:
+                algo = v[1].upper()
+                if 'ECB' in algo or algo in ('AES', 'DES', 'DESEDE'):
+                    self.report('ecb_mode', 'high', no, text)
+        elif owner == 'Ljavax/crypto/spec/IvParameterSpec;' and name == '<init>' and args:
+            self.sink('iv', args[0], no, text)
+        elif owner == 'Ljavax/crypto/spec/SecretKeySpec;' and name == '<init>' and args:
+            self.sink('key', args[0], no, text)
+        elif owner == 'Ljavax/crypto/spec/PBEKeySpec;' and name == '<init>' and args:
+            salt = args[1] if len(args) > 1 else None
+            if _const_strength(salt) or (salt and salt[0] == 'param'):
+                self.sink('pbe_salt', salt, no, text)
+            elif _const_strength(args[0]):
+                self.sink('pbe_pass', args[0], no, text, pbe_low=True)
+        elif owner == 'Ljava/security/SecureRandom;' and name in ('<init>', 'setSeed') \
+                and desc == '[B' and _const_strength(args[0]):
+            self.ctx.seeded.add(self.sig)
+        elif owner == 'Ljavax/crypto/KeyGenerator;' and name == 'init' and self.sig in self.ctx.seeded:
+            self.report('hardcoded_key', 'medium', no, text)
+
+    def tls(self, no, text, owner, name, desc):
+        if owner != 'Landroid/net/SSLCertificateSocketFactory;':
+            return
+        if name == 'getInsecure':
+            self.report('insecure_ssl_socket_factory', 'high', no, text)
+        elif name in ('createSocket', 'getSocket') and 'Ljava/net/InetAddress;' in desc:
+            self.report('insecure_ssl_socket_factory', 'medium', no, text)
+
+    def webview(self, no, text, owner, name, args):
+        if not owner.endswith('WebSettings;') or not args or args[0] != ('int', 1):
+            return
+        if name == 'setJavaScriptEnabled':
+            self.report('js_enabled', 'medium', no, text)
+        elif name == 'setAllowFileAccess':
+            self.report('webview_file_access', 'medium', no, text)
+        elif name in ('setAllowFileAccessFromFileURLs', 'setAllowUniversalAccessFromFileURLs'):
+            self.report('webview_file_access', 'high', no, text)
+
+    def sql(self, no, text, owner, name, types, args):
+        db = owner == 'Landroid/database/sqlite/SQLiteDatabase;'
+        if db and name in ('rawQuery', 'execSQL', 'rawQueryWithFactory'):
+            q = args[1] if name == 'rawQueryWithFactory' and len(args) > 1 else (args[0] if args else None)
+            if q and q[0] == 'concat':
+                self.report('sql_injection_raw', 'high', no, text)
+            elif 'append' in self.seen or 'concat' in self.seen:
+                self.report('sql_injection_raw', 'medium', no, text)
+            return
+        resolver = owner in ('Landroid/content/ContentResolver;', 'Landroid/content/ContentProviderClient;')
+        if not (db or resolver) or name not in ('query', 'update', 'delete', 'queryWithFactory'):
+            return
+        idx = [i for i in range(1, len(types))
+               if types[i] == '[Ljava/lang/String;' and types[i - 1] == 'Ljava/lang/String;']
+        if not idx or idx[-1] >= len(args):
+            return
+        i = idx[-1]
+        selection, sel_args = args[i - 1], args[i]
+        if _is_null(sel_args) and not _is_null(selection) and \
+                not (selection and selection[0] == 'str' and '?' in (selection[1] or '')):
+            self.report('sql_injection_no_args', 'medium', no, text)
+
+    def files(self, no, text, owner, name, types, args):
+        is_sink = (name == 'openFileOutput' or
+                   (owner == 'Ljava/io/File;' and name == '<init>') or
+                   (owner == 'Ljava/io/FileOutputStream;' and name == '<init>'
+                    and 'Ljava/lang/String;' in types))
+        if not is_sink:
+            return
+        names = [a for a, t in zip(args, types) if t == 'Ljava/lang/String;']
+        if not names:
+            return
+        if any(_tainted(a, self.objs) for a in names):
+            self.report('directory_traversal', 'high', no, text)
+        elif any(s in self.seen for s in TAINT_SOURCES) and \
+                not all(a and a[0] == 'str' for a in names):
+            self.report('directory_traversal', 'medium', no, text)
+
+    def icc(self, no, text, owner, name, desc, args, recv):
+        if name in ('sendStickyBroadcast', 'sendStickyOrderedBroadcast',
+                    'sendStickyBroadcastAsUser', 'sendStickyOrderedBroadcastAsUser'):
+            self.report('sticky_broadcast', 'high', no, text)
+        elif name in ('sendBroadcast', 'sendOrderedBroadcast', 'sendBroadcastAsUser') \
+                and 'LocalBroadcastManager' not in owner and args:
+            types = _types(desc)
+            perm = [a for a, t in zip(args, types) if t == 'Ljava/lang/String;']
+            if perm and perm[0] is not None and not _is_null(perm[0]):
+                return   # receiver permission given
+            o = self.obj(args[0], 'intent')
+            if o is not None:
+                if not o['flags'] & {'explicit', 'unknown'}:
+                    self.report('implicit_broadcast', 'medium', no, text)
+            elif not (self.seen & set(INTENT_EXPLICIT)) and not self.ctx_class_intent:
+                self.report('implicit_broadcast', 'medium', no, text)
+        elif owner == 'Landroid/app/PendingIntent;' and name in (
+                'getActivity', 'getBroadcast', 'getService', 'getForegroundService'):
+            intent = args[2] if len(args) > 2 else None
+            o = self.obj(intent, 'intent')
+            if o is not None:
+                flags = o['flags']
+                if flags & {'explicit', 'unknown'}:
+                    return
+                flag_arg = args[3] if len(args) > 3 else None
+                immutable = flag_arg and flag_arg[0] == 'int' and (flag_arg[1] or 0) & 0x4000000
+                if 'action' in flags and not immutable:
+                    self.report('pending_intent_implicit', 'medium', no, text)
+                else:
+                    self.report('pending_intent_empty', 'high', no, text)
+        elif name in CONTEXT_START and self.is_on_receive and not self.action_checked:
+            self.report('no_validity_check', 'medium', no, text)
+        if owner == 'Landroid/content/Intent;' and name == 'getAction':
+            self.action_read = True
+        elif self.action_read and owner == 'Ljava/lang/String;' and name in (
+                'equals', 'equalsIgnoreCase', 'contentEquals', 'hashCode', 'startsWith'):
+            self.action_checked = True
+
+    @property
+    def is_on_receive(self):
+        return self.m['name'] == 'onReceive' and \
+            self.m['desc'] == 'Landroid/content/Context;Landroid/content/Intent;'
+
+    @property
+    def ctx_class_intent(self):
+        return 'Landroid/content/Intent;-><init>(Landroid/content/Context;Ljava/lang/Class;)V' \
+            in self.ctx.method_text(self.m)
+
+    def misc(self, no, text, owner, name, args):
+        if owner.endswith('ClipboardManager;') and name == 'setPrimaryClip':
+            if 'getPassword' in self.seen or self.ctx.reads_input(self.m):
+                self.report('clipboard_sensitive', 'medium', no, text)
+        elif owner == 'Landroid/telephony/TelephonyManager;' and name in (
+                'getDeviceId', 'getImei', 'getMeid', 'getSimSerialNumber', 'getSubscriberId'):
+            self.report('unique_ids', 'high', no, text)
+        elif owner == 'Landroid/os/Build;' and name in ('getSerial', 'getSerialNumber'):
+            self.report('unique_ids', 'high', no, text)
+        elif owner == 'Landroid/provider/Settings$Secure;' and name == 'getString' \
+                and len(args) > 1 and args[1] and args[1][0] == 'str' and args[1][1] == 'android_id':
+            self.report('unique_ids', 'high', no, text)
+        elif owner in ('Ldalvik/system/DexClassLoader;', 'Ldalvik/system/PathClassLoader;',
+                       'Ldalvik/system/InMemoryDexClassLoader;') and name == '<init>':
+            self.report('dynamic_code_load', 'high', no, text)
+
+    def summaries(self, callee, vals):
+        for k, sinks in self.ctx.summary.get(callee, {}).items():
+            if k >= len(vals):
+                continue
+            v = vals[k]
+            for kind, cls, sno, stext in sinks:
+                if _const_strength(v):
+                    conf = 'low' if kind == 'pbe_pass' else 'medium'
+                    self.ctx.emit(cls, SINK_KINDS[kind], conf, sno, stext)
+                elif v and v[0] == 'param':
+                    self.ctx.add_summary(self.sig, v[1], kind, cls, sno, stext)
+
+
+class _Context:
+    """State shared across methods: constant static fields, summaries, findings."""
+
+    def __init__(self, classes):
+        self.classes = classes
+        self.fields = {}
+        for cls in classes:
+            for ref, value in cls['field_inits'].items():
+                self.fields[ref] = ('str', value, 'high')
+        self.writes = {}
+        self.summary = {}
+        self.seeded = set()
+        self.findings = {}
+
+    def field_write(self, ref, value, in_clinit):
+        const = value if value and value[0] in ('str', 'lit') and in_clinit else None
+        self.writes.setdefault(ref, []).append(const)
+
+    def settle_fields(self):
+        for ref, values in self.writes.items():
+            if all(values) and len({v[0] for v in values}) == 1:
+                self.fields[ref] = values[0]
+            else:
+                self.fields.pop(ref, None)
+        self.writes = {}
+
+    def add_summary(self, sig, k, kind, cls, no, text):
+        sinks = self.summary.setdefault(sig, {}).setdefault(k, [])
+        entry = (kind, cls, no, text)
+        if entry not in sinks:
+            sinks.append(entry)
+
+    @staticmethod
+    def method_text(method):
+        return '\n'.join(t for _, t in method['body'])
+
+    def reads_input(self, method):
+        body = self.method_text(method)
+        return 'EditText;->getText' in body or 'TextView;->getText' in body
+
+    def emit(self, cls, pattern, conf, no, text):
+        key = (cls['file'], no, pattern)
+        cur = self.findings.get(key)
+        if cur and CONFIDENCE.index(cur['confidence']) <= CONFIDENCE.index(conf):
+            return
+        self.findings[key] = {
+            'component': _dotted(cls['name']),
+            'component_type': 'class',
+            'file': cls['file'],
+            'line': no,
+            'pattern': pattern,
+            'issue': pattern,
+            'cwe': PATTERNS[pattern],
+            'confidence': conf,
+            'evidence': text,
+        }
+
+
+# ---------------------------------------------------------------- class rules
+
+def _only(method):
+    return [t for _, t in _code(method['body'])]
+
+
+def _class_rules(ctx, cls):
+    if 'Ljavax/net/ssl/X509TrustManager;' in cls['implements']:
+        for m in cls['methods']:
+            if m['name'] in ('checkServerTrusted', 'checkClientTrusted') and _only(m) == ['return-void']:
+                ctx.emit(cls, 'empty_trustmanager', 'high', m['line'], m['decl'])
+    if 'Ljavax/net/ssl/HostnameVerifier;' in cls['implements']:
+        for m in cls['methods']:
+            if m['name'] != 'verify' or m['ret'] != 'Z':
+                continue
+            code = _only(m)
+            if len(code) == 2 and code[0].startswith('const/4') and code[0].endswith('0x1') \
+                    and code[1].split()[0] == 'return' and code[1].split()[-1] == code[0].split()[1].rstrip(','):
+                ctx.emit(cls, 'hostname_not_verified', 'high', m['line'], m['decl'])
+
+
+# ---------------------------------------------------------------- entry point
+
+def analyze(decoded_dir):
+    """Return the code findings for the apktool output folder `decoded_dir`."""
+    classes = [c for c in (_parse_class(p, decoded_dir) for p in _class_files(decoded_dir)) if c]
+    ctx = _Context(classes)
+    for _ in range(PASSES):
+        ctx.findings = {}
+        for cls in classes:
+            for method in cls['methods']:
+                _Method(ctx, cls, method).run()
+        ctx.settle_fields()
+    for cls in classes:
+        _class_rules(ctx, cls)
+    return sorted(ctx.findings.values(), key=lambda f: (f['file'], f['line'], f['pattern']))
