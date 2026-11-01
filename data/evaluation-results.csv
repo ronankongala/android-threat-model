@@ -18,3 +18,15 @@ TaskAffinityAndReparenting-PhishingAndDoSAttack-Lean,ICC,1,1,0,1
 TaskAffinity-LauncherActivity-PhishingAttack-Lean,ICC,1,1,0,1
 TaskAffinity-PhishingAttack-Lean,ICC,2,2,0,1
 UnhandledException-DOS-Lean,ICC,1,1,0,1
+UnprotectedBroadcastRecv-PrivEscalation-Lean,ICC,4,3,1,1
+WeakChecksOnDynamicInvocation-DataInjection-Lean,ICC,3,2,0,1
+CheckValidity-InformationExposure-Lean,Networking,4,4,1,1
+IncorrectHostNameVerification-MITM-Lean,Networking,4,2,1,1
+InsecureSSLSocketFactory-MITM-Lean,Networking,4,2,1,1
+InsecureSSLSocket-MITM-Lean,Networking,4,3,1,1
+InvalidCertificateAuthority-MITM-Lean,Networking,4,2,1,1
+OpenSocket-InformationLeak-Lean,Networking,2,2,0,1
+UnEncryptedSocketComm-MITM-Lean,Networking,2,1,1,1
+UnpinnedCertificates-MITM-Lean,Networking,2,2,0,1
+MergeManifest-UnintendedBehavior-Lean,NonAPI,2,,1,0
+UnnecesaryPerms-PrivEscalation-Lean,Permission,2,2,1,1
