@@ -11,3 +11,4 @@ Rules:
 8. Open questions: list README vs code differences, and any Lean vs Fat differences.
 9. No em dashes. Commit one model per commit with the message "Add threat model: <benchmark name>". No Co-Authored-By trailer and no mention of Claude, Claude Code, or AI in commit messages, files, or comments.
 10. Do not touch anything under benchmarks/.
+11. After each batch, append any new benchmark issue to docs/notes/benchmark-issues.md.
