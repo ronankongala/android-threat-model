@@ -177,3 +177,237 @@ MITRE ATT&CK for Mobile: No direct match. No technique on attack.mitre.org was v
   - `Encrypt.java` lines 42 and 43 call `doFinal` twice and log the IV and ciphertext; Benign also logs the name and grade in plaintext (`AddStudent.java` lines 34 to 35).
   - Secure declares package `edu.ksu.cs.secure` but its `applicationId` is `edu.ksu.cs.benign` (`Secure/app/build.gradle` line 7); whether the Secure test's `edu.ksu.cs.benign:id/...` selectors resolve has not been checked.
 
+## Networking (8)
+
+### CheckValidity-InformationExposure-Lean
+- **Summary:** An app that uses a custom trust manager and does not check whether the server certificate is still within its validity period will connect to a server whose certificate has expired. Benign connects to such a server; Secure checks every certificate in the chain with `checkValidity()`.
+- **Android versions (from README):** "Tested on Android 5.1.1 - Android 8.1"
+- **What the code does:** `Benign/app/src/main/java/edu/ksu/cs/benign/MyTrustManager.java` lines 16 to 18 implement `checkServerTrusted()` with an empty body, so no certificate is checked at all. `Benign/app/src/main/java/edu/ksu/cs/benign/MyIntentService.java` lines 47 to 49 install that trust manager, lines 58 to 63 set a `HostnameVerifier` that always returns true, and lines 64 to 70 read `https://10.0.2.2:5000/test/` and show the response in `ResponseActivity`. `Secure/app/src/main/java/edu/ksu/cs/benign/MyTrustManager.java` lines 20 to 26 call `checkValidity()` on each certificate in the chain, and `Secure/app/src/main/java/edu/ksu/cs/benign/MyIntentService.java` lines 72 to 79 show "Expired certificate! SSL Handshake failed." when the handshake fails with a `CertificateExpiredException` cause.
+
+| Standard | ID | Title | Confidence | Fit |
+|----------|----|-------|------------|-----|
+| CWE | CWE-295 | Improper Certificate Validation | Verified | Direct. `Benign/app/src/main/java/edu/ksu/cs/benign/MyTrustManager.java` lines 16 to 18 leave `checkServerTrusted()` empty, so the expired certificate (and any other certificate) is accepted. Usage ALLOWED. |
+| CWE | CWE-297 | Improper Validation of Certificate with Host Mismatch | Verified | Partial. `Benign/app/src/main/java/edu/ksu/cs/benign/MyIntentService.java` lines 58 to 63 accept every host name. Partial because the README is about the validity period, and Secure keeps the same verifier (`Secure/app/src/main/java/edu/ksu/cs/benign/MyIntentService.java` lines 58 to 63). Usage ALLOWED. |
+| OWASP MASVS v2 | MASVS-NETWORK-1 | The app secures all network traffic according to the current best practices. | Verified | Direct. The TLS connection in `Benign/app/src/main/java/edu/ksu/cs/benign/MyIntentService.java` lines 47 to 57 uses a trust manager that validates nothing. |
+| OWASP MASWE | MASWE-0027 | Insecure Certificate Validation | Verified | Direct. `Benign/app/src/main/java/edu/ksu/cs/benign/MyTrustManager.java` lines 16 to 18 is where the app accepts the connection without the check (see the CWE-295 row); the page covers apps "accepting invalid, expired, self-signed, or untrusted certificates without appropriate verification". Controls shown on the page: MASVS-NETWORK-1. |
+
+CWE-200 (Exposure of Sensitive Information to an Unauthorized Actor) was considered because of the benchmark name and is DISCOURAGED in `standards-reference.md`, so it is not in the table; CWE-295 is used instead.
+
+No OWASP MASTG test in `standards-reference.md` fits: none of the tests in the file covers TLS certificate validation.
+
+MITRE ATT&CK for Mobile: No direct match. No technique on attack.mitre.org was verified that describes a server presenting an expired certificate to an app that does not check it.
+
+- **Candidates to check:**
+  - CWE-298 (Improper Validation of Certificate Expiration): the exact weakness the README describes; official page title and Usage ALLOWED read on 2026-11-01, not in the reference file.
+  - MASTG-TEST-0282 (Unsafe Custom Trust Evaluation): Android MASVS-NETWORK test on the MASTG index page that targets custom `X509TrustManager` code like `MyTrustManager.java`; not in the reference file.
+- **Evidence plan:** On ghera27 (API 27, inside the README range), start `python index_https_expired.py` from `../../Misc/LocalServer` (the `keyExpired` certificate, as in `source-script.sh` line 3), run `./gradlew installApi27Debug` in `Benign` and then in `Secure`, launch each app and check that Benign shows "Response From Server:" and Secure shows "Expired certificate! SSL Handshake failed." as asserted in `Testing/benign_app/src/androidTest/java/edu/ksu/cs/benign/Tests.java` line 70 and `Testing/secure_app/src/androidTest/java/edu/ksu/cs/secure/Tests.java` line 70. Not yet run.
+- **README vs code differences:**
+  - The README says Benign connects "as a result of improper implementation of the *checkValidity* in *checkServerTrusted()*"; Benign's `checkServerTrusted()` (`Benign/app/src/main/java/edu/ksu/cs/benign/MyTrustManager.java` lines 16 to 18) does not call `checkValidity()` at all and accepts any certificate.
+  - README step 1 asks for a server with an expired certificate and links to the LocalServer README, which documents only `index_http.py` and `index_https.py`; the expired server is `index_https_expired.py`, named only in `source-script.sh` line 3.
+- **Open questions:**
+  - Secure accepts any non-expired certificate from any issuer (`Secure/app/src/main/java/edu/ksu/cs/benign/MyTrustManager.java` lines 16 to 27, and its own comment on line 17) and any host name (`Secure/app/src/main/java/edu/ksu/cs/benign/MyIntentService.java` lines 58 to 63). Whether the benchmark intends Secure to show only the expiry check is not stated in the README.
+  - The README names no data that is exposed; the information exposure in the folder name is not tied to any specific data in the code.
+
+### IncorrectHostNameVerification-MITM-Lean
+- **Summary:** An app that installs a custom `HostnameVerifier` with weak or missing checks can connect to a server that is not the one it meant to reach. Benign's verifier always returns true, so the local server acting as a man in the middle is accepted.
+- **Android versions (from README):** "Tested on Android 5.1.1 - Android 8.1"
+- **What the code does:** `Benign/app/src/main/java/edu/ksu/cs/benign/MyIntentService.java` lines 83 to 88 set a `HostnameVerifier` whose `verify()` returns true, and lines 57 to 74 also install an anonymous `X509TrustManager` whose `checkServerTrusted()` is empty. Lines 89 to 95 read `https://10.0.2.2:5000/test/` and pass the response to `ResponseActivity`. `Secure/app/src/main/java/edu/ksu/cs/benign/MyIntentService.java` line 52 initialises the `SSLContext` with the default trust managers, sets no custom verifier, and lines 69 to 74 show "SSL Handshake failed" on `SSLHandshakeException`.
+
+| Standard | ID | Title | Confidence | Fit |
+|----------|----|-------|------------|-----|
+| CWE | CWE-297 | Improper Validation of Certificate with Host Mismatch | Verified | Direct. `Benign/app/src/main/java/edu/ksu/cs/benign/MyIntentService.java` lines 83 to 88 return true for every host name, so a certificate for any host is accepted. Usage ALLOWED. |
+| CWE | CWE-295 | Improper Certificate Validation | Verified | Partial. `Benign/app/src/main/java/edu/ksu/cs/benign/MyIntentService.java` lines 57 to 74 install a trust manager with an empty `checkServerTrusted()`. Partial because the README describes only the host name check. Usage ALLOWED. |
+| OWASP MASVS v2 | MASVS-NETWORK-1 | The app secures all network traffic according to the current best practices. | Verified | Direct. The HTTPS connection in `Benign/app/src/main/java/edu/ksu/cs/benign/MyIntentService.java` lines 81 to 89 runs with no host name or certificate checks. |
+| OWASP MASWE | MASWE-0027 | Insecure Certificate Validation | Verified | Partial. `Benign/app/src/main/java/edu/ksu/cs/benign/MyIntentService.java` lines 57 to 74 is where the app accepts the connection without the check (see the CWE-295 row); the page covers apps "accepting invalid, expired, self-signed, or untrusted certificates without appropriate verification". Partial for the same reason as the CWE-295 row: the README focuses on another check. Controls shown on the page: MASVS-NETWORK-1. |
+
+No OWASP MASTG test in `standards-reference.md` fits: none of the tests in the file covers host name verification.
+
+MITRE ATT&CK for Mobile: No direct match. No technique on attack.mitre.org was verified that describes an app accepting a TLS server for any host name.
+
+- **Candidates to check:**
+  - MASTG-TEST-0283 (Incorrect Implementation of Server Hostname Verification): Android MASVS-NETWORK test on the MASTG index page that matches the verifier in lines 83 to 88; not in the reference file.
+  - MASTG-TEST-0282 (Unsafe Custom Trust Evaluation): matches the empty trust manager in lines 57 to 74; not in the reference file.
+- **Evidence plan:** On ghera27 (API 27, inside the README range), start `python index_https.py` from `../../Misc/LocalServer` (as in `source-script.sh` line 3), run `./gradlew installApi27Debug` in `Benign` and then in `Secure`, launch each app and check that Benign shows "Response From Server:" and Secure shows "SSL Handshake failed" as asserted in the two `Tests.java` files at line 70. Not yet run.
+- **README vs code differences:**
+  - README step 8 says to read the server response with `adb logcat | grep "System.out"`; the code prints nothing to `System.out` and shows the response in `Benign/app/src/main/java/edu/ksu/cs/benign/ResponseActivity.java` lines 17 to 23.
+  - README step 6 says to edit a *url* field in `strings.xml`; `Benign/app/src/main/res/values/strings.xml` has only `app_name` and `url_extension`, and the address comes from `../../Misc/web-config.gradle` lines 13 to 14.
+  - The README describes only the always-true `HostnameVerifier`; Benign also disables certificate trust checks (`Benign/app/src/main/java/edu/ksu/cs/benign/MyIntentService.java` lines 57 to 74).
+- **Open questions:**
+  - The LocalServer certificate `keyOne-publickey.crt` is self-signed and has no CN, so Secure's handshake can fail on the untrusted issuer before any host name check. The Secure test (`Testing/secure_app/src/androidTest/java/edu/ksu/cs/secure/Tests.java` line 70) therefore does not isolate host name verification.
+  - Secure catches only `SSLHandshakeException` (`Secure/app/src/main/java/edu/ksu/cs/benign/MyIntentService.java` line 69); how a host name mismatch alone surfaces on API 27 (`SSLPeerUnverifiedException` or other) is not shown by the code.
+
+### InsecureSSLSocket-MITM-Lean
+- **Summary:** Sockets created with `SSLCertificateSocketFactory.createSocket()` and an `InetAddress` as the first argument do not get host name verification, so an app using them can connect to a man in the middle. Secure passes the host as a string so that host name verification applies.
+- **Android versions (from README):** "Tested on Android 5.1.1 - Android 8.1"
+- **What the code does:** `Benign/app/src/main/java/edu/ksu/cs/benign/MyIntentService.java` line 45 gets `SSLCertificateSocketFactory.getDefault(0)`, line 54 installs a trust-all `X509TrustManager` (defined in lines 27 to 42), and line 55 calls `createSocket(InetAddress, int)` for 10.0.2.2:5000 built in lines 50 to 53. Lines 56 to 60 report "SUCCESS" when `isConnected()` is true, which `ResponseActivity` shows as "Connected to Server". `Secure/app/src/main/java/edu/ksu/cs/benign/MyIntentService.java` line 48 calls `createSocket(String, int)` instead, with the same trust-all manager on line 46, and lines 53 to 59 show "Failed to connect to server" on `IOException`.
+
+| Standard | ID | Title | Confidence | Fit |
+|----------|----|-------|------------|-----|
+| CWE | CWE-297 | Improper Validation of Certificate with Host Mismatch | Verified | Direct. `Benign/app/src/main/java/edu/ksu/cs/benign/MyIntentService.java` line 55 opens the socket with an `InetAddress`, which per the README performs no host name check. Usage ALLOWED. |
+| CWE | CWE-295 | Improper Certificate Validation | Verified | Partial. `Benign/app/src/main/java/edu/ksu/cs/benign/MyIntentService.java` line 54 installs a trust manager whose `checkServerTrusted()` is empty (lines 37 to 40). Partial because the README is about host name checks and Secure keeps the same trust manager (`Secure/app/src/main/java/edu/ksu/cs/benign/MyIntentService.java` line 46). Usage ALLOWED. |
+| OWASP MASVS v2 | MASVS-NETWORK-1 | The app secures all network traffic according to the current best practices. | Verified | Direct. The TLS socket in `Benign/app/src/main/java/edu/ksu/cs/benign/MyIntentService.java` lines 45 to 55 has neither host name nor certificate checks. |
+| OWASP MASWE | MASWE-0027 | Insecure Certificate Validation | Verified | Partial. `Benign/app/src/main/java/edu/ksu/cs/benign/MyIntentService.java` line 54 is where the app accepts the connection without the check (see the CWE-295 row); the page covers apps "accepting invalid, expired, self-signed, or untrusted certificates without appropriate verification". Partial for the same reason as the CWE-295 row: the README focuses on another check. Controls shown on the page: MASVS-NETWORK-1. |
+
+No OWASP MASTG test in `standards-reference.md` fits: none of the tests in the file covers TLS sockets.
+
+MITRE ATT&CK for Mobile: No direct match. No technique on attack.mitre.org was verified that describes an app opening a TLS socket without host name verification.
+
+- **Candidates to check:**
+  - MASTG-TEST-0234 (Missing Implementation of Server Hostname Verification with SSLSockets): Android MASVS-NETWORK test on the MASTG index page that matches line 55; not in the reference file.
+  - MASTG-TEST-0282 (Unsafe Custom Trust Evaluation): matches the trust-all manager in lines 27 to 42; not in the reference file.
+- **Evidence plan:** On ghera27 (API 27, inside the README range), compile and start `java WriteToSocket 5000` from `../../Misc/LocalServer/java` (as in `source-script.sh` `before_test_vuln`; this is a plain TCP server, not the Flask LocalServer), run `./gradlew installApi27Debug` in `Benign` and then in `Secure`, launch each app and check that Benign shows "Connected to Server" and Secure shows "Failed to connect to server" as asserted in the two `Tests.java` files at line 70. Not yet run.
+- **README vs code differences:**
+  - The README names `SSLCertificateSocketFactory.getSocket(InetAddress, ...)`; the code calls `createSocket(InetAddress, int)` (`Benign/app/src/main/java/edu/ksu/cs/benign/MyIntentService.java` line 55).
+  - README step 1 sets up the Flask LocalServer; `source-script.sh` starts `WriteToSocket.java`, a plain TCP server with no TLS.
+  - README step 8 says to read the response with `adb logcat | grep "System.out"`; the app reads no response and only shows "Connected to Server" (`Benign/app/src/main/java/edu/ksu/cs/benign/ResponseActivity.java` lines 15 to 18).
+  - README step 6 says to edit a *url* field in `strings.xml`; `Benign/app/src/main/res/values/strings.xml` has only `app_name`.
+  - The README says the factory "does not perform any SSL security checks"; the code also installs an explicit trust-all manager (`Benign/app/src/main/java/edu/ksu/cs/benign/MyIntentService.java` line 54).
+- **Open questions:**
+  - Benign succeeds when `isConnected()` is true (line 56) and never starts a handshake or reads data, so against the plain TCP `WriteToSocket` server the Benign test may pass on the TCP connection alone.
+  - Secure's `createSocket(String, int)` against a non-TLS server would fail for reasons other than host name verification, so the Secure test may pass whatever the host name check does.
+  - Secure keeps the trust-all manager (`Secure/app/src/main/java/edu/ksu/cs/benign/MyIntentService.java` line 46), so it relies on host name verification alone.
+
+### InsecureSSLSocketFactory-MITM-Lean
+- **Summary:** `SSLCertificateSocketFactory.getInsecure()` returns a socket factory that skips TLS checks, so an app using it can connect to a man in the middle. Secure uses `getDefault()` instead.
+- **Android versions (from README):** "Tested on Android 5.1.1 - Android 8.1"
+- **What the code does:** `Benign/app/src/main/java/edu/ksu/cs/benign/MyIntentService.java` line 44 gets `SSLCertificateSocketFactory.getInsecure(0xFFFFFFFF, null)`, line 49 sets it on the `HttpsURLConnection`, and lines 50 to 55 add a `HostnameVerifier` that returns true. Lines 57 to 63 read `https://10.0.2.2:5000/test/` and show the response in `ResponseActivity`. `Secure/app/src/main/java/edu/ksu/cs/benign/MyIntentService.java` line 43 uses `getDefault(0xFFFFFFFF, null)`, sets no custom verifier, and lines 60 to 65 show "SSL Handshake failed" on `SSLHandshakeException`.
+
+| Standard | ID | Title | Confidence | Fit |
+|----------|----|-------|------------|-----|
+| CWE | CWE-295 | Improper Certificate Validation | Verified | Direct. `Benign/app/src/main/java/edu/ksu/cs/benign/MyIntentService.java` line 44 uses `getInsecure()`, which the README says "does not perform any SSL security checks", and line 49 applies it to the connection. Usage ALLOWED. |
+| CWE | CWE-297 | Improper Validation of Certificate with Host Mismatch | Verified | Partial. `Benign/app/src/main/java/edu/ksu/cs/benign/MyIntentService.java` lines 50 to 55 accept any host name. Partial because the README attributes the missing host name check to `getInsecure()`, while in the code it comes from this separate verifier. Usage ALLOWED. |
+| OWASP MASVS v2 | MASVS-NETWORK-1 | The app secures all network traffic according to the current best practices. | Verified | Direct. The HTTPS connection in `Benign/app/src/main/java/edu/ksu/cs/benign/MyIntentService.java` lines 44 to 57 runs without certificate or host name checks. |
+| OWASP MASWE | MASWE-0027 | Insecure Certificate Validation | Verified | Direct. `Benign/app/src/main/java/edu/ksu/cs/benign/MyIntentService.java` line 44 is where the app accepts the connection without the check (see the CWE-295 row); the page covers apps "accepting invalid, expired, self-signed, or untrusted certificates without appropriate verification". Controls shown on the page: MASVS-NETWORK-1. |
+
+No OWASP MASTG test in `standards-reference.md` fits: none of the tests in the file covers TLS socket factories.
+
+MITRE ATT&CK for Mobile: No direct match. No technique on attack.mitre.org was verified that describes an app using an insecure TLS socket factory.
+
+- **Candidates to check:**
+  - MASTG-TEST-0283 (Incorrect Implementation of Server Hostname Verification): matches the verifier in lines 50 to 55; not in the reference file.
+  - MASTG-TEST-0282 (Unsafe Custom Trust Evaluation): Android MASVS-NETWORK test on the MASTG index page; whether its scope includes `getInsecure()` needs reading its page; not in the reference file.
+- **Evidence plan:** On ghera27 (API 27, inside the README range), start `python index_https.py` from `../../Misc/LocalServer` (as in `source-script.sh` line 3), run `./gradlew installApi27Debug` in `Benign` and then in `Secure`, launch each app and check that Benign shows "Response From Server:" and Secure shows "SSL Handshake failed" as asserted in the two `Tests.java` files at line 70. Not yet run.
+- **README vs code differences:**
+  - The README says `getInsecure()` is what lets the app accept any host; Benign also sets an always-true `HostnameVerifier` (`Benign/app/src/main/java/edu/ksu/cs/benign/MyIntentService.java` lines 50 to 55).
+  - README step 6 says to edit a *url* field in `strings.xml`; `Benign/app/src/main/res/values/strings.xml` has only `app_name` and `url_extension`, and the address comes from `../../Misc/web-config.gradle` lines 13 to 14.
+- **Open questions:**
+  - Both apps pass `0xFFFFFFFF` (the int value -1) as the handshake timeout (Benign line 44, Secure line 43); how `SSLCertificateSocketFactory` treats a negative timeout on API 27 is not shown by the code.
+  - The Secure test fails the handshake against the self-signed `keyOne` certificate, so it shows the CA check; it does not separately show host name verification.
+
+### InvalidCertificateAuthority-MITM-Lean
+- **Summary:** An app with a custom `X509TrustManager` whose `checkServerTrusted()` is not implemented will trust a server signed by any certificate authority, including a self-signed man in the middle. Secure uses the default trust managers.
+- **Android versions (from README):** "Tested on Android 5.1.1 - Android 8.1"
+- **What the code does:** `Benign/app/src/main/java/edu/ksu/cs/benign/MyTrustManager.java` lines 16 to 18 leave `checkServerTrusted()` empty and line 22 returns null from `getAcceptedIssuers()`. `Benign/app/src/main/java/edu/ksu/cs/benign/MyIntentService.java` lines 54 to 56 install it, lines 65 to 70 set a `HostnameVerifier` that returns true, and lines 71 to 78 read `https://10.0.2.2:5000/test/` and show the response. `Secure/app/src/main/java/edu/ksu/cs/benign/MyIntentService.java` line 52 calls `sslContext.init(null, null, null)` and lines 69 to 75 show "SSL Handshake failed" on `SSLHandshakeException`.
+
+| Standard | ID | Title | Confidence | Fit |
+|----------|----|-------|------------|-----|
+| CWE | CWE-295 | Improper Certificate Validation | Verified | Direct. `Benign/app/src/main/java/edu/ksu/cs/benign/MyTrustManager.java` lines 16 to 18 accept a certificate from any issuer, which is the case the README describes. Usage ALLOWED. |
+| CWE | CWE-297 | Improper Validation of Certificate with Host Mismatch | Verified | Partial. `Benign/app/src/main/java/edu/ksu/cs/benign/MyIntentService.java` lines 65 to 70 accept any host name. Partial because the README covers only the certificate authority check. Usage ALLOWED. |
+| OWASP MASVS v2 | MASVS-NETWORK-1 | The app secures all network traffic according to the current best practices. | Verified | Direct. The HTTPS connection in `Benign/app/src/main/java/edu/ksu/cs/benign/MyIntentService.java` lines 54 to 71 trusts any server. |
+| OWASP MASWE | MASWE-0027 | Insecure Certificate Validation | Verified | Direct. `Benign/app/src/main/java/edu/ksu/cs/benign/MyTrustManager.java` lines 16 to 18 is where the app accepts the connection without the check (see the CWE-295 row); the page covers apps "accepting invalid, expired, self-signed, or untrusted certificates without appropriate verification". Controls shown on the page: MASVS-NETWORK-1. |
+
+No OWASP MASTG test in `standards-reference.md` fits: none of the tests in the file covers TLS trust managers.
+
+MITRE ATT&CK for Mobile: No direct match. No technique on attack.mitre.org was verified that describes an app trusting a server signed by an untrusted certificate authority.
+
+- **Candidates to check:**
+  - MASTG-TEST-0282 (Unsafe Custom Trust Evaluation): Android MASVS-NETWORK test on the MASTG index page that matches `MyTrustManager.java`; not in the reference file.
+- **Evidence plan:** On ghera27 (API 27, inside the README range), start `python index_https.py` from `../../Misc/LocalServer` (as in `source-script.sh` line 3), run `./gradlew installApi27Debug` in `Benign` and then in `Secure`, launch each app and check that Benign shows "Response From Server:" and Secure shows "SSL Handshake failed" as asserted in the two `Tests.java` files at line 70. Not yet run.
+- **README vs code differences:**
+  - The README names the trust manager methods as *checkClientTrusted()*, *checkServerTrusted()* and *getAcceptedUsers()*; the third method in the code is `getAcceptedIssuers()` (`Benign/app/src/main/java/edu/ksu/cs/benign/MyTrustManager.java` line 21).
+  - README step 8 says to read the response with `adb logcat | grep "System.out"`; the code shows the response in `ResponseActivity` and prints nothing to `System.out`.
+  - README step 6 says to edit a *url* field in `strings.xml`; `Benign/app/src/main/res/values/strings.xml` has only `app_name` and `url_extension`.
+  - The README does not mention the always-true `HostnameVerifier` in `Benign/app/src/main/java/edu/ksu/cs/benign/MyIntentService.java` lines 65 to 70.
+- **Open questions:**
+  - None beyond the shared note that the LocalServer `keyOne` certificate's validity ended on 18 May 2019 (read from `../../Misc/LocalServer/keys/keyOne-publickey.crt`); Benign ignores this because it checks nothing, and Secure would reject the server for expiry as well as for the untrusted issuer.
+
+### OpenSocket-InformationLeak-Lean
+- **Summary:** An app that listens on a port and sends data to whoever connects, without checking who the peer is, leaks that data to any connecting party. Malicious connects to Benign's open port and reads the contents of Benign's private file `myInfo.txt`.
+- **Android versions (from README):** "Tested on Android 5.1.1 - Android 8.1"
+- **What the code does:** `Benign/app/src/main/java/edu/ksu/cs/benign/MainActivity.java` lines 31 to 34 write the TextView text to the private file `myInfo.txt` and start `MyIntentService`. `Benign/app/src/main/java/edu/ksu/cs/benign/MyIntentService.java` lines 32 to 41 open `ServerSocket(5000)`, accept the first connection and copy `myInfo.txt` to it with no check of the peer. `Malicious/app/src/main/java/edu/ksu/cs/malicious/MyIntentService.java` lines 24 and 35 to 48 connect to 127.0.0.1:5000 and show what they read in `Result`. `Secure/app/src/main/java/edu/ksu/cs/secure/MyIntentService.java` line 36 sends the file only if `s.getInetAddress().getHostName()` equals "trusted.remote.com" and otherwise writes "Rejected" (lines 45 to 49).
+
+| Standard | ID | Title | Confidence | Fit |
+|----------|----|-------|------------|-----|
+| CWE | CWE-940 | Improper Verification of Source of a Communication Channel | Verified | Direct. `Benign/app/src/main/java/edu/ksu/cs/benign/MyIntentService.java` lines 32 to 41 accept an incoming connection and act on it without verifying that it comes from the expected server, which matches the CWE description ("does not properly verify that the request is coming from the expected origin"). Usage ALLOWED. |
+| CWE | CWE-359 | Exposure of Private Personal Information to an Unauthorized Actor | Verified | Partial. The README says `myInfo.txt` "stores sensitive information", and the text written there is "Enter SSN" (`Benign/app/src/main/res/layout/activity_main.xml` line 16), sent to the socket in `MyIntentService.java` lines 39 to 41. Partial because the value is a fixed label, not real personal data entered by a user. Usage ALLOWED. |
+| OWASP MASVS v2 | MASVS-NETWORK-1 | The app secures all network traffic according to the current best practices. | Verified | Partial. `Benign/app/src/main/java/edu/ksu/cs/benign/MyIntentService.java` line 32 opens an unauthenticated plain TCP listener. Partial because in the code the peer is another app on the same device (`Malicious/app/src/main/java/edu/ksu/cs/malicious/MyIntentService.java` line 24), not a remote network attacker. |
+| OWASP MASVS v2 | MASVS-STORAGE-2 | The app prevents leakage of sensitive data. | Verified | Partial. Lines 33 and 39 to 41 of `Benign/app/src/main/java/edu/ksu/cs/benign/MyIntentService.java` copy the private file to any connected peer. Partial because the leaked value is a placeholder label. |
+| OWASP MASVS v2 | MASVS-PLATFORM-1 | The app uses IPC mechanisms securely. | Verified | Partial. In the code the open port acts as a channel between two apps on the device (Malicious connects to 127.0.0.1). Partial because a TCP socket is not an Android IPC mechanism and the README describes the peer as a remote server. |
+
+CWE-200 (Exposure of Sensitive Information to an Unauthorized Actor), the draft entry in `benchmark-index.md`, was considered and is DISCOURAGED in `standards-reference.md`, so it is not in the table; CWE-940 (root cause) and CWE-359 (data exposed) are used instead.
+
+No OWASP MASTG test or MASWE entry in `standards-reference.md` fits: MASWE-0018 and the MASTG tests in the file cover Android app components (activities, services, receivers, providers), and Benign's listener is a TCP socket, not a component.
+
+MITRE ATT&CK for Mobile: No direct match. No technique on attack.mitre.org was verified that describes one app reading data from another app's open local port.
+
+- **Candidates to check:**
+  - CWE-1327 (Binding to an Unrestricted IP Address): `new ServerSocket(PORT)` on line 32 binds to all interfaces; official page title and Usage ALLOWED read on 2026-11-01, not in the reference file.
+  - CWE-306 (Missing Authentication for Critical Functionality): the listener sends the file with no authentication; official page title and Usage ALLOWED read on 2026-11-01, not in the reference file.
+  - CWE-350 (Reliance on Reverse DNS Resolution for a Security-Critical Action): describes the check in `Secure/app/src/main/java/edu/ksu/cs/secure/MyIntentService.java` line 36, so it is a candidate for the Secure fix's remaining weakness; official page title and Usage ALLOWED read on 2026-11-01, not in the reference file.
+- **Evidence plan:** On ghera27 (API 27, inside the README range), run `./gradlew installApi27Debug` in `Benign` and in `Malicious`, tap "Open Port" in Benign, then tap "Connect" in Malicious and check that Malicious shows "Enter SSN"; then replace Benign with `Secure` (same application id `edu.ksu.cs.benign`) and check that Malicious shows "Rejected", as asserted in `Testing/benign_app/src/androidTest/java/edu/ksu/cs/benign/Tests.java` line 80 and `Testing/secure_app/src/androidTest/java/edu/ksu/cs/secure/Tests.java` line 80; this benchmark has no `source-script.sh` and does not use `Misc/LocalServer`. Not yet run.
+- **README vs code differences:**
+  - The README says Malicious "scans open ports on the device"; Malicious connects to one fixed address and port, 127.0.0.1 (`Malicious/app/src/main/java/edu/ksu/cs/malicious/MyIntentService.java` line 24) and `local_server_port` 5000 (line 32, value from `../../Misc/web-config.gradle` line 14).
+  - README step 7 says to set *HOST* in Malicious to the emulator's IP address; the code already uses 127.0.0.1.
+  - The README describes `myInfo.txt` as holding sensitive information; Benign writes the fixed TextView label "Enter SSN" (`Benign/app/src/main/res/layout/activity_main.xml` line 16), which the user cannot edit.
+- **Open questions:**
+  - Secure trusts the peer based on a reverse DNS name (`Secure/app/src/main/java/edu/ksu/cs/secure/MyIntentService.java` line 36). No test or README step shows Secure sending the file to a trusted peer, and whether a reverse lookup name is a sufficient check is not discussed in the README.
+  - The Secure listener still binds to all interfaces on port 5000 (line 32).
+
+### UnEncryptedSocketComm-MITM-Lean
+- **Summary:** An app that talks to a server over a plain TCP socket can be intercepted, and a man in the middle can pose as the server. Benign connects in cleartext and accepts whatever the `WriteToSocket` program sends.
+- **Android versions (from README):** "Tested on Android 5.1.1 - Android 8.1"
+- **What the code does:** `Benign/app/src/main/java/edu/ksu/cs/benign/MyIntentService.java` lines 36 to 38 open a plain `java.net.Socket` to `local_server_ipv4`:`local_server_port` (10.0.2.2:5000), and lines 41 to 48 read every byte and show it in the `Result` activity. Nothing authenticates the server or encrypts the stream. `Secure/app/src/main/java/edu/ksu/cs/secure/MyIntentService.java` lines 39 to 41 create an `SSLSocket` from `SSLSocketFactory.getDefault()` and then call `connect()` on it, and lines 52 to 54 show the exception text on `IOException`.
+
+| Standard | ID | Title | Confidence | Fit |
+|----------|----|-------|------------|-----|
+| CWE | CWE-319 | Cleartext Transmission of Sensitive Information | Verified | Partial. `Benign/app/src/main/java/edu/ksu/cs/benign/MyIntentService.java` lines 36 to 38 use an unencrypted socket. Partial because the README's stated consequence is server spoofing rather than disclosure, and the data received ("The contents will be written to a socket.", `../../Misc/LocalServer/java/myInfo.txt`) is not described as sensitive. Usage ALLOWED. |
+| OWASP MASVS v2 | MASVS-NETWORK-1 | The app secures all network traffic according to the current best practices. | Verified | Direct. All traffic in `Benign/app/src/main/java/edu/ksu/cs/benign/MyIntentService.java` lines 36 to 46 is plain TCP with no TLS. |
+| OWASP MASWE | MASWE-0026 | Network Traffic Not Encrypted | Verified | Direct. `Benign/app/src/main/java/edu/ksu/cs/benign/MyIntentService.java` lines 36 to 38 open an unencrypted socket (see the CWE-319 row); the page covers apps that transmit data "in cleartext, i.e. without encryption" and says this remains a weakness even when no sensitive data is sent. Controls shown on the page: MASVS-NETWORK-1. |
+
+No OWASP MASTG test in `standards-reference.md` fits: none of the tests in the file covers cleartext traffic.
+
+MITRE ATT&CK for Mobile: No direct match. No technique on attack.mitre.org was verified that describes intercepting or spoofing an app's plain TCP connection.
+
+- **Candidates to check:**
+  - CWE-923 (Improper Restriction of Communication Channel to Intended Endpoints): covers the missing server authentication that enables spoofing; official page title read on 2026-11-01, Usage ALLOWED-WITH-REVIEW (Reason: Abstraction), so it would need the mapping-notes review before use; not in the reference file.
+  - MASTG-TEST-0239 (Using low-level APIs (e.g. Socket) to set up a custom HTTP connection) and MASTG-TEST-0236 (Cleartext Traffic Observed on the Network): Android MASVS-NETWORK tests on the MASTG index page; not in the reference file.
+  - CWE-300 (Channel Accessible by Non-Endpoint) was also looked at; its official page gives Usage DISCOURAGED (Frequent Misuse), so it is not proposed.
+- **Evidence plan:** On ghera27 (API 27, inside the README range), compile and start `java WriteToSocket 5000` from `../../Misc/LocalServer/java` (as in `source-script.sh` `before_install_vuln`), run `./gradlew installApi27Debug` in `Benign`, tap "Connect" and check that `Result` shows "The contents will be written to a socket" (`Testing/benign_app/src/androidTest/java/edu/ksu/cs/benign/Tests.java` line 72); then install `Secure`, tap "Connect" and check for "Permission denied" (`Testing/secure_app/src/androidTest/java/edu/ksu/cs/secure/Tests.java` line 72). Not yet run.
+- **README vs code differences:**
+  - README step 6 says *HOST* is an attribute in Benign's `MyIntentService` to be set by hand; the code reads it from the `local_server_ipv4` resource (`Benign/app/src/main/java/edu/ksu/cs/benign/MyIntentService.java` line 32), set to 10.0.2.2 in `../../Misc/web-config.gradle` line 13.
+  - README step 5 runs `java WriteToSocket` with no argument; `../../Misc/LocalServer/java/WriteToSocket.java` lines 12 to 17 exit with "PORT not found" when no port is given.
+- **Open questions:**
+  - `Secure/app/src/main/AndroidManifest.xml` declares no `android.permission.INTERNET`, and the Secure test expects "Permission denied". The Secure test therefore appears to pass because the socket is not allowed, not because TLS protects the connection.
+  - Secure calls `connect()` (line 41) on a socket that `createSocket(HOST, PORT)` (line 40) already connected. Even with the permission, the TLS path would not be exercised as written.
+  - `WriteToSocket` is plain TCP, so a correct TLS client would fail the handshake against it; no TLS server is provided for a positive Secure case.
+
+### UnpinnedCertificates-MITM-Lean
+- **Summary:** An app that trusts every server whose certificate chains to a trusted CA, instead of pinning the expected server certificate, will connect to a malicious server that holds a CA-signed certificate. Secure trusts only the bundled `keyTwo` certificate.
+- **Android versions (from README):** "Tested on Android 5.1.1 - Android 8.1"
+- **What the code does:** `Benign/app/src/main/java/edu/ksu/cs/benign/MyTrustManager.java` lines 49 to 66 accept the chain only if every certificate equals the bundled asset `keyOne-publickey.crt`, which is the LocalServer certificate; the comment on lines 25 to 28 explains this stands in for "a certificate signed by one of the trusted CAs". `Benign/app/src/main/java/edu/ksu/cs/benign/MyIntentService.java` lines 52 to 73 use it, with a `HostnameVerifier` that returns `hostname.equals("10.0.2.2")` (lines 64 to 69). `Secure/app/src/main/java/edu/ksu/cs/benign/MyIntentService.java` lines 58 to 74 build a `KeyStore` holding only `keyTwo-publickey.crt` and use it as the only trust anchor, and lines 94 to 96 show the exception text on failure.
+
+| Standard | ID | Title | Confidence | Fit |
+|----------|----|-------|------------|-----|
+| CWE | CWE-295 | Improper Certificate Validation | Verified | Partial. The README's weakness is that Benign accepts any CA-trusted server; the code simulates this with `Benign/app/src/main/java/edu/ksu/cs/benign/MyTrustManager.java` lines 58 to 64, which accept the LocalServer certificate. Partial because CWE-295 is about validation being wrong, while here validation is correct for a CA model and the gap is the missing pin. Usage ALLOWED. |
+| CWE | CWE-297 | Improper Validation of Certificate with Host Mismatch | Verified | Partial. `Benign/app/src/main/java/edu/ksu/cs/benign/MyIntentService.java` line 67 compares the requested host name with "10.0.2.2" and never checks the certificate in the `SSLSession`. Partial because the README does not discuss host names and Secure has the same check (`Secure/app/src/main/java/edu/ksu/cs/benign/MyIntentService.java` line 86). Usage ALLOWED. |
+| OWASP MASVS v2 | MASVS-NETWORK-2 | The app performs identity pinning for all remote endpoints under the developer's control. | Verified | Direct. Benign does not pin its intended server, and Secure pins `keyTwo-publickey.crt` (`Secure/app/src/main/java/edu/ksu/cs/benign/MyIntentService.java` lines 58 to 65). |
+| OWASP MASVS v2 | MASVS-NETWORK-1 | The app secures all network traffic according to the current best practices. | Verified | Partial. TLS is used in both apps; the gap is the trust decision in `Benign/app/src/main/java/edu/ksu/cs/benign/MyTrustManager.java` lines 49 to 66, which NETWORK-2 covers more precisely. |
+
+No OWASP MASTG test or MASWE entry in `standards-reference.md` fits: the file lists only entries about app components, intents, overlays and untrusted input, and none of them covers certificate pinning.
+
+MITRE ATT&CK for Mobile: No direct match. No technique on attack.mitre.org was verified that describes a man in the middle using a CA-signed certificate against an app without pinning.
+
+- **Candidates to check:**
+  - MASWE-0028 (Insecure Identity Pinning): listed under MASVS-NETWORK on the MASWE index page; not in the reference file.
+  - MASTG-TEST-0244 (Missing Certificate Pinning in Network Traffic): Android MASVS-NETWORK test on the MASTG index page; not in the reference file.
+  - MASTG-TEST-0242 (Missing Certificate Pinning in Network Security Configuration): would fit only partially, because neither app has a network security configuration and pinning is done in code; not in the reference file.
+- **Evidence plan:** On ghera27 (API 27, inside the README range), start `python index_https.py` from `../../Misc/LocalServer` (the `keyOne` server, as in `source-script.sh` line 3), run `./gradlew installApi27Debug` in `Benign` and then in `Secure`, launch each app and check that Benign's `serverResponseText` contains "This is a test web page" and Secure's `headingText` contains "SSLHandshakeException" (the two `Tests.java` files at line 70); optionally start `TrustedServer/index_https-Unpinned-Cert.py` (the `keyTwo` server) to see Secure connect. Not yet run.
+- **README vs code differences:**
+  - The README says Benign "trusts all the servers having certificate signed by trusted CAs"; Benign's trust manager accepts only certificates equal to the bundled `keyOne-publickey.crt` (`Benign/app/src/main/java/edu/ksu/cs/benign/MyTrustManager.java` lines 54 to 64). The code comment on lines 25 to 28 states this is a stand-in.
+  - README step 8 says the result "demonstrates that *Benign* does not verify the Certificate Authority", and mentions a console; the benchmark is about pinning, and the response is shown in `ResponseActivity`.
+  - README step 6 says to edit a *url* field in `strings.xml`; `Benign/app/src/main/res/values/strings.xml` has only `app_name` and `url_extension`.
+- **Open questions:**
+  - `keyOne-publickey.crt` (validity ended 18 May 2019) and `keyTwo-publickey.crt` (validity ended 14 May 2019) are expired according to the certificate files. Benign calls `checkValidity()` (`Benign/app/src/main/java/edu/ksu/cs/benign/MyTrustManager.java` line 61), so the Benign case may fail on a current emulator clock; whether the emulator date must be set back is not stated in the README.
+  - `source-script.sh` never starts the `TrustedServer`, so no automated test shows Secure connecting to its pinned server; the Secure test passes on any `SSLHandshakeException`.
+  - Benign's `checkClientTrusted()` (lines 23 to 45) repeats the server logic and is not used for the server connection.
+
