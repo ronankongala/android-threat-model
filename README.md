@@ -26,3 +26,7 @@ python src\ate.py --apk path\to\app.apk --out results
 ```
 
 This writes `results\app-report.json` and `results\app-report.md` and prints a summary such as `5 findings in 3 components`. Run the tests with `.venv\Scripts\python -m pytest tests`.
+
+## Evaluation
+
+First run of `tools/evaluate.py` (2026-11-01): overall precision 0.50 and recall 1.00. These numbers come from one benchmark (`Crypto/BlockCipher-ECB-InformationExposure-Lean`), the only one with a successful `api27` build in `data/build-results.csv` so far, so they show that the pipeline works, not how accurate the tool is. See `docs/notes/evaluation-report.md` for definitions, details and limits.
