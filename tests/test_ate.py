@@ -112,16 +112,31 @@ def test_apk_returns_dict_with_components(decoded):
             assert key in comp
 
 
+def _activity(name, categories, exported_attr='true'):
+    return {'name': name, 'type': 'activity', 'exported': True,
+            'exported_attr': exported_attr, 'permission': None,
+            'intent_filters': [{'actions': ['android.intent.action.MAIN'],
+                                'categories': categories}] if categories else []}
+
+
 def test_surface_finds_exported_no_permission(findings):
-    issues = [f for f in findings if f['issue'] == 'exported-no-permission']
-    assert issues
+    # The fixture's only exported component is its launcher, which is skipped.
+    assert not [f for f in findings if f['issue'] == 'exported-no-permission']
     for f in findings:
         assert f['issue'] in surface.ISSUES
         assert f['cwe'] == surface.CWE[f['issue']]
         assert f['confidence'] in surface.CONFIDENCE
+    manifest = {'components': [
+        _activity('a.Launcher', ['android.intent.category.LAUNCHER']),
+        _activity('a.Exposed', None),
+    ]}
+    issues = [f for f in surface.find(manifest) if f['issue'] == 'exported-no-permission']
+    assert [f['component'] for f in issues] == ['a.Exposed']
+    assert issues[0]['confidence'] == 'high'
 
 
-def test_report_writes_both_files(findings, tmp_path):
+def test_report_writes_both_files(tmp_path):
+    findings = surface.find({'components': [_activity('a.Exposed', None)]})
     json_path, md_path = report.write(findings, 'fixture', str(tmp_path))
     assert os.path.basename(json_path) == 'fixture-report.json'
     assert os.path.basename(md_path) == 'fixture-report.md'

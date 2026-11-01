@@ -74,14 +74,19 @@ def _protected(comp):
     return False
 
 
+def _has_launcher_category(comp):
+    return any('android.intent.category.LAUNCHER' in f['categories']
+               for f in comp['intent_filters'])
+
+
 def _exported_no_permission(comp):
-    """Confidence: high when exported on purpose (android:exported="true") and not a
-    launcher; medium when exported through an intent filter; low for the launcher
-    activity, which must be exported for the app to start."""
+    """Confidence: high when exported on purpose (android:exported="true"); medium
+    when exported through an intent filter. Launcher activities are skipped: they
+    must be exported for the app to start, so they are not a vulnerability."""
     if not comp['exported'] or _protected(comp):
         return None
-    if _is_launcher(comp):
-        return 'low'
+    if comp['type'] in ('activity', 'activity-alias') and _has_launcher_category(comp):
+        return None
     if comp.get('exported_attr') == 'true':
         return 'high'
     return 'medium'
