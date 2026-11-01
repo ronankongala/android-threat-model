@@ -47,7 +47,7 @@ The first evaluation run and its limits are described in [docs/notes/evaluation-
 
 **System log confirming the block** (Permission Denial from adb logcat):
 
-<img src="docs/screenshots/step01_26_secure-permission-denial-log.png" alt="Permission denial log" width="450">
+![Permission denial log](docs/screenshots/step01_26_secure-permission-denial-log.png)
 
 ## Repo structure
 
