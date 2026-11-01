@@ -39,7 +39,7 @@ The "Android versions affected" text is copied from each README. Most READMEs us
 | ICC | `UnhandledException-DOS-Lean` | Lean | Not handling unchecked exceptions lets another app crash the component, causing denial of service. | Tested on Android 5.1.1 - Android 8.1 | CWE-248 | MASVS-CODE-4 | Needs check | Drafted (evidence pending) |
 | ICC | `UnprotectedBroadcastRecv-PrivEscalation-Fat` | Fat | Exporting components that hold privileged permissions lets other apps escalate privileges. | Tested on Android 4.4 | CWE-926 | MASVS-PLATFORM-1 | Needs check | No |
 | ICC | `UnprotectedBroadcastRecv-PrivEscalation-Lean` | Lean | Exporting components that hold privileged permissions lets other apps escalate privileges. | Tested on Android 5.1.1 - Android 8.1 | CWE-926 | MASVS-PLATFORM-1 | Needs check | Drafted (evidence pending) |
-| ICC | `WeakChecksOnDynamicInvocation-DataInjection-Lean` | Lean | Exposing call() in a content provider without proper checks allows unauthorized reads and writes of the data store. | Tested on Android 5.1.1 - Android 8.1 | CWE-862 | MASVS-PLATFORM-1 | Needs check | No |
+| ICC | `WeakChecksOnDynamicInvocation-DataInjection-Lean` | Lean | Exposing call() in a content provider without proper checks allows unauthorized reads and writes of the data store. | Tested on Android 5.1.1 - Android 8.1 | CWE-862 | MASVS-PLATFORM-1 | Needs check | Not drafted (tool stopped) |
 
 ## Networking (8)
 
