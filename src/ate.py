@@ -66,10 +66,10 @@ def main(argv=None):
         findings = surface.find(manifest)
     finally:
         shutil.rmtree(work, ignore_errors=True)
-    if args.dynamic:
-        findings = findings + run_dynamic(args.apk, manifest)
+    dynamic = run_dynamic(args.apk, manifest) if args.dynamic else None
     name = os.path.splitext(os.path.basename(args.apk))[0]
-    report.write(findings, name, args.out)
+    report.write(findings, name, args.out, dynamic)
+    findings = findings + (dynamic or [])
     components = len({(f['component_type'], f['component']) for f in findings})
     print('%d findings in %d components' % (len(findings), components))
     return 0
