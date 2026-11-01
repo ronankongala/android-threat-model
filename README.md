@@ -70,7 +70,7 @@ android-threat-engine/
     threat-models/     threat models, standards reference, benchmark index, mappings
     diagrams/          SVG renderings of the threat model diagrams
     notes/             setup log, benchmark issues, designs, reports
-    screenshots/       emulator screenshots (to be added)
+    screenshots/       emulator screenshots from Step 1 smoke test and extra emulator runs
   results/             drift run output (empty until the drift runs start)
   benchmarks/          Ghera checkout (not committed; see Getting started)
   env.ps1              per-session toolchain environment
