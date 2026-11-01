@@ -165,12 +165,13 @@ CWE and MASVS titles are copied from `docs/threat-models/standards-reference.md`
 |----------|----|-------|------------|-----|
 | CWE | CWE-927 | Use of Implicit Intent for Sensitive Communication | Verified | Direct. `MainActivity.java` lines 27 to 30 put the password in an intent that has only an action and wrap it in a pending intent; when it fires, `MalService` matches the action and reads the password (`MalService.java` line 15). Usage ALLOWED. |
 | OWASP MASVS v2 | MASVS-PLATFORM-1 | The app uses IPC mechanisms securely. | Verified | Direct. The fix makes the base intent explicit (Secure `MainActivity.java` lines 29 to 30). |
+| OWASP MASWE | MASWE-0032 | Insecure Intents | Verified | Direct. `MainActivity.java` lines 27 to 30 put the password in an intent that has only an action and wrap it in a pending intent; the page covers "sending sensitive data via implicit intents that any matching app can receive" and "creating PendingIntents that other apps can modify or replay". Controls shown on the page: MASVS-PLATFORM-1, MASVS-STORAGE-2. |
 
-OWASP MASTG test and OWASP MASWE: No direct match among the allowed IDs. MASTG-TEST-0366, MASTG-TEST-0029 and MASWE-0063 are about exported broadcast receivers or exposed functionality in the target app, while this weakness is the implicit base intent of a pending intent (`MainActivity.java` line 28).
+OWASP MASTG test: No direct match among the IDs in the reference file. MASTG-TEST-0364, MASTG-TEST-0365, MASTG-TEST-0366 and MASTG-TEST-0029 are about exported components that expose functionality in the target app, while this weakness is the implicit base intent of a pending intent (`MainActivity.java` line 28).
 
 Candidates to check (not in the table):
-- A MASTG test or MASWE weakness about pending intents with implicit base intents. No ID has been verified.
-- MASWE-0063 for BenignPartner's `MyReceiver` (exported, no permission, fires any pending intent it is given). This is the partner app, not the benchmark target, so it is not in the table.
+- MASTG-TEST-0030 (Testing for Vulnerable Implementation of PendingIntent) and MASTG-TEST-0381 (References to Insecure PendingIntent Creation), both listed in the MASTG site navigation. Not in the reference file.
+- MASWE-0018 for BenignPartner's `MyReceiver` (exported, no permission, fires any pending intent it is given). This is the partner app, not the benchmark target, so it is not in the table.
 
 MITRE ATT&CK for Mobile: No direct match. No technique on attack.mitre.org was verified that describes declaring a service to intercept another app's implicit pending intent.
 
