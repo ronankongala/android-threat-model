@@ -9,7 +9,7 @@ android-threat-engine is an Android app security research project built on the [
 - **Ground truth dataset**: one row per benchmark with the expected Benign and Secure results and the mapped IDs (`data/ground-truth.csv`).
 - **Drift matrix**: one row per benchmark and API level (22 to 34) for recording whether exploits and fixes still hold on newer Android versions (`data/drift-matrix.csv`).
 - **Benchmark issues log**: 234 differences between the Ghera READMEs, code and tests, including Secure apps whose fix looks incomplete.
-- **APK analysis tool**: decodes an APK with apktool, extracts exported components, intent filters, permissions and provider settings from the manifest, and writes findings with CWE IDs and confidence levels as JSON and Markdown.
+- **APK analysis tool**: decodes an APK with apktool, extracts exported components, intent filters, permissions and provider settings from the manifest, detects insecure code patterns in the smali code (weak ciphers, hard-coded keys, trust managers, WebView settings, SQL, intents and broadcasts), traces intent extras and user input to sensitive sinks with taint analysis, optionally exercises the app on an emulator over adb (`--dynamic`), and writes findings with CWE IDs, confidence levels and evidence as JSON and Markdown.
 - **Evaluator and docs lint**: scores the tool against the ground truth, and checks the documentation for unknown IDs, wrong titles, missing sections, broken links and invalid diagrams.
 
 ## Architecture
@@ -33,7 +33,14 @@ android-threat-engine is an Android app security research project built on the [
 
 ## Results
 
-The first evaluation run and its limits are described in [docs/notes/evaluation-report.md](docs/notes/evaluation-report.md). So far only one benchmark has a complete `api27` build, so the numbers show that the pipeline works, not how accurate the tool is. Full results will be updated after the complete build run of all 57 benchmarks.
+Static evaluation (`python tools/evaluate.py --no-dynamic`) on the 19 benchmarks with an `api27` build (5 Crypto, 14 ICC), after adding code pattern analysis (Layer 2) and taint analysis (Layer 3):
+
+| Run | TP | FP | Precision | Recall |
+|-----|---:|---:|----------:|-------:|
+| Manifest rules only | 9 | 19 | 0.32 | 0.47 |
+| Manifest, code patterns and taint | 11 | 19 | 0.37 | 0.58 |
+
+By category: Crypto precision 0.44, recall 0.80 (5 benchmarks); ICC precision 0.33, recall 0.50 (14 benchmarks). Every Secure APK counts as a false positive because the exported launcher activity is always reported; counting only Secure findings whose CWE is in the ground truth gives precision 0.52. Networking, Storage, System and Web benchmarks are not built yet, so their code rules are not measured. Details and limits: [docs/notes/evaluation-report.md](docs/notes/evaluation-report.md).
 
 ## Screenshots
 
@@ -53,7 +60,8 @@ The first evaluation run and its limits are described in [docs/notes/evaluation-
 
 ```text
 android-threat-engine/
-  src/                 analysis tool: apk.py, surface.py, report.py, ate.py (CLI)
+  src/                 analysis tool: apk.py, surface.py, code_analyzer.py, call_graph.py,
+                       taint_analyzer.py, dynamic_analyzer.py, report.py, ate.py (CLI)
   tests/               pytest tests for the tool
   tools/               build, emulator, lint, evaluation and diagram scripts
   data/                ground truth, drift matrix, evaluation results
@@ -89,6 +97,7 @@ python -m venv .venv
 
 ```powershell
 python src\ate.py --apk path\to\app.apk --out results
+python src\ate.py --apk path\to\app.apk --out results --dynamic   # with the emulator running
 ```
 
 This writes `results\app-report.json` and `results\app-report.md` and prints a summary such as `5 findings in 3 components`. Run the tests with `.venv\Scripts\python -m pytest tests`.
