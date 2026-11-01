@@ -1,15 +1,16 @@
 # Standards reference
 
-Official titles for every CWE and MASVS v2 ID used in the threat models and the benchmark index. Each row was checked by opening the official page on the date shown.
+Official titles for every CWE and MASVS v2 ID used in the threat models and the benchmark index, and for the CWE IDs the threat models considered but could not use. Each row was checked by opening the official page on the date shown.
 
 ## CWE
 
-Each CWE page was downloaded as raw HTML on 2026-10-31. The "Official title" column is the text of the page's `<h2>` heading, copied character for character. The "Page label" column is the value shown next to the "Vulnerability Mapping" label in the status block at the top of each page, also copied character for character. The "Usage (mapping notes)" column is the value in the "Usage" row of the "Vulnerability Mapping Notes" section further down each page, copied character for character. The "Abstraction level" column is the value shown next to the "Abstraction" label in the same block. Raw HTML was obtained for all 27 pages, so no row is marked "Needs check".
+Each CWE page was downloaded as raw HTML on 2026-10-31. The "Official title" column is the text of the page's `<h2>` heading, copied character for character. The "Page label" column is the value shown next to the "Vulnerability Mapping" label in the status block at the top of each page, also copied character for character. The "Usage (mapping notes)" column is the value in the "Usage" row of the "Vulnerability Mapping Notes" section further down each page, copied character for character. The "Abstraction level" column is the value shown next to the "Abstraction" label in the same block. Raw HTML was obtained for all 30 pages, so no row is marked "Needs check". CWE-20, CWE-345 and CWE-532 were added later on the same date, from newly downloaded raw HTML, because the ICC broadcast threat models needed them.
 
 CWE version: the version string on every page is `(5.0)`. It appears at the end of the page's `<title>` element (for example `CWE-89: Improper Neutralization of Special Elements used in an SQL Command (5.0)`) and again at the end of the breadcrumb line at the top of the page. It does not appear in the `<h2>` heading.
 
 | ID | Official title | Abstraction level | Page label | Usage (mapping notes) | URL | Date checked | Status |
 |---|---|---|---|---|---|---|---|
+| CWE-20 | CWE-20: Improper Input Validation | Class | DISCOURAGED | DISCOURAGED | https://cwe.mitre.org/data/definitions/20.html | 2026-10-31 | Verified |
 | CWE-22 | CWE-22: Improper Limitation of a Pathname to a Restricted Directory | Base | ALLOWED | ALLOWED-WITH-REVIEW | https://cwe.mitre.org/data/definitions/22.html | 2026-10-31 | Verified |
 | CWE-89 | CWE-89: Improper Neutralization of Special Elements used in an SQL Command | Base | ALLOWED | ALLOWED | https://cwe.mitre.org/data/definitions/89.html | 2026-10-31 | Verified |
 | CWE-200 | CWE-200: Exposure of Sensitive Information to an Unauthorized Actor | Class | DISCOURAGED | DISCOURAGED | https://cwe.mitre.org/data/definitions/200.html | 2026-10-31 | Verified |
@@ -23,11 +24,13 @@ CWE version: the version string on every page is `(5.0)`. It appears at the end 
 | CWE-321 | CWE-321: Use of Hard-coded Cryptographic Key | Variant | ALLOWED | ALLOWED | https://cwe.mitre.org/data/definitions/321.html | 2026-10-31 | Verified |
 | CWE-327 | CWE-327: Use of a Broken or Risky Cryptographic Algorithm | Class | ALLOWED | ALLOWED-WITH-REVIEW | https://cwe.mitre.org/data/definitions/327.html | 2026-10-31 | Verified |
 | CWE-329 | CWE-329: Generation of Predictable IV with CBC Mode | Variant | ALLOWED | ALLOWED | https://cwe.mitre.org/data/definitions/329.html | 2026-10-31 | Verified |
+| CWE-345 | CWE-345: Insufficient Verification of Data Authenticity | Class | DISCOURAGED | DISCOURAGED | https://cwe.mitre.org/data/definitions/345.html | 2026-10-31 | Verified |
 | CWE-359 | CWE-359: Exposure of Private Personal Information to an Unauthorized Actor | Base | ALLOWED | ALLOWED | https://cwe.mitre.org/data/definitions/359.html | 2026-10-31 | Verified |
 | CWE-441 | CWE-441: Unintended Proxy or Intermediary | Class | ALLOWED | ALLOWED-WITH-REVIEW | https://cwe.mitre.org/data/definitions/441.html | 2026-10-31 | Verified |
 | CWE-470 | CWE-470: Use of Externally-Controlled Input to Select Classes or Code | Base | ALLOWED | ALLOWED | https://cwe.mitre.org/data/definitions/470.html | 2026-10-31 | Verified |
 | CWE-494 | CWE-494: Download of Code Without Integrity Check | Base | ALLOWED | ALLOWED | https://cwe.mitre.org/data/definitions/494.html | 2026-10-31 | Verified |
 | CWE-522 | CWE-522: Insufficiently Protected Credentials | Class | ALLOWED | ALLOWED-WITH-REVIEW | https://cwe.mitre.org/data/definitions/522.html | 2026-10-31 | Verified |
+| CWE-532 | CWE-532: Insertion of Sensitive Information into Log File | Base | ALLOWED | ALLOWED | https://cwe.mitre.org/data/definitions/532.html | 2026-10-31 | Verified |
 | CWE-760 | CWE-760: Use of a One-Way Hash with a Predictable Salt | Variant | ALLOWED | ALLOWED | https://cwe.mitre.org/data/definitions/760.html | 2026-10-31 | Verified |
 | CWE-862 | CWE-862: Missing Authorization | Class | ALLOWED | ALLOWED-WITH-REVIEW | https://cwe.mitre.org/data/definitions/862.html | 2026-10-31 | Verified |
 | CWE-863 | CWE-863: Incorrect Authorization | Class | ALLOWED | ALLOWED-WITH-REVIEW | https://cwe.mitre.org/data/definitions/863.html | 2026-10-31 | Verified |
@@ -68,10 +71,12 @@ Built from the "Usage (mapping notes)" column only. The label conflict for eight
 
 ### DISCOURAGED or PROHIBITED
 
-No row has a Usage of PROHIBITED. Two rows have a Usage of DISCOURAGED. On both pages the Usage row reads "(this CWE ID should not be used to map to real-world vulnerabilities)".
+No row has a Usage of PROHIBITED. Four rows have a Usage of DISCOURAGED. On all four pages the Usage row reads "(this CWE ID should not be used to map to real-world vulnerabilities)".
 
 - CWE-200 (Class): DISCOURAGED. Rows that use it (`OpenSocket-InformationLeak-Lean`, `ClipboardUse-InformationExposure-Lean`) need a more specific child CWE.
 - CWE-284 (Pillar): DISCOURAGED. Rows that use it (`InadequatePathPermission-InformationExposure-Lean`, `WeakPermission-UnauthorizedAccess-Lean`) need a more specific child CWE.
+- CWE-20 (Class): DISCOURAGED. No threat model table or benchmark index row uses it. `NoValidityCheckOnBroadcastMsg-UnintendedInvocation-Lean` considered it for the receiver that accepts any intent. The mapping notes give the reasons Frequent Misuse, Frequent Misinterpretation and Abstraction, and say to consider lower-level children if the issue is truly improper input validation.
+- CWE-345 (Class): DISCOURAGED. No threat model table or benchmark index row uses it. `OrderedBroadcast-DataInjection-Lean` and `StickyBroadcast-DataInjection-Lean` considered it for receivers that trust data from an unknown sender. The mapping notes give the reason Abstraction (a level-1 Class) and say to examine its children for a better fit.
 
 ### ALLOWED-WITH-REVIEW
 
