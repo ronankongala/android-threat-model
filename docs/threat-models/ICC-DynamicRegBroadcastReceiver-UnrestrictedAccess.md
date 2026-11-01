@@ -156,7 +156,8 @@ Fit values:
 | OWASP MASVS v2 | MASVS-PLATFORM-1 | The app uses IPC mechanisms securely. | Verified | Direct |
 | OWASP MASTG test | MASTG-TEST-0366 | Exported And Unprotected Broadcast Receivers That Expose Sensitive Functionality | Verified | Direct. Primary test. |
 | OWASP MASTG test | MASTG-TEST-0029 | Testing for Sensitive Functionality Exposure Through IPC | Verified | Partial. Deprecated, superseded by MASTG v2 tests, kept for reference. |
-| OWASP MASWE | MASWE-0063 | Insecure Broadcast Receivers | Verified | Direct. Beta, ID may change. |
+| OWASP MASWE | MASWE-0018 | Lack of Authentication or Authorization on App Components | Verified | Direct. Benign `MainActivity.java` line 20 registers the receiver with `registerReceiver(emailBroadcastRecv, new IntentFilter("edu.ksu.cs.action.EMAIL"))` and no permission, so any app can invoke it; the page lists "Missing or Weak Permissions on Exported Components" and names broadcast receivers. Controls shown on the page: MASVS-AUTH-1, MASVS-PLATFORM-1, MASVS-STORAGE-2. |
+| OWASP MASWE | MASWE-0032 | Insecure Intents | Verified | Partial. Applies only to Benign's own implicit diagnostic broadcast (`MainActivity.java` line 33, `sendBroadcast(intent)`); the page covers "sending sensitive data via implicit intents". Not part of the README exploit. Controls shown on the page: MASVS-PLATFORM-1, MASVS-STORAGE-2. |
 
 MITRE ATT&CK for Mobile: no direct match. T1404 (Exploitation for Privilege Escalation) was considered and rejected because it covers exploitation of software vulnerabilities to gain higher privileges, mostly root exploits, while this is a confused deputy between two apps with no OS vulnerability.
 
