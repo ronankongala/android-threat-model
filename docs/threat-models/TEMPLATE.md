@@ -113,6 +113,8 @@ Fit values:
 
 For a CWE whose Usage in `docs/threat-models/standards-reference.md` is ALLOWED-WITH-REVIEW, the Fit cell must contain the outcome of the review, never an instruction to the reader. Read the Vulnerability Mapping Notes on the saved CWE page, give the Rationale and Comment in one short sentence, list the child entries shown on the page, and state whether any child fits better. If a child fits better, say so: switch the row to that ID only if it is already in the reference file, otherwise list it under "Candidates to check".
 
+Mapping depth: map to the most specific entry that fits. If the children of an entry only cover other technologies (for example web servers, WebSockets or Windows messages), keep the entry and say so in the Fit note. Do not follow children further than one level below the first entry you considered.
+
 Do not invent IDs. List a standard only if the fit is Direct or Partial. If nothing fits, write "No direct match" and explain why.
 
 | Standard | ID | Title | Confidence | Fit |
