@@ -161,6 +161,7 @@ CWE and MASVS titles are copied from `docs/threat-models/standards-reference.md`
 |----------|----|-------|------------|-----|
 | CWE | CWE-927 | Use of Implicit Intent for Sensitive Communication | Verified | Partial. The CWE description says a receiver in an ordered broadcast may alter the data and that downstream components cannot tell. That is this benchmark, but the broadcast is sent by the system, not by Benign. Usage ALLOWED. |
 | CWE | CWE-925 | Improper Verification of Intent by Broadcast Receiver | Verified | Partial. `FormatOutgoingCallReceiver` trusts the result data without checking it. The CWE is about verifying the source of the intent; here the intent is genuine and only the result data is changed. Usage ALLOWED. |
+| CWE | CWE-532 | Insertion of Sensitive Information into Log File | Verified | Partial. `FormatOutgoingCallReceiver.java` line 19 (Secure line 21) logs `"+1" + phNm`, so every outgoing number goes to the device log, in both Benign and Secure. The README exploit does not use the log, and whether another app can read Benign's log on the test emulator has not been checked. Usage ALLOWED. |
 | OWASP MASVS v2 | MASVS-PLATFORM-1 | The app uses IPC mechanisms securely. | Verified | Direct. The weakness is in how Benign consumes an IPC broadcast. |
 | OWASP MASVS v2 | MASVS-CODE-4 | The app validates and sanitizes all untrusted inputs. | Verified | Partial. The Secure fix is a form of input validation (check the action, use the original extra), but the input is not sanitized. |
 | OWASP MASTG test | MASTG-TEST-0366 | Exported And Unprotected Broadcast Receivers That Expose Sensitive Functionality | Verified | Partial. Benign's receiver is exported without a permission, but the exploit does not call it directly. |
@@ -169,6 +170,8 @@ CWE and MASVS titles are copied from `docs/threat-models/standards-reference.md`
 
 Candidates to check (not in the table):
 - A MASWE or MASTG v2 entry that covers trusting data from ordered broadcasts. No ID has been verified.
+- CWE-345 (Insufficient Verification of Data Authenticity) was considered for Benign trusting result data from an unknown earlier receiver. It is in `standards-reference.md`, but its Usage is DISCOURAGED: the mapping notes say it is a level-1 Class and to examine its children for a better fit, so it is not used in the table.
+- CWE-348 (Use of Less Trusted Source), a child of CWE-345 shown on its page, fits better. Its description: the product has two different sources of the same data and uses the less trusted one. Benign reads `getResultData()`, which earlier receivers can change, instead of `Intent.EXTRA_PHONE_NUMBER`, and the Secure fix switches to the extra. Not in `standards-reference.md`; add it there before use.
 
 MITRE ATT&CK for Mobile: No direct match. No technique on attack.mitre.org was verified that describes redirecting outgoing calls through an ordered broadcast receiver.
 
@@ -270,4 +273,4 @@ The fix works only under the README's assumption and has side effects:
 - The README claims calls from the stock phone app are also redirected. The Testing code only covers the Benign Call button.
 - A malicious receiver could also cancel the call or stop the broadcast (CWE-927 description). Not in the benchmark code. Hypothesis, to test in Step 3.
 - `Benign/app/src/main/res/layout/activity_demo.xml` refers to `edu.ksu.cs.benign.DemoActivity`, which does not exist in the source. It appears to be unused.
-- CWE IDs not in `standards-reference.md` that may fit better and should be checked before use: an ID for missing verification of data authenticity (Benign trusts result data from an unknown earlier receiver). Not used in the table.
+- The CWE for missing verification of data authenticity was checked: CWE-345 is DISCOURAGED, and its child CWE-348 is listed under "Candidates to check" in section 7.
