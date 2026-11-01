@@ -167,7 +167,8 @@ CWE and MASVS titles are copied from `docs/threat-models/standards-reference.md`
 | OWASP MASWE | MASWE-0063 | Insecure Broadcast Receivers | Verified | Direct. Beta, ID may change. |
 
 Candidates to check (not in the table):
-- None beyond the IDs above.
+- CWE-20 (Improper Input Validation) was considered for the receiver that accepts any intent. It is in `standards-reference.md`, but its Usage is DISCOURAGED: the mapping notes give the reasons Frequent Misuse, Frequent Misinterpretation and Abstraction, and say to consider lower-level children if the issue is truly improper input validation, so it is not used in the table. None of the children shown on its page fits better: the closest, CWE-1287 (Improper Validation of Specified Type of Input), is about the data type of an input, not about which sender or action an intent has. CWE-925 in the table already describes this case.
+- CWE-360 (Trust of System Event Data), shown on the CWE-345 page as a child of CWE-345. Its extended description says events often have no way to be verified as coming from a trusted source, which matches a receiver that trusts any `DEVICE_STORAGE_LOW` intent, but its example is Windows messages. Not in `standards-reference.md`; add it there before use.
 
 MITRE ATT&CK for Mobile: No direct match. No technique on attack.mitre.org was verified that describes triggering another app's exported receiver to delete its data.
 
@@ -270,4 +271,4 @@ The fix stops the benchmark exploit, which sends no action. Residual points:
 - Benign and Malicious both declare `PROCESS_OUTGOING_CALLS`, which neither uses; Secure drops it. It looks like a leftover and has no effect on the exploit.
 - Whether `adb shell am broadcast -n ...` from the shell user reaches the receiver in the same way as the Malicious app has not been checked.
 - Whether the attacker can bypass Secure by setting the action in an explicit intent (see section 9, item 1). Hypothesis, to test in Step 3.
-- CWE IDs not in `standards-reference.md` that may fit and should be checked before use: an ID for improper input validation (the receiver accepts any intent). Not used in the table.
+- The CWE for improper input validation was checked: CWE-20 is DISCOURAGED and none of its children fits better. See "Candidates to check" in section 7.
