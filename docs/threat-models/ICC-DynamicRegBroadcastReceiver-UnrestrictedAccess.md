@@ -207,10 +207,12 @@ Exploit steps, done by hand in the emulator for each pair:
 4. Tap SEND BROADCAST.
 5. Check Benign or Secure for the "An email will be sent to ..." message.
 
-The log line below was read with:
+For the Secure + Malicious run, the log was cleared before step 1 and read after step 5:
 
 ```powershell
-adb logcat -d | Select-String -Pattern "Permission Denial|edu.ksu.cs"
+adb logcat -c
+# steps 1 to 5
+adb logcat -d | findstr /i "Permission Denial"
 ```
 
 The following command sends the same broadcast without the Malicious app. **Not run:**
@@ -226,10 +228,10 @@ adb shell am broadcast -a edu.ksu.cs.action.EMAIL --es email rookie@malicious.co
 | Benign + Malicious | Exploit succeeded | Benign displayed "An email will be sent to rookie@malicious.comwith the text : I can send email without any permissions" (the missing space comes from the string concatenation in `EmailActivity.java`). |
 | Secure + Malicious | Exploit had no effect | Secure showed no message. |
 
-Permission Denial for the Secure + Malicious pair, from adb logcat:
+Permission Denial for the Secure + Malicious pair, from adb logcat (screenshot: [step01_26_secure-permission-denial-log.png](../screenshots/step01_26_secure-permission-denial-log.png)):
 
 ```text
-10-31 22:10:32.718  1661  1676 W BroadcastQueue: Permission Denial: broadcasting Intent { act=edu.ksu.cs.action.EMAIL flg=0x10 (has extras) } from edu.ksu.cs.malicious (pid=5689, uid=10083) requires edu.ksu.cs.perm due to registered receiver BroadcastFilter{bd56859 u0 ReceiverList{4c484a0 5640 edu.ksu.cs.benign/10084/u0 remote:b5ed9a3}}
+10-31 22:16:54.080 1661 1676 W BroadcastQueue: Permission Denial: broadcasting Intent { act=edu.ksu.cs.action.EMAIL flg=0x10 (has extras) } from edu.ksu.cs.malicious (pid=5689, uid=10083) requires edu.ksu.cs.perm due to registered receiver BroadcastFilter{bd56859 u0 ReceiverList{4c484a0 5640 edu.ksu.cs.benign/10084/u0 remote:b5ed9a3}}
 ```
 
 ## 9. Mitigation
