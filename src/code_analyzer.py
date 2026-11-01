@@ -51,6 +51,8 @@ Patterns:
 import os
 import re
 
+import call_graph
+
 PATTERNS = {
     'ecb_mode': 'CWE-327',
     'constant_iv': 'CWE-329',
@@ -78,6 +80,7 @@ CONFIDENCE = ('high', 'medium', 'low')
 
 LIBRARY_PREFIXES = ('android/', 'androidx/', 'kotlin/', 'com/google/')
 PASSES = 3   # rounds for static fields and method summaries to settle
+INPUT_CALL_DEPTH = 2   # call levels followed to an input field read (clipboard_sensitive)
 
 INVOKE_RE = re.compile(r'^(invoke-\S+)\s+\{([^}]*)\},\s*(\S+)$')
 METHOD_REF_RE = re.compile(r'^(\S+?;)->([^(]+)\(([^)]*)\)(\S+)$')
@@ -182,17 +185,23 @@ def _int(token):
         return None
 
 
+BLOCK_STARTS = ('.annotation', '.array-data', '.packed-switch', '.sparse-switch')
+
+
 def _code(body):
-    """Instructions only: no directives, labels or array/switch payload data."""
-    out, skip = [], False
+    """Instructions only: no directives, labels, annotation blocks (such as the
+    Throws annotation of a method that declares exceptions) or array/switch
+    payload data."""
+    out, end = [], None
     for no, text in body:
-        if text.startswith(('.array-data', '.packed-switch', '.sparse-switch')):
-            skip = True
+        if end:
+            if text == end:
+                end = None
             continue
-        if text.startswith('.end'):
-            skip = False
+        if text.startswith(BLOCK_STARTS):
+            end = '.end ' + text.split()[0][1:]
             continue
-        if skip or text.startswith(('.', ':')):
+        if text.startswith(('.', ':')):
             continue
         out.append((no, text))
     return out
@@ -552,7 +561,7 @@ class _Method:
 
     def misc(self, no, text, owner, name, args):
         if owner.endswith('ClipboardManager;') and name == 'setPrimaryClip':
-            if 'getPassword' in self.seen or self.ctx.reads_input(self.m):
+            if 'getPassword' in self.seen or self.sig in self.ctx.input_readers:
                 self.report('clipboard_sensitive', 'medium', no, text)
         elif owner == 'Landroid/telephony/TelephonyManager;' and name in (
                 'getDeviceId', 'getImei', 'getMeid', 'getSimSerialNumber', 'getSubscriberId'):
@@ -592,6 +601,7 @@ class _Context:
         self.summary = {}
         self.seeded = set()
         self.findings = {}
+        self.input_readers = set()
 
     def field_write(self, ref, value, in_clinit):
         const = value if value and value[0] in ('str', 'lit') and in_clinit else None
@@ -617,7 +627,25 @@ class _Context:
 
     def reads_input(self, method):
         body = self.method_text(method)
-        return 'EditText;->getText' in body or 'TextView;->getText' in body
+        return 'EditText;->getText' in body or 'TextView;->getText' in body \
+            or '->getPassword(' in body
+
+    def find_input_readers(self, decoded_dir):
+        """Signatures of app methods that read an input field (EditText or
+        TextView getText, or getPassword) directly or through up to
+        INPUT_CALL_DEPTH calls to other app methods, using call_graph.py.
+        Synthetic accessors such as access$000 count as one call level."""
+        readers = set()
+        for cls in self.classes:
+            for m in cls['methods']:
+                if self.reads_input(m):
+                    readers.add('%s->%s(%s)%s' % (cls['name'], m['name'], m['desc'], m['ret']))
+        _, reverse = call_graph.build(decoded_dir)
+        level = set(readers)
+        for _ in range(INPUT_CALL_DEPTH):
+            level = {caller for callee in level for caller in reverse.get(callee, ())} - readers
+            readers |= level
+        self.input_readers = readers
 
     def emit(self, cls, pattern, conf, no, text):
         key = (cls['file'], no, pattern)
@@ -664,6 +692,7 @@ def analyze(decoded_dir):
     """Return the code findings for the apktool output folder `decoded_dir`."""
     classes = [c for c in (_parse_class(p, decoded_dir) for p in _class_files(decoded_dir)) if c]
     ctx = _Context(classes)
+    ctx.find_input_readers(decoded_dir)
     for _ in range(PASSES):
         ctx.findings = {}
         for cls in classes:
