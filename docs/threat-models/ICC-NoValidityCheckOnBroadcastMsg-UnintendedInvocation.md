@@ -165,7 +165,8 @@ CWE and MASVS titles are copied from `docs/threat-models/standards-reference.md`
 | OWASP MASVS v2 | MASVS-CODE-4 | The app validates and sanitizes all untrusted inputs. | Verified | Partial. The Secure fix validates the incoming intent's action. The control is broader than IPC. |
 | OWASP MASTG test | MASTG-TEST-0366 | Exported And Unprotected Broadcast Receivers That Expose Sensitive Functionality | Verified | Direct. An exported receiver without a permission exposes file deletion. |
 | OWASP MASTG test | MASTG-TEST-0029 | Testing for Sensitive Functionality Exposure Through IPC | Verified | Partial. Deprecated, kept for reference only. |
-| OWASP MASWE | MASWE-0063 | Insecure Broadcast Receivers | Verified | Direct. Beta, ID may change. |
+| OWASP MASWE | MASWE-0018 | Lack of Authentication or Authorization on App Components | Verified | Partial. `LowMemoryReceiver` is exported by its intent filter with no permission (Benign manifest line 22) and lets any app trigger file deletion. Partial because the README explains a permission cannot be used for a system broadcast, so the fix is verification rather than access control. Controls shown on the page: MASVS-AUTH-1, MASVS-PLATFORM-1, MASVS-STORAGE-2. |
+| OWASP MASWE | MASWE-0032 | Insecure Intents | Verified | Partial. `LowMemoryReceiver.java` lines 13 to 15 start `DeleteFilesIntentService` for any received intent without checking it; the page covers "acting on untrusted intents ... (e.g. calling `startActivity`, `startService` ...) without validation". Partial because the started service is Benign's own and the intent from Malicious is not forwarded as is. Controls shown on the page: MASVS-PLATFORM-1, MASVS-STORAGE-2. |
 
 CWE-20 (Improper Input Validation) was considered and is DISCOURAGED in `standards-reference.md`, so it is not in the table; none of its children fits better.
 
