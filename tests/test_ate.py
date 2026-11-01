@@ -9,6 +9,9 @@ Storage/SQLlite-RawQuery-SQLInjection-Lean and
 Storage/InternalStorage-DirectoryTraversal-Lean, plus the smoke test fixture,
 whose receiver forwards an intent extra to startActivity.
 
+The Layer 4 test (dynamic_analyzer.py) installs the smoke test fixture on the
+ghera27 emulator and is skipped when adb sees no device.
+
 Layer 2 tests (code_analyzer.py) use the Benign api27 APK of the Ghera benchmark
 that exhibits each pattern (PATTERN_FIXTURES). A test is skipped when its APK
 has not been built.
@@ -27,6 +30,7 @@ sys.path.insert(0, os.path.join(ROOT, 'src'))
 import apk  # noqa: E402
 import call_graph  # noqa: E402
 import code_analyzer  # noqa: E402
+import dynamic_analyzer  # noqa: E402
 import report  # noqa: E402
 import surface  # noqa: E402
 import taint_analyzer  # noqa: E402
@@ -183,3 +187,18 @@ def test_taint_flow_detected(case, decode_dir):
     assert f['confidence'] in ('high', 'medium', 'low')
     assert f['source_line'] and f['sink_line']
     assert 'source L' in f['evidence'] and 'sink L' in f['evidence']
+
+
+# Layer 4: dynamic analysis
+
+_adb = dynamic_analyzer.find_adb()
+no_emulator = not (_adb and dynamic_analyzer.device_available(_adb))
+
+
+@pytest.mark.skipif(no_emulator, reason='emulator not running')
+def test_dynamic_receiver_accepts_external(decode_dir):
+    manifest = decode_dir(FIXTURE_APK)
+    found = dynamic_analyzer.run(FIXTURE_APK, manifest['package'], adb=_adb, manifest=manifest)
+    accepted = [f for f in found if f['issue'] == 'dynamic-receiver-accepts-external']
+    assert accepted, 'no dynamic-receiver-accepts-external finding: %r' % found
+    assert accepted[0]['cwe'] in ('CWE-925', 'CWE-926')
