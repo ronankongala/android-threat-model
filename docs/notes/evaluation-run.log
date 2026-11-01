@@ -1,0 +1,14 @@
+Benchmarks with a successful api27 build: 1
+== Crypto/BlockCipher-ECB-InformationExposure-Lean (ground truth CWEs: CWE-321, CWE-327, CWE-926)
+   Benign 3 findings in 2 components
+          CWE-926 exported-no-permission activity edu.ksu.cs.benign.ResetPasswordActivity (low)
+          CWE-926 exported-no-permission activity edu.ksu.cs.benign.NewPasswordActivity (medium)
+          CWE-927 implicit-intent activity edu.ksu.cs.benign.NewPasswordActivity (medium)
+   Secure 3 findings in 2 components
+          CWE-926 exported-no-permission activity edu.ksu.cs.benign.ResetPasswordActivity (low)
+          CWE-926 exported-no-permission activity edu.ksu.cs.benign.NewPasswordActivity (medium)
+          CWE-927 implicit-intent activity edu.ksu.cs.benign.NewPasswordActivity (medium)
+   true_positive=1 (matching CWEs: CWE-926) false_positive=1
+
+Evaluated 1 benchmarks: 1 true positives, 1 false positives
+Wrote data\evaluation-results.csv
