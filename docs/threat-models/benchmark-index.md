@@ -59,7 +59,7 @@ The "Android versions affected" text is copied from each README. Most READMEs us
 | Category | Folder name | Lean or Fat | Summary | Android versions affected | Draft CWE | Draft MASVS control | Confidence | Model done |
 |---|---|---|---|---|---|---|---|---|
 | NonAPI | `MergeManifest-UnintendedBehavior-Lean` | Lean | An app can silently inherit exported components from a library manifest during manifest merging. | Tested on Android 5.1.1 - Android 8.1 | CWE-926 | MASVS-PLATFORM-1 | Needs check | No |
-| NonAPI | `OutdatedLibrary-DirectoryTraversal-Lean` | Lean | Using an outdated library with known flaws makes the app vulnerable too. | Tested on Android 5.1.1 - Android 8.1 | CWE-1104 | MASVS-CODE-3 | Needs check | No |
+| NonAPI | `OutdatedLibrary-DirectoryTraversal-Lean` | Lean | Using an outdated library with known flaws makes the app vulnerable too. | Tested on Android 5.1.1 - Android 8.1 | CWE-1395 (primary), CWE-1104 | MASVS-CODE-3 | Needs check | No |
 
 ## Permission (2)
 
