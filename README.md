@@ -39,11 +39,11 @@ The first evaluation run and its limits are described in [docs/notes/evaluation-
 
 **Exploit succeeds against Benign** (Malicious triggers an email with no permissions):
 
-<img src="docs/screenshots/step01_21_exploit-success-benign.png" alt="Exploit success" width="180">
+<img src="docs/screenshots/step01_21_exploit-success-benign.png" alt="Exploit success" width="150">
 
 **Exploit blocked by Secure** (no message appears after SEND BROADCAST):
 
-<img src="docs/screenshots/step01_25_exploit-fails-secure.png" alt="Exploit blocked" width="180">
+<img src="docs/screenshots/step01_25_exploit-fails-secure.png" alt="Exploit blocked" width="150">
 
 **System log confirming the block** (Permission Denial from adb logcat):
 
