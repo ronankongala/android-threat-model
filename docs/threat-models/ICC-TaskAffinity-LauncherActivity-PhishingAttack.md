@@ -145,10 +145,10 @@ CWE and MASVS titles are copied from `docs/threat-models/standards-reference.md`
 | OWASP MASVS v2 | MASVS-PLATFORM-1 | The app uses IPC mechanisms securely. | Verified | Partial. The fix is a manifest setting that controls how the system places Benign's activities (Secure manifest line 11). The control page is about IPC used to expose data or functionality to other apps, which only partly covers task placement. |
 | OWASP MASVS v2 | MASVS-PLATFORM-3 | The app uses the user interface securely. | Verified | Partial. Another app's screen replaces Benign's first screen, which has credential fields (`activity_benign_main.xml` lines 10 to 25). The control page is about sensitive data on screen leaking through platform mechanisms and lists MASWE-0039 (App Vulnerable to Overlay Attacks); it does not name task hijacking, and the benchmark `MalActivity` collects no data. |
 
-OWASP MASTG test and OWASP MASWE: No direct match among the allowed IDs. MASTG-TEST-0366, MASTG-TEST-0029 and MASWE-0063 are about broadcast receivers or functionality exposed through IPC, while this benchmark is about task placement (Malicious manifest line 14).
+OWASP MASTG test and OWASP MASWE: No direct match among the IDs in the reference file. MASTG-TEST-0364, MASTG-TEST-0365, MASTG-TEST-0366, MASTG-TEST-0029 and MASWE-0018 are about exported components without access control, and MASWE-0032 is about insecure intents, while this benchmark is about task placement (Malicious manifest line 14).
 
 Candidates to check (not in the table):
-- MASWE-0039 (App Vulnerable to Overlay Attacks), listed on the MASVS-PLATFORM-3 page. Not in the allowed list for this batch.
+- MASWE-0039 (App Vulnerable to Overlay Attacks) is in the reference file but not used: its page is about attacker-controlled windows drawn over the app and defences such as touch filtering (controls shown on the page: MASVS-PLATFORM-3, MASVS-CODE-1), while task hijacking places another app's activity in the app's task.
 - A MASTG test about task hijacking or `taskAffinity`. No ID has been verified.
 
 MITRE ATT&CK for Mobile: No direct match. No technique on attack.mitre.org was verified that describes task affinity hijacking.
