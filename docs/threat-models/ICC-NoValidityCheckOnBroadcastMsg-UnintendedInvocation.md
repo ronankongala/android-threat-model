@@ -160,15 +160,17 @@ CWE and MASVS titles are copied from `docs/threat-models/standards-reference.md`
 |----------|----|-------|------------|-----|
 | CWE | CWE-925 | Improper Verification of Intent by Broadcast Receiver | Verified | Direct. The CWE's extended description is this case: a receiver for a system intent also receives explicit intents from other apps and assumes they are the system intent. Usage ALLOWED. |
 | CWE | CWE-926 | Improper Export of Android Application Components | Verified | Partial. The receiver is exported by its intent filter with no permission. The README explains it cannot be protected by a permission because it must receive a system broadcast, so the fix is in verification, not in export. Usage ALLOWED. |
+| CWE | CWE-360 | Trust of System Event Data | Verified | Partial. `LowMemoryReceiver.java` lines 13 to 15 start the file deletion for any intent, as if it were the system `DEVICE_STORAGE_LOW` event. The CWE's extended description says events often cannot be verified as coming from a trusted source and that a process must check their validity. Partial because the page's text and its only child (CWE-422, Unprotected Windows Messaging Channel) are about Windows messages; CWE-925 is the Android-specific form. Usage ALLOWED. |
 | OWASP MASVS v2 | MASVS-PLATFORM-1 | The app uses IPC mechanisms securely. | Verified | Direct. |
 | OWASP MASVS v2 | MASVS-CODE-4 | The app validates and sanitizes all untrusted inputs. | Verified | Partial. The Secure fix validates the incoming intent's action. The control is broader than IPC. |
 | OWASP MASTG test | MASTG-TEST-0366 | Exported And Unprotected Broadcast Receivers That Expose Sensitive Functionality | Verified | Direct. An exported receiver without a permission exposes file deletion. |
 | OWASP MASTG test | MASTG-TEST-0029 | Testing for Sensitive Functionality Exposure Through IPC | Verified | Partial. Deprecated, kept for reference only. |
 | OWASP MASWE | MASWE-0063 | Insecure Broadcast Receivers | Verified | Direct. Beta, ID may change. |
 
+CWE-20 (Improper Input Validation) was considered and is DISCOURAGED in `standards-reference.md`, so it is not in the table; none of its children fits better.
+
 Candidates to check (not in the table):
-- CWE-20 (Improper Input Validation) was considered for the receiver that accepts any intent. It is in `standards-reference.md`, but its Usage is DISCOURAGED: the mapping notes give the reasons Frequent Misuse, Frequent Misinterpretation and Abstraction, and say to consider lower-level children if the issue is truly improper input validation, so it is not used in the table. None of the children shown on its page fits better: the closest, CWE-1287 (Improper Validation of Specified Type of Input), is about the data type of an input, not about which sender or action an intent has. CWE-925 in the table already describes this case.
-- CWE-360 (Trust of System Event Data), shown on the CWE-345 page as a child of CWE-345. Its extended description says events often have no way to be verified as coming from a trusted source, which matches a receiver that trusts any `DEVICE_STORAGE_LOW` intent, but its example is Windows messages. Not in `standards-reference.md`; add it there before use.
+- None beyond the IDs above.
 
 MITRE ATT&CK for Mobile: No direct match. No technique on attack.mitre.org was verified that describes triggering another app's exported receiver to delete its data.
 
@@ -271,4 +273,4 @@ The fix stops the benchmark exploit, which sends no action. Residual points:
 - Benign and Malicious both declare `PROCESS_OUTGOING_CALLS`, which neither uses; Secure drops it. It looks like a leftover and has no effect on the exploit.
 - Whether `adb shell am broadcast -n ...` from the shell user reaches the receiver in the same way as the Malicious app has not been checked.
 - Whether the attacker can bypass Secure by setting the action in an explicit intent (see section 9, item 1). Hypothesis, to test in Step 3.
-- The CWE for improper input validation was checked: CWE-20 is DISCOURAGED and none of its children fits better. See "Candidates to check" in section 7.
+- The CWE for improper input validation was checked: CWE-20 is DISCOURAGED and none of its children fits better. CWE-360 is in the table in section 7 instead.
