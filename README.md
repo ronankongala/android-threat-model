@@ -44,6 +44,20 @@ flowchart LR
 
 The first evaluation run and its limits are described in [docs/notes/evaluation-report.md](docs/notes/evaluation-report.md). So far only one benchmark has a complete `api27` build, so the numbers show that the pipeline works, not how accurate the tool is. Full results will be updated after the complete build run of all 57 benchmarks.
 
+## Screenshots
+
+**Exploit succeeds against Benign** (Malicious triggers an email with no permissions):
+
+![Exploit success](docs/screenshots/step01_21_exploit-success-benign.png)
+
+**Exploit blocked by Secure** (no message appears after SEND BROADCAST):
+
+![Exploit blocked](docs/screenshots/step01_25_exploit-fails-secure.png)
+
+**System log confirming the block** (Permission Denial from adb logcat):
+
+![Permission denial log](docs/screenshots/step01_26_secure-permission-denial-log.png)
+
 ## Repo structure
 
 ```text
