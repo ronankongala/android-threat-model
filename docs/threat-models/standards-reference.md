@@ -4,41 +4,43 @@ Official titles for every CWE and MASVS v2 ID used in the threat models and the 
 
 ## CWE
 
-Each CWE page was downloaded as raw HTML on 2026-10-31. The "Official title" column is the text of the page's `<h2>` heading, copied character for character. The "Mapping status" column is the value shown next to the "Vulnerability Mapping" label in the status block at the top of each page, also copied character for character. The "Abstraction level" column is the value shown next to the "Abstraction" label in the same block. Raw HTML was obtained for all 27 pages, so no row is marked "Needs check".
+Each CWE page was downloaded as raw HTML on 2026-10-31. The "Official title" column is the text of the page's `<h2>` heading, copied character for character. The "Page label" column is the value shown next to the "Vulnerability Mapping" label in the status block at the top of each page, also copied character for character. The "Usage (mapping notes)" column is the value in the "Usage" row of the "Vulnerability Mapping Notes" section further down each page, copied character for character. The "Abstraction level" column is the value shown next to the "Abstraction" label in the same block. Raw HTML was obtained for all 27 pages, so no row is marked "Needs check".
 
 CWE version: the version string on every page is `(5.0)`. It appears at the end of the page's `<title>` element (for example `CWE-89: Improper Neutralization of Special Elements used in an SQL Command (5.0)`) and again at the end of the breadcrumb line at the top of the page. It does not appear in the `<h2>` heading.
 
-| ID | Official title | Abstraction level | Mapping status | URL | Date checked | Status |
-|---|---|---|---|---|---|---|
-| CWE-22 | CWE-22: Improper Limitation of a Pathname to a Restricted Directory | Base | ALLOWED | https://cwe.mitre.org/data/definitions/22.html | 2026-10-31 | Verified |
-| CWE-89 | CWE-89: Improper Neutralization of Special Elements used in an SQL Command | Base | ALLOWED | https://cwe.mitre.org/data/definitions/89.html | 2026-10-31 | Verified |
-| CWE-200 | CWE-200: Exposure of Sensitive Information to an Unauthorized Actor | Class | DISCOURAGED | https://cwe.mitre.org/data/definitions/200.html | 2026-10-31 | Verified |
-| CWE-248 | CWE-248: Uncaught Exception | Base | ALLOWED | https://cwe.mitre.org/data/definitions/248.html | 2026-10-31 | Verified |
-| CWE-250 | CWE-250: Execution with Unnecessary Privileges | Base | ALLOWED | https://cwe.mitre.org/data/definitions/250.html | 2026-10-31 | Verified |
-| CWE-272 | CWE-272: Least Privilege Violation | Base | ALLOWED | https://cwe.mitre.org/data/definitions/272.html | 2026-10-31 | Verified |
-| CWE-284 | CWE-284: Improper Access Control | Pillar | DISCOURAGED | https://cwe.mitre.org/data/definitions/284.html | 2026-10-31 | Verified |
-| CWE-295 | CWE-295: Improper Certificate Validation | Base | ALLOWED | https://cwe.mitre.org/data/definitions/295.html | 2026-10-31 | Verified |
-| CWE-297 | CWE-297: Improper Validation of Certificate with Host Mismatch | Variant | ALLOWED | https://cwe.mitre.org/data/definitions/297.html | 2026-10-31 | Verified |
-| CWE-319 | CWE-319: Cleartext Transmission of Sensitive Information | Base | ALLOWED | https://cwe.mitre.org/data/definitions/319.html | 2026-10-31 | Verified |
-| CWE-321 | CWE-321: Use of Hard-coded Cryptographic Key | Variant | ALLOWED | https://cwe.mitre.org/data/definitions/321.html | 2026-10-31 | Verified |
-| CWE-327 | CWE-327: Use of a Broken or Risky Cryptographic Algorithm | Class | ALLOWED | https://cwe.mitre.org/data/definitions/327.html | 2026-10-31 | Verified |
-| CWE-329 | CWE-329: Generation of Predictable IV with CBC Mode | Variant | ALLOWED | https://cwe.mitre.org/data/definitions/329.html | 2026-10-31 | Verified |
-| CWE-359 | CWE-359: Exposure of Private Personal Information to an Unauthorized Actor | Base | ALLOWED | https://cwe.mitre.org/data/definitions/359.html | 2026-10-31 | Verified |
-| CWE-441 | CWE-441: Unintended Proxy or Intermediary | Class | ALLOWED | https://cwe.mitre.org/data/definitions/441.html | 2026-10-31 | Verified |
-| CWE-470 | CWE-470: Use of Externally-Controlled Input to Select Classes or Code | Base | ALLOWED | https://cwe.mitre.org/data/definitions/470.html | 2026-10-31 | Verified |
-| CWE-494 | CWE-494: Download of Code Without Integrity Check | Base | ALLOWED | https://cwe.mitre.org/data/definitions/494.html | 2026-10-31 | Verified |
-| CWE-522 | CWE-522: Insufficiently Protected Credentials | Class | ALLOWED | https://cwe.mitre.org/data/definitions/522.html | 2026-10-31 | Verified |
-| CWE-760 | CWE-760: Use of a One-Way Hash with a Predictable Salt | Variant | ALLOWED | https://cwe.mitre.org/data/definitions/760.html | 2026-10-31 | Verified |
-| CWE-862 | CWE-862: Missing Authorization | Class | ALLOWED | https://cwe.mitre.org/data/definitions/862.html | 2026-10-31 | Verified |
-| CWE-863 | CWE-863: Incorrect Authorization | Class | ALLOWED | https://cwe.mitre.org/data/definitions/863.html | 2026-10-31 | Verified |
-| CWE-922 | CWE-922: Insecure Storage of Sensitive Information | Class | ALLOWED | https://cwe.mitre.org/data/definitions/922.html | 2026-10-31 | Verified |
-| CWE-925 | CWE-925: Improper Verification of Intent by Broadcast Receiver | Variant | ALLOWED | https://cwe.mitre.org/data/definitions/925.html | 2026-10-31 | Verified |
-| CWE-926 | CWE-926: Improper Export of Android Application Components | Variant | ALLOWED | https://cwe.mitre.org/data/definitions/926.html | 2026-10-31 | Verified |
-| CWE-927 | CWE-927: Use of Implicit Intent for Sensitive Communication | Variant | ALLOWED | https://cwe.mitre.org/data/definitions/927.html | 2026-10-31 | Verified |
-| CWE-1104 | CWE-1104: Use of Unmaintained Third Party Components | Base | ALLOWED | https://cwe.mitre.org/data/definitions/1104.html | 2026-10-31 | Verified |
-| CWE-1395 | CWE-1395: Dependency on Vulnerable Third-Party Component | Class | ALLOWED | https://cwe.mitre.org/data/definitions/1395.html | 2026-10-31 | Verified |
+| ID | Official title | Abstraction level | Page label | Usage (mapping notes) | URL | Date checked | Status |
+|---|---|---|---|---|---|---|---|
+| CWE-22 | CWE-22: Improper Limitation of a Pathname to a Restricted Directory | Base | ALLOWED | ALLOWED-WITH-REVIEW | https://cwe.mitre.org/data/definitions/22.html | 2026-10-31 | Verified |
+| CWE-89 | CWE-89: Improper Neutralization of Special Elements used in an SQL Command | Base | ALLOWED | ALLOWED | https://cwe.mitre.org/data/definitions/89.html | 2026-10-31 | Verified |
+| CWE-200 | CWE-200: Exposure of Sensitive Information to an Unauthorized Actor | Class | DISCOURAGED | DISCOURAGED | https://cwe.mitre.org/data/definitions/200.html | 2026-10-31 | Verified |
+| CWE-248 | CWE-248: Uncaught Exception | Base | ALLOWED | ALLOWED | https://cwe.mitre.org/data/definitions/248.html | 2026-10-31 | Verified |
+| CWE-250 | CWE-250: Execution with Unnecessary Privileges | Base | ALLOWED | ALLOWED | https://cwe.mitre.org/data/definitions/250.html | 2026-10-31 | Verified |
+| CWE-272 | CWE-272: Least Privilege Violation | Base | ALLOWED | ALLOWED | https://cwe.mitre.org/data/definitions/272.html | 2026-10-31 | Verified |
+| CWE-284 | CWE-284: Improper Access Control | Pillar | DISCOURAGED | DISCOURAGED | https://cwe.mitre.org/data/definitions/284.html | 2026-10-31 | Verified |
+| CWE-295 | CWE-295: Improper Certificate Validation | Base | ALLOWED | ALLOWED | https://cwe.mitre.org/data/definitions/295.html | 2026-10-31 | Verified |
+| CWE-297 | CWE-297: Improper Validation of Certificate with Host Mismatch | Variant | ALLOWED | ALLOWED | https://cwe.mitre.org/data/definitions/297.html | 2026-10-31 | Verified |
+| CWE-319 | CWE-319: Cleartext Transmission of Sensitive Information | Base | ALLOWED | ALLOWED | https://cwe.mitre.org/data/definitions/319.html | 2026-10-31 | Verified |
+| CWE-321 | CWE-321: Use of Hard-coded Cryptographic Key | Variant | ALLOWED | ALLOWED | https://cwe.mitre.org/data/definitions/321.html | 2026-10-31 | Verified |
+| CWE-327 | CWE-327: Use of a Broken or Risky Cryptographic Algorithm | Class | ALLOWED | ALLOWED-WITH-REVIEW | https://cwe.mitre.org/data/definitions/327.html | 2026-10-31 | Verified |
+| CWE-329 | CWE-329: Generation of Predictable IV with CBC Mode | Variant | ALLOWED | ALLOWED | https://cwe.mitre.org/data/definitions/329.html | 2026-10-31 | Verified |
+| CWE-359 | CWE-359: Exposure of Private Personal Information to an Unauthorized Actor | Base | ALLOWED | ALLOWED | https://cwe.mitre.org/data/definitions/359.html | 2026-10-31 | Verified |
+| CWE-441 | CWE-441: Unintended Proxy or Intermediary | Class | ALLOWED | ALLOWED-WITH-REVIEW | https://cwe.mitre.org/data/definitions/441.html | 2026-10-31 | Verified |
+| CWE-470 | CWE-470: Use of Externally-Controlled Input to Select Classes or Code | Base | ALLOWED | ALLOWED | https://cwe.mitre.org/data/definitions/470.html | 2026-10-31 | Verified |
+| CWE-494 | CWE-494: Download of Code Without Integrity Check | Base | ALLOWED | ALLOWED | https://cwe.mitre.org/data/definitions/494.html | 2026-10-31 | Verified |
+| CWE-522 | CWE-522: Insufficiently Protected Credentials | Class | ALLOWED | ALLOWED-WITH-REVIEW | https://cwe.mitre.org/data/definitions/522.html | 2026-10-31 | Verified |
+| CWE-760 | CWE-760: Use of a One-Way Hash with a Predictable Salt | Variant | ALLOWED | ALLOWED | https://cwe.mitre.org/data/definitions/760.html | 2026-10-31 | Verified |
+| CWE-862 | CWE-862: Missing Authorization | Class | ALLOWED | ALLOWED-WITH-REVIEW | https://cwe.mitre.org/data/definitions/862.html | 2026-10-31 | Verified |
+| CWE-863 | CWE-863: Incorrect Authorization | Class | ALLOWED | ALLOWED-WITH-REVIEW | https://cwe.mitre.org/data/definitions/863.html | 2026-10-31 | Verified |
+| CWE-922 | CWE-922: Insecure Storage of Sensitive Information | Class | ALLOWED | ALLOWED-WITH-REVIEW | https://cwe.mitre.org/data/definitions/922.html | 2026-10-31 | Verified |
+| CWE-925 | CWE-925: Improper Verification of Intent by Broadcast Receiver | Variant | ALLOWED | ALLOWED | https://cwe.mitre.org/data/definitions/925.html | 2026-10-31 | Verified |
+| CWE-926 | CWE-926: Improper Export of Android Application Components | Variant | ALLOWED | ALLOWED | https://cwe.mitre.org/data/definitions/926.html | 2026-10-31 | Verified |
+| CWE-927 | CWE-927: Use of Implicit Intent for Sensitive Communication | Variant | ALLOWED | ALLOWED | https://cwe.mitre.org/data/definitions/927.html | 2026-10-31 | Verified |
+| CWE-1104 | CWE-1104: Use of Unmaintained Third Party Components | Base | ALLOWED | ALLOWED | https://cwe.mitre.org/data/definitions/1104.html | 2026-10-31 | Verified |
+| CWE-1395 | CWE-1395: Dependency on Vulnerable Third-Party Component | Class | ALLOWED | ALLOWED-WITH-REVIEW | https://cwe.mitre.org/data/definitions/1395.html | 2026-10-31 | Verified |
 
-Note on mapping status: for eight IDs (CWE-22, CWE-327, CWE-441, CWE-522, CWE-862, CWE-863, CWE-922, CWE-1395), the label next to "Vulnerability Mapping" reads ALLOWED, but the hover text on that label reads "This CWE ID could be used to map to real-world vulnerabilities in limited situations requiring careful review", and the "Usage" row in the "Vulnerability Mapping Notes" section further down the same page reads ALLOWED-WITH-REVIEW. The table records the "Vulnerability Mapping" label as instructed. Treat these eight as needing a review of their mapping notes before use.
+Titles are as shown in CWE 5.0; older versions such as 4.20 show bracketed names, for example ('SQL Injection') for CWE-89 (checked in `cwec_v4.20.xml` from https://cwe.mitre.org/data/archive.html).
+
+Note on mapping status: for eight IDs (CWE-22, CWE-327, CWE-441, CWE-522, CWE-862, CWE-863, CWE-922, CWE-1395), the label next to "Vulnerability Mapping" reads ALLOWED, but the hover text on that label reads "This CWE ID could be used to map to real-world vulnerabilities in limited situations requiring careful review", and the "Usage" row in the "Vulnerability Mapping Notes" section further down the same page reads ALLOWED-WITH-REVIEW. The "Page label" column records the label and the "Usage (mapping notes)" column records the Usage row. Treat these eight as needing a review of their mapping notes before use.
 
 ## MASVS v2
 
@@ -62,7 +64,24 @@ MASVS controls have no separate name, so the official title is the control state
 
 ## Replaced entries
 
-Built from the "Mapping status" column only. No row in that column is PROHIBITED. Two rows are DISCOURAGED. On both pages the hover text for that status reads "This CWE ID should not be used to map to real-world vulnerabilities".
+Built from the "Usage (mapping notes)" column only. The label conflict for eight IDs is explained in the note under the CWE table.
+
+### DISCOURAGED or PROHIBITED
+
+No row has a Usage of PROHIBITED. Two rows have a Usage of DISCOURAGED. On both pages the Usage row reads "(this CWE ID should not be used to map to real-world vulnerabilities)".
 
 - CWE-200 (Class): DISCOURAGED. Rows that use it (`OpenSocket-InformationLeak-Lean`, `ClipboardUse-InformationExposure-Lean`) need a more specific child CWE.
 - CWE-284 (Pillar): DISCOURAGED. Rows that use it (`InadequatePathPermission-InformationExposure-Lean`, `WeakPermission-UnauthorizedAccess-Lean`) need a more specific child CWE.
+
+### ALLOWED-WITH-REVIEW
+
+Eight rows have a Usage of ALLOWED-WITH-REVIEW. On each page the Usage row reads "(this CWE ID could be used to map to real-world vulnerabilities in limited situations requiring careful review)". Read the mapping notes on the page before using these IDs.
+
+- CWE-22 (Base)
+- CWE-327 (Class)
+- CWE-441 (Class)
+- CWE-522 (Class)
+- CWE-862 (Class)
+- CWE-863 (Class)
+- CWE-922 (Class)
+- CWE-1395 (Class)
