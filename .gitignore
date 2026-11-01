@@ -13,3 +13,11 @@ local.properties
 # Local Node.js tooling (tools/)
 node_modules/
 tools/.cache/
+
+# Downloaded by src/apk.py
+tools/apktool.jar
+
+# Python
+__pycache__/
+.pytest_cache/
+.venv/
