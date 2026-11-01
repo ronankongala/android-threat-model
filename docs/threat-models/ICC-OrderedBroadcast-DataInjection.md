@@ -167,12 +167,13 @@ CWE and MASVS titles are copied from `docs/threat-models/standards-reference.md`
 | OWASP MASVS v2 | MASVS-CODE-4 | The app validates and sanitizes all untrusted inputs. | Verified | Partial. The Secure fix is a form of input validation (check the action, use the original extra), but the input is not sanitized. |
 | OWASP MASTG test | MASTG-TEST-0366 | Exported And Unprotected Broadcast Receivers That Expose Sensitive Functionality | Verified | Partial. Benign's receiver is exported without a permission, but the exploit does not call it directly. |
 | OWASP MASTG test | MASTG-TEST-0029 | Testing for Sensitive Functionality Exposure Through IPC | Verified | Partial. Deprecated, kept for reference only. |
-| OWASP MASWE | MASWE-0063 | Insecure Broadcast Receivers | Verified | Partial. Covers receiver weaknesses in general; ordered-broadcast result data is not singled out. Beta, ID may change. |
+| OWASP MASWE | MASWE-0032 | Insecure Intents | Verified | Partial. `FormatOutgoingCallReceiver.java` line 16 takes the number from `getResultData()`, data that an earlier receiver in the ordered broadcast can change; the page covers acting on untrusted intents and their data without validation. Partial because the page does not single out ordered-broadcast result data. Controls shown on the page: MASVS-PLATFORM-1, MASVS-STORAGE-2. |
+| OWASP MASWE | MASWE-0018 | Lack of Authentication or Authorization on App Components | Verified | Partial. `FormatOutgoingCallReceiver` is exported with no permission (Benign manifest lines 23 to 25), but the exploit does not call it directly. Controls shown on the page: MASVS-AUTH-1, MASVS-PLATFORM-1, MASVS-STORAGE-2. |
 
 CWE-345 (Insufficient Verification of Data Authenticity) was considered and is DISCOURAGED in `standards-reference.md`, so it is not in the table; its child CWE-348 is used instead.
 
 Candidates to check (not in the table):
-- A MASWE or MASTG v2 entry that covers trusting data from ordered broadcasts. No ID has been verified.
+- A MASTG v2 test that covers trusting data from ordered broadcasts. No ID has been verified.
 
 MITRE ATT&CK for Mobile: No direct match. No technique on attack.mitre.org was verified that describes redirecting outgoing calls through an ordered broadcast receiver.
 
