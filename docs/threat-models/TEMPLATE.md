@@ -111,6 +111,8 @@ Fit values:
 - **Direct**: the standard describes this benchmark's weakness or test as it is.
 - **Partial**: the standard covers part of this benchmark, or covers it only with a caveat. Give the caveat in the Fit cell.
 
+For a CWE whose Usage in `docs/threat-models/standards-reference.md` is ALLOWED-WITH-REVIEW, the Fit cell must contain the outcome of the review, never an instruction to the reader. Read the Vulnerability Mapping Notes on the saved CWE page, give the Rationale and Comment in one short sentence, list the child entries shown on the page, and state whether any child fits better. If a child fits better, say so: switch the row to that ID only if it is already in the reference file, otherwise list it under "Candidates to check".
+
 Do not invent IDs. List a standard only if the fit is Direct or Partial. If nothing fits, write "No direct match" and explain why.
 
 | Standard | ID | Title | Confidence | Fit |
