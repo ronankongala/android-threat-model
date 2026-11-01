@@ -162,11 +162,12 @@ CWE and MASVS titles are copied from `docs/threat-models/standards-reference.md`
 |----------|----|-------|------------|-----|
 | CWE | CWE-927 | Use of Implicit Intent for Sensitive Communication | Verified | Direct. `HomeActivity.java` lines 31 to 34 send the image in an intent that sets only an action, so any app with a matching intent filter can receive it; `MalImageEditor` does (Malicious manifest lines 20 to 25). Usage ALLOWED. |
 | OWASP MASVS v2 | MASVS-PLATFORM-1 | The app uses IPC mechanisms securely. | Verified | Direct. The fix replaces the implicit intent with an explicit one (Secure `HomeActivity.java` line 31). |
+| OWASP MASWE | MASWE-0032 | Insecure Intents | Verified | Direct. `HomeActivity.java` lines 31 to 34 send the image in an intent that sets only an action; the page covers "sending sensitive data via implicit intents that any matching app can receive". Controls shown on the page: MASVS-PLATFORM-1, MASVS-STORAGE-2. |
 
-OWASP MASTG test and OWASP MASWE: No direct match among the allowed IDs. MASTG-TEST-0366, MASTG-TEST-0029 and MASWE-0063 are about exported broadcast receivers or exposed functionality, while this benchmark sends data out through an implicit activity intent (`HomeActivity.java` line 32).
+OWASP MASTG test: No direct match among the IDs in the reference file. MASTG-TEST-0364, MASTG-TEST-0365, MASTG-TEST-0366 and MASTG-TEST-0029 are about exported components that expose functionality, while this benchmark sends data out through an implicit activity intent (`HomeActivity.java` line 32). MASWE-0018 is not in the table: Benign's `ImageEditor` is not exported (manifest line 23).
 
 Candidates to check (not in the table):
-- A MASTG test or MASWE weakness about sending sensitive data in implicit intents. No ID has been verified.
+- A MASTG test about sending sensitive data in implicit intents. No such test is in the reference file.
 
 MITRE ATT&CK for Mobile: No direct match. No technique on attack.mitre.org was verified that describes intercepting another app's implicit activity intent through intent filter priority.
 
