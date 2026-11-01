@@ -165,6 +165,7 @@ CWE and MASVS titles are copied from `docs/threat-models/standards-reference.md`
 | CWE | CWE-927 | Use of Implicit Intent for Sensitive Communication | Verified | Direct. Benign sends the phone number in an implicit sticky broadcast; the CWE description names sticky broadcasts as a variant. Usage ALLOWED. |
 | CWE | CWE-925 | Improper Verification of Intent by Broadcast Receiver | Verified | Partial. BenignPartner's `MyReceiver` does not verify the source of the intent, but the CWE's extended description is about receivers that trust system intents. Usage ALLOWED. |
 | CWE | CWE-926 | Improper Export of Android Application Components | Verified | Partial. BenignPartner's receiver is registered without a permission and its manifest entry is `exported="true"`, but the root cause is the sticky send in Benign. Usage ALLOWED. |
+| CWE | CWE-532 | Insertion of Sensitive Information into Log File | Verified | Partial. BenignPartner's `MyReceiver.java` line 18 logs `"Send SMS to " + phnNm`, so the phone number goes to the device log (attack tree path C2). The README exploit reads the sticky intent instead, and whether another app can read BenignPartner's log on the test emulator has not been checked. BenignPartner is shared by both pairs, so the Secure fix does not remove this. Usage ALLOWED. |
 | OWASP MASVS v2 | MASVS-PLATFORM-1 | The app uses IPC mechanisms securely. | Verified | Direct. Both the sticky send and the unprotected receiver are IPC weaknesses. |
 | OWASP MASTG test | MASTG-TEST-0366 | Exported And Unprotected Broadcast Receivers That Expose Sensitive Functionality | Verified | Partial. Covers BenignPartner's unprotected receiver, not the sticky send in Benign. |
 | OWASP MASTG test | MASTG-TEST-0029 | Testing for Sensitive Functionality Exposure Through IPC | Verified | Partial. Deprecated, kept for reference only. |
@@ -172,6 +173,8 @@ CWE and MASVS titles are copied from `docs/threat-models/standards-reference.md`
 
 Candidates to check (not in the table):
 - A MASWE or MASTG v2 entry that covers sensitive data sent in implicit or sticky broadcasts (the sender side). No ID has been verified.
+- CWE-345 (Insufficient Verification of Data Authenticity) was considered for `MyReceiver` accepting any `phone` value. It is in `standards-reference.md`, but its Usage is DISCOURAGED: the mapping notes say it is a level-1 Class and to examine its children for a better fit, so it is not used in the table.
+- CWE-346 (Origin Validation Error), a child of CWE-345 shown on its page, fits better. Its description is that the product "does not properly verify that the source of data or communication is valid", which is what `MyReceiver` does with the `phone` extra. Its own page label is ALLOWED with careful review of mapping notes, so its notes need the same review. Not in `standards-reference.md`; add it there before use.
 
 MITRE ATT&CK for Mobile: No direct match. No technique on attack.mitre.org was verified that describes rewriting another app's sticky broadcast.
 
@@ -282,5 +285,5 @@ The fix removes the stored copy, so Malicious finds nothing to read or rewrite l
 - Whether a stored sticky intent survives the sender's uninstall is not stated in the README or code. The cold boot before pair 2 is a precaution so that pair 1 cannot affect pair 2. Hypothesis, to test in Step 3.
 - The protection level of `android.permission.BROADCAST_STICKY` (whether the user is asked to grant it) is not stated in the benchmark. Check it against the Android documentation before claiming the attacker needs no user approval.
 - The README says `sendStickyBroadcast` leaks data; whether `sendStickyBroadcast` is deprecated or restricted on newer Android versions is not covered by the benchmark. Hypothesis, to test in Step 3.
-- CWE IDs not in `standards-reference.md` that may fit better and should be checked before use: an ID for missing verification of data authenticity (for the receiver accepting any `phone` value). Not used in the table.
+- The CWE for missing verification of data authenticity was checked: CWE-345 is DISCOURAGED, and its child CWE-346 is listed under "Candidates to check" in section 7.
 - `Benign/` and `Secure/` each contain a prebuilt APK (`StickyBroadcast-DataInjection-Lean-benign.apk`, `...-secure.apk`). The commands above build from source instead; whether the prebuilt APKs match the source is not checked.
