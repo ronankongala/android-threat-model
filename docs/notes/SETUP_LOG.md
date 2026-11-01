@@ -16,3 +16,15 @@ Host: Windows 11 Home 10.0.26200, x86_64 (AMD64), WSL2 available (Ubuntu-24.04)
 | 2026-10-31 | Android SDK Build-Tools | 27.0.3 | `sdkmanager --% --sdk_root=C:\Android\Sdk "build-tools;27.0.3"` | Same `;` splitting issue and fix as above. |
 | 2026-10-31 | System image Google APIs x86, API 27 | `system-images;android-27;google_apis;x86` rev 11 | `sdkmanager --% --sdk_root=C:\Android\Sdk "system-images;android-27;google_apis;x86"` | Same `;` splitting issue and fix as above. |
 | 2026-10-31 | env.ps1 | n/a | `. .\env.ps1` from the project root | Sets JAVA_HOME (JDK 8), ANDROID_HOME, ANDROID_SDK_ROOT and prepends JDK 8 bin, cmdline-tools, platform-tools and emulator to PATH for the current session only. User and machine variables are unchanged. |
+| 2026-10-31 | Ghera benchmark repository | Tag `Jan2019`, commit `6289f39d` | `git clone` of the Ghera repository, checked out at tag `Jan2019` | None. Clone size about 185 MiB. |
+| 2026-10-31 | Android Virtual Device `ghera27` | Pixel, Android 8.1 (API 27), `system-images;android-27;google_apis;x86` | `avdmanager create avd` (JAVA_HOME=JDK 17 for the command only) | None. WHPX acceleration confirmed usable. |
+| 2026-10-31 | Benchmark Gradle wrapper | 4.4 | Benchmark builds run with JAVA_HOME=JDK 8 | None |
+
+## Problems and fixes
+
+| Problem | Fix |
+|---------|-----|
+| winget is not installed, so the planned winget install of the JDKs was not possible. | Used portable Temurin JDK zips unpacked under `C:\Android`. No admin rights needed. |
+| Current cmdline-tools need Java 17 and will not run on JDK 8. | JDK 17 is used only for `sdkmanager` and `avdmanager`. JDK 8 is used for benchmark builds. |
+| PowerShell splits package names containing semicolons (for example `platforms;android-27`). | Wrap the package name in single quotes around double quotes, for example `'"platforms;android-27"'`. |
+| A shell opened as administrator started in `C:\WINDOWS\system32`. | Use a regular (non-admin) shell started from the project folder. |
