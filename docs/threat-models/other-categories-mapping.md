@@ -411,3 +411,70 @@ MITRE ATT&CK for Mobile: No direct match. No technique on attack.mitre.org was v
   - `source-script.sh` never starts the `TrustedServer`, so no automated test shows Secure connecting to its pinned server; the Secure test passes on any `SSLHandshakeException`.
   - Benign's `checkClientTrusted()` (lines 23 to 45) repeats the server logic and is not used for the server connection.
 
+## NonAPI (2)
+
+### MergeManifest-UnintendedBehavior-Lean
+- **Summary:** When an app uses a library that has its own manifest, the build merges that manifest into the app's, so any component the library exports becomes part of the app. In the example, a logging library brings in an exported service that another app can start to acquire a wake lock.
+- **Android versions (from README):** "Tested on Android 5.1.1 - Android 8.1"
+- **What the code does:** `Benign/app/build.gradle` line 18 adds the `logutil` module, and `Benign/app/src/main/java/edu/ksu/cs/benign/MainActivity.java` line 14 uses only its `LogDebug.d` logging call. The library manifest `Benign/logutil/src/main/AndroidManifest.xml` lines 7 to 13 declare `BackgroundService` with `android:exported="true"` and no permission, and line 5 requests `WAKE_LOCK`; Benign's own manifest declares neither (`Benign/app/src/main/AndroidManifest.xml` lines 5 to 19). `Benign/logutil/src/main/java/edu/ksu/cs/logutil/BackgroundService.java` lines 16 to 23 acquire a partial wake lock, start `DisplayActivity` and release the lock for any non-null intent. `Malicious/app/src/main/java/edu/ksu/cs/malicious/MainActivity.java` lines 22 to 25 start that service by explicit class name in `edu.ksu.cs.benign`.
+
+| Standard | ID | Title | Confidence | Fit |
+|----------|----|-------|------------|-----|
+| CWE | CWE-926 | Improper Export of Android Application Components | Verified | Direct. `BackgroundService` is exported with no permission in the library manifest (`Benign/logutil/src/main/AndroidManifest.xml` lines 7 to 9) and ends up in Benign through the merge (`Benign/app/build.gradle` line 18). Usage ALLOWED. |
+| CWE | CWE-1395 | Dependency on Vulnerable Third-Party Component | Verified | Partial. Benign depends on `logutil` (`Benign/app/build.gradle` line 18), which carries the exported service. Usage ALLOWED-WITH-REVIEW; review outcome: the mapping notes say this Class has no Base-level children and ask for a root cause analysis. Here the original mistake is the library's export, which CWE-926 already names, and the library has no published known vulnerability, so CWE-1395 is kept only as a secondary, partial entry. |
+| OWASP MASVS v2 | MASVS-PLATFORM-1 | The app uses IPC mechanisms securely. | Verified | Direct. Exported, unprotected service at `Benign/logutil/src/main/AndroidManifest.xml` lines 7 to 13. |
+| OWASP MASVS v2 | MASVS-CODE-3 | The app only uses software components without known vulnerabilities. | Verified | Partial. The weakness comes from the included `logutil` component (`Benign/app/build.gradle` line 18), but the component's flaw is not a published known vulnerability. |
+| OWASP MASTG test | MASTG-TEST-0365 | Exported And Unprotected Services That Expose Sensitive Functionality | Verified | Direct. Any app can start `BackgroundService`, which acquires a wake lock and starts an activity (`BackgroundService.java` lines 17 to 22). |
+| OWASP MASTG test | MASTG-TEST-0029 | Testing for Sensitive Functionality Exposure Through IPC | Verified | Partial. Deprecated, kept for reference only. |
+| OWASP MASWE | MASWE-0018 | Lack of Authentication or Authorization on App Components | Verified | Direct. The merged service has no permission (`Benign/logutil/src/main/AndroidManifest.xml` lines 7 to 9) and Malicious starts it directly (`Malicious/.../MainActivity.java` lines 22 to 25). Controls shown on the page: MASVS-AUTH-1, MASVS-PLATFORM-1, MASVS-STORAGE-2. |
+
+MITRE ATT&CK for Mobile: No direct match. No technique on attack.mitre.org was verified that describes starting a service another app inherited from a library manifest.
+
+- **Candidates to check:**
+  - CWE-1357 (Reliance on Insufficiently Trustworthy Component): the parent of CWE-1395 shown on its page; it describes depending on a component without checking what it brings in, as with `logutil` here.
+- **Evidence plan:** On the ghera27 emulator (API 27, inside the README range), install Benign and Malicious, launch Benign then Malicious, and check `adb logcat -d | grep LogUtilLib` for "Long running background service" and that `DisplayActivity` shows "Background Service started"; then start the service without Malicious using `adb shell am startservice -n edu.ksu.cs.benign/edu.ksu.cs.logutil.BackgroundService`. There is no Secure app. Not yet run.
+- **README vs code differences:**
+  - The README says the service "keeps the device screen unlocked"; `BackgroundService.java` line 18 takes a `PARTIAL_WAKE_LOCK`, which keeps the CPU on rather than the screen, and line 23 releases it right after starting `DisplayActivity`.
+  - The README says the benchmark has no Secure app, but `Testing/secure_app` exists and its only test is `assert true;` (`Testing/secure_app/src/androidTest/java/edu/ksu/cs/secure/Tests.java` line 29), so it always passes.
+- **Open questions:**
+  - The README says there is "no way to secure the app against this vulnerability programmatically" and points to the manifest merge documentation; whether a merge rule in Benign's manifest that removes or unexports the service counts as the intended fix is not stated.
+  - The merge also adds `WAKE_LOCK` (`Benign/logutil/src/main/AndroidManifest.xml` line 5) to Benign's permissions, which Benign's own code does not use.
+  - The library's intent filter uses the action `android.intent.action.BKSERVICE` (`Benign/logutil/src/main/AndroidManifest.xml` line 11), in the platform's action namespace; Malicious does not use it.
+
+### OutdatedLibrary-DirectoryTraversal-Lean
+- **Summary:** An app that keeps using an old version of a library inherits the bugs fixed in later versions. In the example, version 1.0 of a file-writing library does not check the file name for `../`, so another app can make Benign write a file into its own cache folder.
+- **Android versions (from README):** "Tested on Android 5.1.1 - Android 8.1"
+- **What the code does:** `Benign/app/build.gradle` line 18 and `Benign/writetofilelibrary-1.0/build.gradle` line 2 link the version 1.0 AAR. `Benign/app/src/main/java/edu/ksu/cs/benign/MainActivity.java` lines 23 to 35 copy the `fileName` and `fileContent` extras from the incoming intent into an intent for the library's `WriteActivity`; `MainActivity` is the exported launcher activity (`Benign/app/src/main/AndroidManifest.xml` lines 12 to 18). `Library/version1.0/src/main/java/com/example/writetofilelibrary/WriteActivity.java` lines 27 to 41 accept any non-empty name and write the content to `new File(getFilesDir()/custom, fileNm)`; version 1.1 adds `!i.getStringExtra("fileName").contains("..")` (`Library/version1.1/src/main/java/com/example/writetofilelibrary/WriteActivity.java` line 29), and Secure links 1.1 (`Secure/app/build.gradle` line 18). `Malicious/app/src/main/java/edu/ksu/cs/malicious/MainActivity.java` lines 29 to 36 send `../../cache/malicious.txt` to Benign's `MainActivity`.
+
+| Standard | ID | Title | Confidence | Fit |
+|----------|----|-------|------------|-----|
+| CWE | CWE-1395 | Dependency on Vulnerable Third-Party Component | Verified | Direct. Benign links library 1.0 (`Benign/app/build.gradle` line 18), whose flaw at `WriteActivity.java` line 38 is fixed in 1.1 (line 29), and the README presents the outdated dependency as the weakness. Usage ALLOWED-WITH-REVIEW; review outcome: the mapping notes say this Class has no Base-level children and that, if root cause analysis confirms it, it may be the best available entry. The root cause in Benign is staying on the old version, so CWE-1395 is used, with CWE-22 for the flaw inside the library. |
+| CWE | CWE-22 | Improper Limitation of a Pathname to a Restricted Directory | Verified | Partial. `WriteActivity.java` (1.0) line 38 joins the caller's name to `files/custom` with no check, so `../../cache/malicious.txt` (Malicious line 29) escapes it. Usage ALLOWED-WITH-REVIEW; review outcome: the mapping notes suggest CWE-23 for relative path traversal and CWE-36 for absolute. This is a relative traversal, so CWE-23 is the better fit, but it is not in the reference file and is listed as a candidate; CWE-22 is kept as Partial until then. |
+| OWASP MASVS v2 | MASVS-CODE-3 | The app only uses software components without known vulnerabilities. | Verified | Direct. Library 1.0 linked at `Benign/app/build.gradle` line 18. |
+| OWASP MASVS v2 | MASVS-CODE-4 | The app validates and sanitizes all untrusted inputs. | Verified | Partial. The file name from another app is used unchecked (`MainActivity.java` lines 25 and 33, `WriteActivity.java` line 38). Partial because the README places the fault in the library version. |
+| OWASP MASVS v2 | MASVS-PLATFORM-1 | The app uses IPC mechanisms securely. | Verified | Partial. The exported launcher `MainActivity` forwards caller extras to `WriteActivity` (`MainActivity.java` lines 23 to 35). |
+| OWASP MASTG test | MASTG-TEST-0364 | Exported And Unprotected Activities That Expose Sensitive Functionality | Verified | Partial. `MainActivity` is exported (Benign manifest lines 12 to 18) and lets any app write a file of its choosing through the library (`MainActivity.java` lines 24 to 35). Partial because a launcher activity has to be exported; the weakness is the unchecked forwarding. |
+| OWASP MASWE | MASWE-0032 | Insecure Intents | Verified | Partial. `MainActivity.java` lines 24 to 35 act on extras from an untrusted intent and pass them to `startActivityForResult` without validation, which the page lists. Partial because the target is Benign's own library activity. Controls shown on the page: MASVS-PLATFORM-1, MASVS-STORAGE-2. |
+| OWASP MASWE | MASWE-0050 | Unsafe Handling of Untrusted Data | Verified | Partial. The untrusted `fileName` becomes a file path at `WriteActivity.java` line 38. Partial because the benchmark's focus is the outdated library. Controls shown on the page: MASVS-CODE-4. |
+
+CWE-1104 (Use of Unmaintained Third Party Components) was considered and not used: the library is maintained, since version 1.1 exists with the fix (`Library/version1.1/.../WriteActivity.java` line 29); Benign simply does not use it. MASWE-0018 was considered and not used: `WriteActivity` itself is not exported (`Library/version1.0/src/main/AndroidManifest.xml` line 6), and the exposure through the launcher activity is covered by MASTG-TEST-0364 and MASWE-0032.
+
+MITRE ATT&CK for Mobile: No direct match. No technique on attack.mitre.org was verified that describes writing into another app's private folder through a path traversal in a bundled library.
+
+- **Candidates to check:**
+  - CWE-23 (Relative Path Traversal): suggested by the CWE-22 mapping notes; matches `../../cache/malicious.txt` (Malicious line 29).
+  - MASWE-0044 (Dependencies with Known Vulnerabilities, as listed on the MASWE index): the MASVS-CODE-3 weakness for outdated dependencies.
+  - MASTG-TEST-0272 (Identify Dependencies with Known Vulnerabilities in the Android Project, as listed on the MASTG test index): a test for the 1.0 dependency at `Benign/app/build.gradle` line 18.
+  - MASTG-TEST-0042 (Checking for Weaknesses in Third Party Libraries, as listed on the MASTG test index, deprecated): the older form of the same test.
+- **Evidence plan:** On the ghera27 emulator (API 27, inside the README range), build both library versions, install Benign and Malicious, press "Click for injection" in Malicious and check for "Data injection succeeded." and for `malicious.txt` in Benign's cache folder; then repeat with Secure and Malicious, expecting "Data injection failed."; without Malicious, use `adb shell am start -n edu.ksu.cs.benign/.MainActivity --es fileName ../../cache/malicious.txt --es fileContent test`. Not yet run.
+- **README vs code differences:**
+  - The README says Malicious sends the file name to the library; Malicious sends it to Benign's `MainActivity` (`Malicious/.../MainActivity.java` line 33), which forwards it (`Benign/.../MainActivity.java` lines 24 to 35), and `WriteActivity` is not exported (`Library/version1.0/src/main/AndroidManifest.xml` line 6).
+  - The README steps never build or install Malicious or Secure but step 7 launches Malicious (README line 51).
+  - README line 53 contains Unicode replacement characters (U+FFFD) around the expected message.
+  - `Library/version1.1/build.gradle` line 27 still sets `versionName "1.0"`.
+  - Secure's `MainActivity` sets an `outerCall` flag that is never read (`Secure/app/src/main/java/edu/ksu/cs/benign/MainActivity.java` lines 14 and 26).
+  - The Secure test method is named `testPresenceOfVulnerability` although it checks for the failure message (`Testing/secure_app/src/androidTest/java/edu/ksu/cs/secure/Tests.java` line 63).
+- **Open questions:**
+  - The 1.1 fix rejects any name containing `..` (`Library/version1.1/.../WriteActivity.java` line 29) rather than checking the resolved path; whether other names can still leave `files/custom` has not been checked.
+  - Both Benign and Secure build against AARs under `Library/version1.x/build/outputs/aar/` (`Benign/writetofilelibrary-1.0/build.gradle` line 2, `Secure/writetofilelibrary-1.1/build.gradle` line 2), which exist only after the library build in README step 5 or `source-script.sh`.
+
