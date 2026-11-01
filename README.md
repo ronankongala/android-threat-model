@@ -14,17 +14,8 @@ android-threat-engine is an Android app security research project built on the [
 
 ## Architecture
 
-```mermaid
-flowchart LR
-    A[APK file] --> B["Decoder<br/>src/apk.py<br/>apktool d + AndroidManifest.xml parser"]
-    B -->|manifest dict| C["Surface extractor<br/>src/surface.py<br/>manifest rules + CWE lookup"]
-    C -->|findings list| D["Report generator<br/>src/report.py"]
-    D --> E["name-report.json"]
-    D --> F["name-report.md"]
-    G["CLI<br/>src/ate.py"] -.-> B
-    G -.-> C
-    G -.-> D
-```
+<img src="docs/diagrams/architecture.svg" alt="Architecture diagram">
+
 
 `src/ate.py` runs the three stages in order and prints a one-line summary. `tools/evaluate.py` runs the CLI on the Benign and Secure APK of each built benchmark and compares the findings with `data/ground-truth.csv`.
 
@@ -48,15 +39,15 @@ The first evaluation run and its limits are described in [docs/notes/evaluation-
 
 **Exploit succeeds against Benign** (Malicious triggers an email with no permissions):
 
-![Exploit success](docs/screenshots/step01_21_exploit-success-benign.png)
+<img src="docs/screenshots/step01_21_exploit-success-benign.png" alt="Exploit success" width="180">
 
 **Exploit blocked by Secure** (no message appears after SEND BROADCAST):
 
-![Exploit blocked](docs/screenshots/step01_25_exploit-fails-secure.png)
+<img src="docs/screenshots/step01_25_exploit-fails-secure.png" alt="Exploit blocked" width="180">
 
 **System log confirming the block** (Permission Denial from adb logcat):
 
-![Permission denial log](docs/screenshots/step01_26_secure-permission-denial-log.png)
+<img src="docs/screenshots/step01_26_secure-permission-denial-log.png" alt="Permission denial log" width="450">
 
 ## Repo structure
 
