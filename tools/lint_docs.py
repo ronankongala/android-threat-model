@@ -1,0 +1,219 @@
+#!/usr/bin/env python3
+"""Lint the threat-model documentation.
+
+Checks every Markdown file in docs/threat-models/ and docs/notes/:
+  1. each CWE, MASVS, MASTG and MASWE ID in a table cell exists in
+     docs/threat-models/standards-reference.md, and in standards tables
+     (header starting "| Standard |") the title next to it matches exactly;
+  2. no DISCOURAGED CWE appears in a standards table;
+  3. each threat model (ICC-*.md, Web-*.md) has the ten section headings
+     from docs/threat-models/TEMPLATE.md;
+  4. no em dash, no "Claude", no standalone word "AI";
+  5. every relative Markdown link and image resolves to a file;
+  6. every Mermaid block starts with a known diagram type and has as many
+     "subgraph" lines as "end" lines.
+
+Standard library only. Usage: python tools/lint_docs.py [--out REPORT.md]
+Exit code 0 when the only findings are unresolved docs/screenshots links.
+"""
+import os
+import re
+import sys
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DIRS = [os.path.join(ROOT, 'docs', 'threat-models'), os.path.join(ROOT, 'docs', 'notes')]
+REF = os.path.join(ROOT, 'docs', 'threat-models', 'standards-reference.md')
+TEMPLATE = os.path.join(ROOT, 'docs', 'threat-models', 'TEMPLATE.md')
+
+ID_RE = re.compile(r'\b(CWE-\d+|MASVS-[A-Z]+-\d+|MASTG-TEST-\d{4}|MASWE-\d{4})\b')
+ID_IDS_ONLY = re.compile(r'(?:(?:CWE-\d+|MASVS-[A-Z]+-\d+|MASTG-TEST-\d{4}|MASWE-\d{4})'
+                         r'(?: \((?:primary|secondary)\))?(?:, )?)+')
+EM_DASH = '—'
+BANNED_WORDS = [re.compile(r'Claude'), re.compile(r'\bAI\b')]
+MERMAID_TYPES = ('flowchart', 'graph', 'sequenceDiagram', 'classDiagram', 'stateDiagram',
+                 'stateDiagram-v2', 'erDiagram', 'gantt', 'pie', 'journey', 'mindmap',
+                 'timeline', 'gitGraph', 'quadrantChart', 'requirementDiagram')
+LINK_RE = re.compile(r'!?\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)')
+# The rule text in BATCH-RULES.md must stay a verbatim copy and names the banned words.
+EXEMPT_RULE_PREFIX = '9. No em dashes.'
+
+
+def read(path):
+    with open(path, encoding='utf-8') as f:
+        return f.read()
+
+
+def load_reference():
+    titles, discouraged = {}, set()
+    for line in read(REF).splitlines():
+        cells = [c.strip() for c in line.strip().strip('|').split('|')]
+        if len(cells) < 3:
+            continue
+        key = cells[0]
+        if re.fullmatch(r'CWE-\d+', key):
+            titles[key] = cells[1].split(': ', 1)[1] if ': ' in cells[1] else cells[1]
+            if len(cells) > 4 and cells[4] == 'DISCOURAGED':
+                discouraged.add(key)
+        elif re.fullmatch(r'MASVS-[A-Z]+-\d+|MASTG-TEST-\d{4}|MASWE-\d{4}', key):
+            titles[key] = cells[1]
+    return titles, discouraged
+
+
+def template_headings():
+    return [l.strip() for l in read(TEMPLATE).splitlines() if re.match(r'^## \d+\. ', l)]
+
+
+def strip_code_spans(line):
+    return re.sub(r'`[^`]*`', '', line)
+
+
+def lint_file(path, titles, discouraged, headings, findings):
+    rel = os.path.relpath(path, ROOT).replace(os.sep, '/')
+    text = read(path)
+    lines = text.splitlines()
+    is_ref = os.path.abspath(path) == os.path.abspath(REF)
+
+    # 4. banned characters and words
+    for n, line in enumerate(lines, 1):
+        exempt = rel.endswith('BATCH-RULES.md') and line.startswith(EXEMPT_RULE_PREFIX)
+        if EM_DASH in line:
+            findings.append((rel, n, 'em-dash', 'em dash found'))
+        for rx in BANNED_WORDS:
+            if rx.search(line):
+                kind = 'banned-word-exempt' if exempt else 'banned-word'
+                findings.append((rel, n, kind, 'banned word "%s"' % rx.pattern.replace('\\b', '')))
+
+    # 1 and 2. IDs in tables
+    if not is_ref:
+        in_standards = False
+        for n, line in enumerate(lines, 1):
+            if not line.startswith('|'):
+                in_standards = False
+                continue
+            if line.startswith('| Standard |'):
+                in_standards = True
+                continue
+            if re.match(r'^\|[-| ]+\|$', line):
+                continue
+            cells = [c.strip() for c in line.strip().strip('|').split('|')]
+            for i, cell in enumerate(cells):
+                if in_standards and i == 1 and ID_RE.fullmatch(cell):
+                    sid = cell
+                    if sid not in titles:
+                        findings.append((rel, n, 'id-missing', '%s not in standards-reference.md' % sid))
+                    elif len(cells) > 2 and cells[2] != titles[sid]:
+                        findings.append((rel, n, 'title-mismatch',
+                                         '%s title "%s" != "%s"' % (sid, cells[2], titles[sid])))
+                    if sid in discouraged:
+                        findings.append((rel, n, 'discouraged', '%s is DISCOURAGED but in a standards table' % sid))
+                    continue
+                # ID-list cells (for example "CWE-1395 (primary), CWE-1104" in the index):
+                # every ID must exist. IDs named inside prose (review notes that list
+                # child entries, candidates, controls quoted from a page) are mentions,
+                # not table entries, and are not checked.
+                if ID_IDS_ONLY.fullmatch(cell):
+                    for sid in ID_RE.findall(cell):
+                        if sid not in titles:
+                            findings.append((rel, n, 'id-missing', '%s not in standards-reference.md' % sid))
+
+    # 3. section headings for models
+    base = os.path.basename(path)
+    if re.match(r'^(ICC|Web)-.*\.md$', base):
+        present = set(l.strip() for l in lines)
+        for h in headings:
+            if h not in present:
+                findings.append((rel, 0, 'heading-missing', 'missing heading "%s"' % h))
+
+    # 5. relative links and images
+    in_fence = False
+    for n, line in enumerate(lines, 1):
+        if line.lstrip().startswith('```'):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        for target in LINK_RE.findall(strip_code_spans(line)):
+            if re.match(r'^[a-z]+:', target) or target.startswith('#'):
+                continue
+            target_path = target.split('#', 1)[0]
+            resolved = os.path.normpath(os.path.join(os.path.dirname(path), target_path))
+            if not os.path.exists(resolved):
+                kind = 'link-screenshot' if '/screenshots/' in target_path.replace('\\', '/') else 'link-unresolved'
+                findings.append((rel, n, kind, 'unresolved link %s' % target))
+
+    # 6. mermaid blocks
+    blocks, cur, start = [], None, 0
+    for n, line in enumerate(lines, 1):
+        s = line.strip()
+        if cur is None and s == '```mermaid':
+            cur, start = [], n
+        elif cur is not None and s == '```':
+            blocks.append((start, cur))
+            cur = None
+        elif cur is not None:
+            cur.append(s)
+    if cur is not None:
+        findings.append((rel, start, 'mermaid', 'unclosed mermaid block'))
+    for start, body in blocks:
+        content = [b for b in body if b and not b.startswith('%%')]
+        if not content or not content[0].split()[0] in MERMAID_TYPES:
+            findings.append((rel, start, 'mermaid', 'unknown diagram type "%s"' % (content[0] if content else '')))
+        subs = sum(1 for b in content if b.startswith('subgraph'))
+        ends = sum(1 for b in content if b == 'end')
+        if subs != ends:
+            findings.append((rel, start, 'mermaid', 'subgraph/end mismatch: %d subgraph, %d end' % (subs, ends)))
+    return len(blocks)
+
+
+def main(argv):
+    out = None
+    if '--out' in argv:
+        out = argv[argv.index('--out') + 1]
+    titles, discouraged = load_reference()
+    headings = template_headings()
+    findings, files, diagrams = [], [], 0
+    for d in DIRS:
+        for name in sorted(os.listdir(d)):
+            if name.endswith('.md'):
+                files.append(os.path.join(d, name))
+    for f in files:
+        diagrams += lint_file(f, titles, discouraged, headings, findings)
+    counts = {}
+    for f in findings:
+        counts[f[2]] = counts.get(f[2], 0) + 1
+    blocking = [f for f in findings if f[2] not in ('link-screenshot', 'banned-word-exempt')]
+    report = ['# Docs lint report', '',
+              'Generated by `python tools/lint_docs.py --out docs/notes/lint-report.md`.', '',
+              '- Files checked: %d' % len(files),
+              '- Reference IDs loaded: %d (%d DISCOURAGED CWE)' % (len(titles), len(discouraged)),
+              '- Model headings expected: %d' % len(headings),
+              '- Mermaid blocks checked: %d' % diagrams,
+              '- Findings: %d (blocking: %d)' % (len(findings), len(blocking)), '']
+    report.append('## Counts by kind')
+    report.append('')
+    if counts:
+        for k in sorted(counts):
+            report.append('- %s: %d' % (k, counts[k]))
+    else:
+        report.append('- none')
+    report.append('')
+    report.append('Kinds `link-screenshot` (links into docs/screenshots, expected until screenshots are imported) '
+                  'and `banned-word-exempt` (the verbatim rule text in BATCH-RULES.md rule 9) are not blocking.')
+    report.append('')
+    report.append('## Findings')
+    report.append('')
+    if findings:
+        for rel, n, kind, msg in findings:
+            report.append('- `%s` line %s: %s: %s' % (rel, n, kind, msg))
+    else:
+        report.append('- none')
+    text = '\n'.join(report) + '\n'
+    if out:
+        with open(os.path.join(ROOT, out) if not os.path.isabs(out) else out, 'w', encoding='utf-8') as f:
+            f.write(text)
+    sys.stdout.write(text)
+    return 1 if blocking else 0
+
+
+if __name__ == '__main__':
+    sys.exit(main(sys.argv[1:]))
