@@ -4,7 +4,7 @@ Official titles for every CWE and MASVS v2 ID used in the threat models and the 
 
 ## CWE
 
-Each CWE page was downloaded as raw HTML on 2026-10-31. The "Official title" column is the text of the page's `<h2>` heading, copied character for character. The "Page label" column is the value shown next to the "Vulnerability Mapping" label in the status block at the top of each page, also copied character for character. The "Usage (mapping notes)" column is the value in the "Usage" row of the "Vulnerability Mapping Notes" section further down each page, copied character for character. The "Abstraction level" column is the value shown next to the "Abstraction" label in the same block. Raw HTML was obtained for all 33 pages, so no row is marked "Needs check". CWE-20, CWE-345 and CWE-532 were added later on the same date, from newly downloaded raw HTML, because the ICC broadcast threat models needed them. CWE-346, CWE-348 and CWE-360 were added after that, also on the same date and from newly downloaded raw HTML, because the same models listed them as candidates.
+Each CWE page was downloaded as raw HTML on 2026-10-31. The "Official title" column is the text of the page's `<h2>` heading, copied character for character. The "Page label" column is the value shown next to the "Vulnerability Mapping" label in the status block at the top of each page, also copied character for character. The "Usage (mapping notes)" column is the value in the "Usage" row of the "Vulnerability Mapping Notes" section further down each page, copied character for character. The "Abstraction level" column is the value shown next to the "Abstraction" label in the same block. Raw HTML was obtained for all 34 pages, so no row is marked "Needs check". CWE-20, CWE-345 and CWE-532 were added later on the same date, from newly downloaded raw HTML, because the ICC broadcast threat models needed them. CWE-346, CWE-348 and CWE-360 were added after that, also on the same date and from newly downloaded raw HTML, because the same models listed them as candidates. CWE-940 was added last, also on the same date and from newly downloaded raw HTML, because the CWE-346 review below found it a better fit.
 
 CWE version: the version string on every page is `(5.0)`. It appears at the end of the page's `<title>` element (for example `CWE-89: Improper Neutralization of Special Elements used in an SQL Command (5.0)`) and again at the end of the breadcrumb line at the top of the page. It does not appear in the `<h2>` heading.
 
@@ -41,6 +41,7 @@ CWE version: the version string on every page is `(5.0)`. It appears at the end 
 | CWE-925 | CWE-925: Improper Verification of Intent by Broadcast Receiver | Variant | ALLOWED | ALLOWED | https://cwe.mitre.org/data/definitions/925.html | 2026-10-31 | Verified |
 | CWE-926 | CWE-926: Improper Export of Android Application Components | Variant | ALLOWED | ALLOWED | https://cwe.mitre.org/data/definitions/926.html | 2026-10-31 | Verified |
 | CWE-927 | CWE-927: Use of Implicit Intent for Sensitive Communication | Variant | ALLOWED | ALLOWED | https://cwe.mitre.org/data/definitions/927.html | 2026-10-31 | Verified |
+| CWE-940 | CWE-940: Improper Verification of Source of a Communication Channel | Base | ALLOWED | ALLOWED | https://cwe.mitre.org/data/definitions/940.html | 2026-10-31 | Verified |
 | CWE-1104 | CWE-1104: Use of Unmaintained Third Party Components | Base | ALLOWED | ALLOWED | https://cwe.mitre.org/data/definitions/1104.html | 2026-10-31 | Verified |
 | CWE-1395 | CWE-1395: Dependency on Vulnerable Third-Party Component | Class | ALLOWED | ALLOWED-WITH-REVIEW | https://cwe.mitre.org/data/definitions/1395.html | 2026-10-31 | Verified |
 
@@ -87,7 +88,7 @@ Nine rows have a Usage of ALLOWED-WITH-REVIEW. On each page the Usage row reads 
 
 - CWE-22 (Base)
 - CWE-327 (Class)
-- CWE-346 (Class). Mapping notes review: the Rationale and Comment say this is a Class that may have more appropriate Base-level children, so the children should be examined. Children shown on the page: CWE-940 (Improper Verification of Source of a Communication Channel) and CWE-1385 (Missing Origin Validation in WebSockets). CWE-1385 is limited to WebSockets. CWE-940 is more specific for an app component that handles incoming requests, and the CWE-940 page lists CWE-925 as its child. CWE-940 is not in this file.
+- CWE-346 (Class). Mapping notes review: the Rationale and Comment say this is a Class that may have more appropriate Base-level children, so the children should be examined. Children shown on the page: CWE-940 (Improper Verification of Source of a Communication Channel) and CWE-1385 (Missing Origin Validation in WebSockets). CWE-1385 is limited to WebSockets. CWE-940 is more specific for an app component that handles incoming requests, and the CWE-940 page lists CWE-925 as its child. CWE-940 is now in this file, with a Usage of ALLOWED, so it needs no review of its own.
 - CWE-441 (Class)
 - CWE-522 (Class)
 - CWE-862 (Class)
