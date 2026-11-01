@@ -163,42 +163,57 @@ Notes:
 
 ### Screenshots
 
-No screenshots have been captured yet; `docs/screenshots/` holds only `.gitkeep`. Planned file names:
+Taken on the `ghera27` emulator (Android 8.1, API 27) with the `api27` debug APKs.
 
 | Pair | Step | Screenshot |
 |------|------|------------|
-| Benign + Malicious | Benign `EmailActivity` showing the attacker message | `docs/screenshots/DynamicRegBroadcastReceiver-UnrestrictedAccess-Lean-benign-malicious.png` (not yet captured) |
-| Secure + Malicious | Secure app after the Malicious broadcast, no message | `docs/screenshots/DynamicRegBroadcastReceiver-UnrestrictedAccess-Lean-secure-malicious.png` (not yet captured) |
+| Benign + Malicious | Attack worked: after SEND BROADCAST in Malicious, Benign shows the attacker message | [step01_21_exploit-success-benign.png](../screenshots/step01_21_exploit-success-benign.png) |
+| Secure + Malicious | No effect: after SEND BROADCAST in Malicious, Secure shows no message | [step01_25_exploit-fails-secure.png](../screenshots/step01_25_exploit-fails-secure.png) |
 
 ### Commands
 
-These are the commands recorded in `docs/notes/SETUP_LOG.md` (smoke test, 2026-10-31), run in PowerShell on Windows on the `ghera27` emulator (Pixel, API 27). The APK paths are the outputs present in the benchmark build folders.
+Build, as recorded in `docs/notes/SETUP_LOG.md` (smoke test, 2026-10-31). PowerShell on Windows, Gradle 4.4, JDK 8; `local.properties` in each app folder contains `sdk.dir=C:/Android/Sdk`.
 
 ```powershell
 # From the project root: set JAVA_HOME (JDK 8), ANDROID_HOME and PATH for this session
 . .\env.ps1
-
-# Start the emulator
-emulator -avd ghera27
-
-# Build (Gradle 4.4, JDK 8). local.properties in each app folder contains sdk.dir=C:/Android/Sdk
 $B = "benchmarks\ghera\ICC\DynamicRegBroadcastReceiver-UnrestrictedAccess-Lean"
 Push-Location "$B\Benign";    .\gradlew.bat assembleDebug; Pop-Location
 Push-Location "$B\Malicious"; .\gradlew.bat assembleDebug; Pop-Location
 Push-Location "$B\Secure";    .\gradlew.bat assembleDebug; Pop-Location
+```
+
+Start the emulator and install the apps:
+
+```powershell
+. .\env.ps1
+emulator -avd ghera27
+$B = "benchmarks\ghera\ICC\DynamicRegBroadcastReceiver-UnrestrictedAccess-Lean"
 
 # Pair 1: Benign + Malicious
 adb install -r "$B\Benign\app\build\outputs\apk\api27\debug\app-api27-debug.apk"
 adb install -r "$B\Malicious\app\build\outputs\apk\api27\debug\app-api27-debug.apk"
-# Open Benign on the emulator, press Home, open Malicious, tap its button.
 
 # Pair 2: Secure + Malicious (Secure shares the package name edu.ksu.cs.benign)
 adb uninstall edu.ksu.cs.benign
 adb install -r "$B\Secure\app\build\outputs\apk\api27\debug\app-api27-debug.apk"
-# Open Secure on the emulator, press Home, open Malicious, tap its button.
 ```
 
-The launch and tap steps were done by hand in the emulator UI. The following command sends the same broadcast without the Malicious app and can be used for the screenshots. **It has not been run yet:**
+Exploit steps, done by hand in the emulator for each pair:
+
+1. Open Benign (or Secure for pair 2).
+2. Press Home.
+3. Open Malicious.
+4. Tap SEND BROADCAST.
+5. Check Benign or Secure for the "An email will be sent to ..." message.
+
+The log line below was read with:
+
+```powershell
+adb logcat -d | Select-String -Pattern "Permission Denial|edu.ksu.cs"
+```
+
+The following command sends the same broadcast without the Malicious app. **Not run:**
 
 ```powershell
 adb shell am broadcast -a edu.ksu.cs.action.EMAIL --es email rookie@malicious.com --es text "I can send email without any permissions"
@@ -206,12 +221,16 @@ adb shell am broadcast -a edu.ksu.cs.action.EMAIL --es email rookie@malicious.co
 
 ### Observed result
 
-From `docs/notes/SETUP_LOG.md`:
-
 | Pair | Outcome | Observation |
 |------|---------|-------------|
-| Benign + Malicious | Exploit succeeded | Benign displayed "An email will be sent to rookie@malicious.com with the text : I can send email without any permissions". |
+| Benign + Malicious | Exploit succeeded | Benign displayed "An email will be sent to rookie@malicious.comwith the text : I can send email without any permissions" (the missing space comes from the string concatenation in `EmailActivity.java`). |
 | Secure + Malicious | Exploit had no effect | Secure showed no message. |
+
+Permission Denial for the Secure + Malicious pair, from adb logcat:
+
+```text
+10-31 22:10:32.718  1661  1676 W BroadcastQueue: Permission Denial: broadcasting Intent { act=edu.ksu.cs.action.EMAIL flg=0x10 (has extras) } from edu.ksu.cs.malicious (pid=5689, uid=10083) requires edu.ksu.cs.perm due to registered receiver BroadcastFilter{bd56859 u0 ReceiverList{4c484a0 5640 edu.ksu.cs.benign/10084/u0 remote:b5ed9a3}}
+```
 
 ## 9. Mitigation
 
@@ -240,4 +259,3 @@ The fix blocks the benchmark exploit but leaves residual risk:
 - The README says the email is sent "when the user leaves the particular activity", but in the Lean code the broadcast is sent when the Send email button is tapped. The model follows the code.
 - On API 23 and later, the Secure app also needs a runtime grant of its own dangerous permission `edu.ksu.cs.perm` before its own broadcast reaches its receiver. Check whether the Secure app's Send email button still works on the `ghera27` emulator; the smoke test only checked the Malicious path.
 - Confirm MASVS-PLATFORM-1, MASTG-TEST-0366, and the T1404 mapping, then update their confidence.
-- Capture the two screenshots listed in section 8.
