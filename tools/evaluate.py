@@ -20,8 +20,13 @@ where
 A count is left blank when the APK is missing or the tool fails; the scores then
 treat it as 0 findings, and the reason is printed.
 
-Usage: python tools/evaluate.py
+Usage: python tools/evaluate.py [--no-dynamic | --dynamic]
+
+--no-dynamic (the default) scores the static layers only: manifest rules, smali
+code patterns and taint analysis. --dynamic also passes --dynamic to ate.py, so
+each APK is exercised on the running emulator.
 """
+import argparse
 import csv
 import json
 import os
@@ -52,13 +57,13 @@ def load_ground_truth():
     return gt
 
 
-def run_tool(apk, out_dir):
+def run_tool(apk, out_dir, dynamic=False):
     """Return the findings list, or None with a reason when it cannot be produced."""
     if not os.path.exists(apk):
         return None, 'APK not found: %s' % os.path.relpath(apk, ROOT)
     os.makedirs(out_dir, exist_ok=True)
-    r = subprocess.run([sys.executable, ATE, '--apk', apk, '--out', out_dir],
-                       capture_output=True, text=True)
+    cmd = [sys.executable, ATE, '--apk', apk, '--out', out_dir] + (['--dynamic'] if dynamic else [])
+    r = subprocess.run(cmd, capture_output=True, text=True)
     if r.returncode != 0:
         return None, 'ate.py exit %d: %s' % (r.returncode, (r.stderr or r.stdout).strip())
     report = os.path.join(out_dir, 'app-api27-debug-report.json')
@@ -67,7 +72,14 @@ def run_tool(apk, out_dir):
     return findings, r.stdout.strip()
 
 
-def main():
+def main(argv=None):
+    p = argparse.ArgumentParser(description='Score src/ate.py against the Ghera ground truth.')
+    g = p.add_mutually_exclusive_group()
+    g.add_argument('--no-dynamic', dest='dynamic', action='store_false', help='static layers only (default)')
+    g.add_argument('--dynamic', dest='dynamic', action='store_true', help='also run dynamic analysis')
+    p.set_defaults(dynamic=False)
+    args = p.parse_args(argv)
+    print('Mode: %s' % ('static and dynamic' if args.dynamic else 'static only (--no-dynamic)'))
     gt = load_ground_truth()
     benchmarks = []
     for row in read_csv(BUILD_RESULTS):
@@ -86,7 +98,7 @@ def main():
         result = {}
         for variant in ('Benign', 'Secure'):
             findings, msg = run_tool(os.path.join(base, variant, APK_REL),
-                                     os.path.join(TMP, bench, variant))
+                                     os.path.join(TMP, bench, variant), args.dynamic)
             result[variant] = findings
             print('   %-6s %s' % (variant, msg))
             for f in findings or []:
@@ -115,6 +127,9 @@ def main():
     tp = sum(r['true_positive'] for r in rows)
     fp = sum(r['false_positive'] for r in rows)
     print('\nEvaluated %d benchmarks: %d true positives, %d false positives' % (len(rows), tp, fp))
+    if rows:
+        precision = '%.2f' % (tp / (tp + fp)) if tp + fp else 'n/a'
+        print('Precision %s, recall %.2f' % (precision, tp / len(rows)))
     print('Wrote %s' % os.path.relpath(OUT_CSV, ROOT))
     return 0
 
