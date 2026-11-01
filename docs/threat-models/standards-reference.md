@@ -4,7 +4,7 @@ Official titles for every CWE and MASVS v2 ID used in the threat models and the 
 
 ## CWE
 
-Each CWE page was downloaded as raw HTML on 2026-10-31. The "Official title" column is the text of the page's `<h2>` heading, copied character for character. The "Page label" column is the value shown next to the "Vulnerability Mapping" label in the status block at the top of each page, also copied character for character. The "Usage (mapping notes)" column is the value in the "Usage" row of the "Vulnerability Mapping Notes" section further down each page, copied character for character. The "Abstraction level" column is the value shown next to the "Abstraction" label in the same block. Raw HTML was obtained for all 30 pages, so no row is marked "Needs check". CWE-20, CWE-345 and CWE-532 were added later on the same date, from newly downloaded raw HTML, because the ICC broadcast threat models needed them.
+Each CWE page was downloaded as raw HTML on 2026-10-31. The "Official title" column is the text of the page's `<h2>` heading, copied character for character. The "Page label" column is the value shown next to the "Vulnerability Mapping" label in the status block at the top of each page, also copied character for character. The "Usage (mapping notes)" column is the value in the "Usage" row of the "Vulnerability Mapping Notes" section further down each page, copied character for character. The "Abstraction level" column is the value shown next to the "Abstraction" label in the same block. Raw HTML was obtained for all 33 pages, so no row is marked "Needs check". CWE-20, CWE-345 and CWE-532 were added later on the same date, from newly downloaded raw HTML, because the ICC broadcast threat models needed them. CWE-346, CWE-348 and CWE-360 were added after that, also on the same date and from newly downloaded raw HTML, because the same models listed them as candidates.
 
 CWE version: the version string on every page is `(5.0)`. It appears at the end of the page's `<title>` element (for example `CWE-89: Improper Neutralization of Special Elements used in an SQL Command (5.0)`) and again at the end of the breadcrumb line at the top of the page. It does not appear in the `<h2>` heading.
 
@@ -25,7 +25,10 @@ CWE version: the version string on every page is `(5.0)`. It appears at the end 
 | CWE-327 | CWE-327: Use of a Broken or Risky Cryptographic Algorithm | Class | ALLOWED | ALLOWED-WITH-REVIEW | https://cwe.mitre.org/data/definitions/327.html | 2026-10-31 | Verified |
 | CWE-329 | CWE-329: Generation of Predictable IV with CBC Mode | Variant | ALLOWED | ALLOWED | https://cwe.mitre.org/data/definitions/329.html | 2026-10-31 | Verified |
 | CWE-345 | CWE-345: Insufficient Verification of Data Authenticity | Class | DISCOURAGED | DISCOURAGED | https://cwe.mitre.org/data/definitions/345.html | 2026-10-31 | Verified |
+| CWE-346 | CWE-346: Origin Validation Error | Class | ALLOWED | ALLOWED-WITH-REVIEW | https://cwe.mitre.org/data/definitions/346.html | 2026-10-31 | Verified |
+| CWE-348 | CWE-348: Use of Less Trusted Source | Base | ALLOWED | ALLOWED | https://cwe.mitre.org/data/definitions/348.html | 2026-10-31 | Verified |
 | CWE-359 | CWE-359: Exposure of Private Personal Information to an Unauthorized Actor | Base | ALLOWED | ALLOWED | https://cwe.mitre.org/data/definitions/359.html | 2026-10-31 | Verified |
+| CWE-360 | CWE-360: Trust of System Event Data | Base | ALLOWED | ALLOWED | https://cwe.mitre.org/data/definitions/360.html | 2026-10-31 | Verified |
 | CWE-441 | CWE-441: Unintended Proxy or Intermediary | Class | ALLOWED | ALLOWED-WITH-REVIEW | https://cwe.mitre.org/data/definitions/441.html | 2026-10-31 | Verified |
 | CWE-470 | CWE-470: Use of Externally-Controlled Input to Select Classes or Code | Base | ALLOWED | ALLOWED | https://cwe.mitre.org/data/definitions/470.html | 2026-10-31 | Verified |
 | CWE-494 | CWE-494: Download of Code Without Integrity Check | Base | ALLOWED | ALLOWED | https://cwe.mitre.org/data/definitions/494.html | 2026-10-31 | Verified |
@@ -43,7 +46,7 @@ CWE version: the version string on every page is `(5.0)`. It appears at the end 
 
 Titles are as shown in CWE 5.0; older versions such as 4.20 show bracketed names, for example ('SQL Injection') for CWE-89 (checked in `cwec_v4.20.xml` from https://cwe.mitre.org/data/archive.html).
 
-Note on mapping status: for eight IDs (CWE-22, CWE-327, CWE-441, CWE-522, CWE-862, CWE-863, CWE-922, CWE-1395), the label next to "Vulnerability Mapping" reads ALLOWED, but the hover text on that label reads "This CWE ID could be used to map to real-world vulnerabilities in limited situations requiring careful review", and the "Usage" row in the "Vulnerability Mapping Notes" section further down the same page reads ALLOWED-WITH-REVIEW. The "Page label" column records the label and the "Usage (mapping notes)" column records the Usage row. Treat these eight as needing a review of their mapping notes before use.
+Note on mapping status: for nine IDs (CWE-22, CWE-327, CWE-346, CWE-441, CWE-522, CWE-862, CWE-863, CWE-922, CWE-1395), the label next to "Vulnerability Mapping" reads ALLOWED, but the hover text on that label reads "This CWE ID could be used to map to real-world vulnerabilities in limited situations requiring careful review", and the "Usage" row in the "Vulnerability Mapping Notes" section further down the same page reads ALLOWED-WITH-REVIEW. The "Page label" column records the label and the "Usage (mapping notes)" column records the Usage row. Treat these nine as needing a review of their mapping notes before use.
 
 ## MASVS v2
 
@@ -67,7 +70,7 @@ MASVS controls have no separate name, so the official title is the control state
 
 ## Replaced entries
 
-Built from the "Usage (mapping notes)" column only. The label conflict for eight IDs is explained in the note under the CWE table.
+Built from the "Usage (mapping notes)" column only. The label conflict for nine IDs is explained in the note under the CWE table.
 
 ### DISCOURAGED or PROHIBITED
 
@@ -80,10 +83,11 @@ No row has a Usage of PROHIBITED. Four rows have a Usage of DISCOURAGED. On all 
 
 ### ALLOWED-WITH-REVIEW
 
-Eight rows have a Usage of ALLOWED-WITH-REVIEW. On each page the Usage row reads "(this CWE ID could be used to map to real-world vulnerabilities in limited situations requiring careful review)". Read the mapping notes on the page before using these IDs.
+Nine rows have a Usage of ALLOWED-WITH-REVIEW. On each page the Usage row reads "(this CWE ID could be used to map to real-world vulnerabilities in limited situations requiring careful review)". Read the mapping notes on the page before using these IDs.
 
 - CWE-22 (Base)
 - CWE-327 (Class)
+- CWE-346 (Class). Mapping notes review: the Rationale and Comment say this is a Class that may have more appropriate Base-level children, so the children should be examined. Children shown on the page: CWE-940 (Improper Verification of Source of a Communication Channel) and CWE-1385 (Missing Origin Validation in WebSockets). CWE-1385 is limited to WebSockets. CWE-940 is more specific for an app component that handles incoming requests, and the CWE-940 page lists CWE-925 as its child. CWE-940 is not in this file.
 - CWE-441 (Class)
 - CWE-522 (Class)
 - CWE-862 (Class)
