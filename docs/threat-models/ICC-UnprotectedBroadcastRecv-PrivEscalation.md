@@ -161,7 +161,7 @@ CWE and MASVS titles are copied from `docs/threat-models/standards-reference.md`
 | OWASP MASVS v2 | MASVS-PLATFORM-1 | The app uses IPC mechanisms securely. | Verified | Direct. |
 | OWASP MASTG test | MASTG-TEST-0366 | Exported And Unprotected Broadcast Receivers That Expose Sensitive Functionality | Verified | Direct. Primary test. |
 | OWASP MASTG test | MASTG-TEST-0029 | Testing for Sensitive Functionality Exposure Through IPC | Verified | Partial. Deprecated, kept for reference only. |
-| OWASP MASWE | MASWE-0063 | Insecure Broadcast Receivers | Verified | Direct. Beta, ID may change. |
+| OWASP MASWE | MASWE-0018 | Lack of Authentication or Authorization on App Components | Verified | Direct. `MyReceiver` is exported with no permission (Benign manifest lines 22 to 24) and sends an SMS for any caller (`MyReceiver.java` line 21); the page lists "Missing or Weak Permissions on Exported Components" and names broadcast receivers. Controls shown on the page: MASVS-AUTH-1, MASVS-PLATFORM-1, MASVS-STORAGE-2. |
 
 Candidates to check (not in the table):
 - None beyond the IDs above.
