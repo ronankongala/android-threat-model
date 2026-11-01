@@ -70,6 +70,28 @@ MASVS controls have no separate name, so the official title is the control state
 | MASVS-PRIVACY-1 | The app minimizes access to sensitive data and resources. | https://mas.owasp.org/MASVS/controls/MASVS-PRIVACY-1/ | 2026-10-31 | Verified |
 | MASVS-PRIVACY-2 | The app prevents identification of the user. | https://mas.owasp.org/MASVS/controls/MASVS-PRIVACY-2/ | 2026-10-31 | Verified |
 
+## OWASP MASTG tests and MASWE weaknesses
+
+Each page was downloaded as raw HTML on 2026-11-01. The "Official title" column is the text of the page's `<h1>` heading after the ID, copied character for character. The "Status shown on the page" column records what the page itself shows: the MASTG v1 test pages show a "Deprecated Test" banner; the MASTG v2 test pages and the MASWE pages show no status banner. The "Index status" column is the `status:` value in the row for the same ID on the index pages https://mas.owasp.org/MASTG/tests/ and https://mas.owasp.org/MASWE/, downloaded the same day. The "Mapping shown on the page" column lists the MASWE tag on a test page, or the MASVS v2 controls under "Mappings" on a MASWE page.
+
+Selection: the five IDs named for this batch, plus every Android MASTG test or MASWE entry linked to MASVS-PLATFORM-1 that covers content providers, activities or fragments. The candidates were taken from the MASVS-PLATFORM-1 control page (which links MASWE-0018, MASWE-0029, MASWE-0030, MASWE-0031 and MASWE-0032) and from the list of Android MASVS-PLATFORM tests in the site navigation. No test or weakness page about fragments was found. MASTG-TEST-0339 (SQL Injection in Content Providers), named in the MASTG-TEST-0007 banner, is filed under MASVS-CODE and tagged MASWE-0050, so it is not included. MASTG-TEST-0250 and MASTG-TEST-0251 mention content providers but are WebView tests tagged MASWE-0034 (a MASVS-PLATFORM-2 weakness), so they are not included.
+
+| ID | Official title | Status shown on the page | Index status | Mapping shown on the page | URL | Date checked | Status |
+|---|---|---|---|---|---|---|---|
+| MASTG-TEST-0007 | Determining Whether Sensitive Stored Data Has Been Exposed via IPC Mechanisms | Deprecated ("Deprecated Test ... New version available in MASTG V2"; banner lists MASTG-TEST-0339, MASTG-TEST-0355, MASTG-TEST-0356, MASTG-TEST-0357) | deprecated | Tags `MSTG-STORAGE-6`, `masvs-platform-1` | https://mas.owasp.org/MASTG/tests/android/MASVS-PLATFORM/MASTG-TEST-0007/ | 2026-11-01 | Verified |
+| MASTG-TEST-0029 | Testing for Sensitive Functionality Exposure Through IPC | Deprecated ("Deprecated Test ... New version available in MASTG V2"; banner lists MASTG-TEST-0364, MASTG-TEST-0365, MASTG-TEST-0366) | deprecated | Tags `MSTG-PLATFORM-4`, `masvs-platform-1` | https://mas.owasp.org/MASTG/tests/android/MASVS-PLATFORM/MASTG-TEST-0029/ | 2026-11-01 | Verified |
+| MASTG-TEST-0355 | References to Unauthorized Database Access through Content Providers | No status banner (edit link points to the `tests-beta` folder) | current | MASWE-0018 | https://mas.owasp.org/MASTG/tests/android/MASVS-PLATFORM/MASTG-TEST-0355/ | 2026-11-01 | Verified |
+| MASTG-TEST-0356 | Runtime Verification of Unauthorized Database Access through Content Providers | No status banner (edit link points to the `tests-beta` folder) | current | MASWE-0018 | https://mas.owasp.org/MASTG/tests/android/MASVS-PLATFORM/MASTG-TEST-0356/ | 2026-11-01 | Verified |
+| MASTG-TEST-0357 | References to Oversharing of File-Based Content Providers | No status banner (edit link points to the `tests-beta` folder) | current | MASWE-0018 | https://mas.owasp.org/MASTG/tests/android/MASVS-PLATFORM/MASTG-TEST-0357/ | 2026-11-01 | Verified |
+| MASTG-TEST-0364 | Exported And Unprotected Activities That Expose Sensitive Functionality | No status banner (edit link points to the `tests-beta` folder) | current | MASWE-0018 | https://mas.owasp.org/MASTG/tests/android/MASVS-PLATFORM/MASTG-TEST-0364/ | 2026-11-01 | Verified |
+| MASTG-TEST-0365 | Exported And Unprotected Services That Expose Sensitive Functionality | No status banner (edit link points to the `tests-beta` folder) | current | MASWE-0018 | https://mas.owasp.org/MASTG/tests/android/MASVS-PLATFORM/MASTG-TEST-0365/ | 2026-11-01 | Verified |
+| MASTG-TEST-0366 | Exported And Unprotected Broadcast Receivers That Expose Sensitive Functionality | No status banner (edit link points to the `tests-beta` folder) | current | MASWE-0018 | https://mas.owasp.org/MASTG/tests/android/MASVS-PLATFORM/MASTG-TEST-0366/ | 2026-11-01 | Verified |
+| MASWE-0018 | Lack of Authentication or Authorization on App Components | No status banner | current | MASVS-AUTH-1, MASVS-PLATFORM-1, MASVS-STORAGE-2 | https://mas.owasp.org/MASWE/MASVS-AUTH/MASWE-0018/ | 2026-11-01 | Verified |
+| MASWE-0032 | Insecure Intents | No status banner | current | MASVS-PLATFORM-1, MASVS-STORAGE-2 | https://mas.owasp.org/MASWE/MASVS-PLATFORM/MASWE-0032/ | 2026-11-01 | Verified |
+| MASWE-0063 | Debug Mechanisms Not Disabled | No status banner | current | MASVS-RESILIENCE-4, MASVS-PLATFORM-2 | https://mas.owasp.org/MASWE/MASVS-RESILIENCE/MASWE-0063/ | 2026-11-01 | Verified |
+
+Note on MASWE-0063: the official page is "Debug Mechanisms Not Disabled", a MASVS-RESILIENCE-4 weakness. It is not about broadcast receivers. The earlier threat models that list "MASWE-0063 | Insecure Broadcast Receivers" (beta) do not match the official page; those rows need correcting. The weakness that MASTG-TEST-0364, MASTG-TEST-0365 and MASTG-TEST-0366 are tagged with is MASWE-0018.
+
 ## Replaced entries
 
 Built from the "Usage (mapping notes)" column only. The label conflict for nine IDs is explained in the note under the CWE table.
