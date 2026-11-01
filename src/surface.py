@@ -23,12 +23,15 @@ pattern names (for example ecb_mode for weak-cipher).
 
 CWE IDs are those used in docs/threat-models/ (see standards-reference.md).
 
-find(apk, decoded_dir) also runs the smali rules in code_analyzer.py on the
-apktool output folder and merges their findings with the manifest findings.
-Code findings carry extra keys (file, line, pattern, evidence). The merged list
+find(apk, decoded_dir) also runs the smali rules in code_analyzer.py and the
+source to sink taint analysis in taint_analyzer.py on the apktool output folder
+and merges their findings with the manifest findings. Code and taint findings
+carry extra keys (file, line, pattern, evidence; taint findings also
+source_line and sink_line). The merged list
 keeps one finding per (component, cwe): the one with the highest confidence.
 """
 import code_analyzer
+import taint_analyzer
 
 CWE = {
     'exported-no-permission': 'CWE-926',
@@ -145,7 +148,8 @@ def find(apk, decoded_dir=None):
     decoded_dir = decoded_dir or apk.get('decoded_dir')
     findings = _manifest_findings(apk)
     if decoded_dir:
-        findings = merge(findings, code_analyzer.analyze(decoded_dir))
+        findings = merge(findings, code_analyzer.analyze(decoded_dir),
+                         taint_analyzer.analyze(decoded_dir))
     return findings
 
 

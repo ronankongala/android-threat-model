@@ -2,8 +2,8 @@
 
 Usage: python src/ate.py --apk app.apk [--out DIR] [--no-ai]
 
-Decodes the APK (apk.py), extracts manifest and smali code findings
-(surface.py, code_analyzer.py), writes
+Decodes the APK (apk.py), extracts manifest, smali code and taint
+findings (surface.py, code_analyzer.py, taint_analyzer.py), writes
 <name>-report.json and <name>-report.md to DIR (report.py), and prints one
 summary line. <name> is the APK file name without its extension.
 """
