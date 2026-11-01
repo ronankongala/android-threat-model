@@ -543,3 +543,226 @@ MITRE ATT&CK for Mobile: No direct match. No technique was verified on attack.mi
   - The Benign test clicks Query Benign CP and then only checks the button's own label (`Testing/benign_app/src/androidTest/java/edu/ksu/cs/benign/Tests.java` line 68). It would also pass if Benign were not installed, since a query to an unknown authority does not raise `SecurityException` in Malicious's code.
   - The README installs Benign before Malicious. Whether Malicious keeps the permission when installed first (before the permission is defined) is not checked.
 
+## Storage (7)
+
+### ExternalStorage-DataInjection-Lean
+
+- **Summary:** An app that reads a file from external storage cannot control that file, even in its own app-specific external directory, so another app with storage permission can replace the content the app later reads.
+- **Android versions (from README):** "Tested on Android 5.1.1 - Android 8.1"
+- **What the code does:** When the Read bible button is tapped, Benign builds `bible.txt` under `getExternalFilesDir(null)`, writes "This is written by Benign" only if the file does not exist, and otherwise reads and displays whatever the file holds (`Benign/app/src/main/java/edu/ksu/cs/benign/MainActivity.java` lines 44 to 52, read in lines 24 to 30). Malicious takes its own external files path, replaces `edu.ksu.cs.malicious` with `edu.ksu.cs.benign`, and writes its raw resource `bible.txt` to that path using `WRITE_EXTERNAL_STORAGE` (`Malicious/app/src/main/java/edu/ksu/cs/malicious/MalActivity.java` lines 28 to 37; `Malicious/app/src/main/AndroidManifest.xml` line 5). Secure stores and reads the file under `getFilesDir()` instead (`Secure/app/src/main/java/edu/ksu/cs/benign/MainActivity.java` line 43).
+
+| Standard | ID | Title | Confidence | Fit |
+|----------|----|-------|------------|-----|
+| CWE | CWE-922 | Insecure Storage of Sensitive Information | Verified | Partial. `Benign/.../MainActivity.java` line 44 keeps `bible.txt` in external storage, where `MalActivity.java` lines 33 to 37 overwrite it. Mapping notes review: the Rationale says this Class might have Base-level children that would be more appropriate and the Comment says to examine them. The children one level down are CWE-312 (Cleartext Storage of Sensitive Information) and CWE-921 (Storage of Sensitive Data in a Mechanism without Access Control). CWE-312 does not fit because the problem is write access, not encryption. CWE-921 fits the storage location better (its extended description says Android external storage is typically globally readable and writable), but it is not in the reference file, so it is listed under Candidates. Partial because the README's weakness is that Benign trusts what it reads back (lines 45 to 46), and the file is not described as sensitive. Usage ALLOWED-WITH-REVIEW. |
+| OWASP MASVS v2 | MASVS-CODE-4 | The app validates and sanitizes all untrusted inputs. | Verified | Partial. `readFromFile` (`Benign/.../MainActivity.java` lines 26 to 30) shows file content read from attacker-writable storage without any check. Partial because the Secure fix moves the file to internal storage (`Secure/.../MainActivity.java` line 43) rather than validating the content. |
+| OWASP MASWE | MASWE-0050 | Unsafe Handling of Untrusted Data | Verified | Partial. Benign reads `bible.txt` from external storage (`Benign/.../MainActivity.java` lines 44 to 46) and uses it as trusted. Partial because the data only reaches a `TextView` (line 30). Controls shown on the page: MASVS-CODE-4. |
+
+CWE-20 (Improper Input Validation) and CWE-345 (Insufficient Verification of Data Authenticity) were considered for reading the file without checks; both are DISCOURAGED in `standards-reference.md`, so CWE-922 is used instead, with CWE-921 as a candidate.
+
+No MASTG test in the reference file fits: all of them cover IPC components (content providers, activities, services, receivers), and this attack goes through a shared file, not an app component.
+
+MITRE ATT&CK for Mobile: No direct match. No technique was verified on attack.mitre.org that describes overwriting a file another app keeps in external storage.
+
+- **Candidates to check:**
+  - CWE-921 (Storage of Sensitive Data in a Mechanism without Access Control): Base child of CWE-922, Usage ALLOWED on its page (downloaded 2026-11-01); its extended description names Android external storage as readable and writable by other apps.
+  - MASTG-TEST-0002 (Testing Local Storage for Input Validation): listed as deprecated on https://mas.owasp.org/MASTG/tests/ (downloaded 2026-11-01); covers input read back from local storage.
+  - MASTG-TEST-0202 (References to APIs and Permissions for Accessing External Storage): listed as current on the same index page; would find the `getExternalFilesDir` call at line 44.
+- **Evidence plan:** On ghera27 (API 27, inside the README range), install Benign, tap Read bible and expect "This is written by Benign", then install and launch Malicious (allow storage access), return to Benign, tap Read bible and expect the text from `Malicious/app/src/main/res/raw/bible.txt`; repeat with Secure and expect Malicious to show "Unable to write into file" and Secure to keep showing "This is written by Secure". Not yet run.
+- **README vs code differences:** None found.
+- **Open questions:**
+  - The Secure test (`Testing/secure_app/src/androidTest/java/edu/ksu/cs/secure/Tests.java` line 109) expects Malicious to fail its write. Secure never creates its external files directory, so the failure would come from the missing directory, not from anything Secure enforces; whether the write would succeed if that directory existed is not checked.
+
+### ExternalStorage-InformationLeak-Lean
+
+- **Summary:** An app that writes sensitive data to a file in external storage, even in its app-specific external directory, cannot control who reads it; another app with storage read permission can read the file.
+- **Android versions (from README):** "Tested on Android 5.1.1 - Android 8.1"
+- **What the code does:** In `onResume`, Benign copies its raw resource `ssn` (an SSN card image, `Benign/app/src/main/res/raw/ssn.png`) to `ssn_bkup.jpg` under `getExternalFilesDir(null)` (`Benign/app/src/main/java/edu/ksu/cs/benign/MainActivity.java` lines 24 to 31). Malicious, holding `READ_EXTERNAL_STORAGE` (`Malicious/app/src/main/AndroidManifest.xml` line 5), rewrites its own external path to Benign's and decodes the image, showing "ImageView loaded with SSN" on success (`Malicious/app/src/main/java/edu/ksu/cs/malicious/MalActivity.java` lines 53 to 63). Secure writes the same file under `getFilesDir()` (`Secure/app/src/main/java/edu/ksu/cs/benign/MainActivity.java` line 24).
+
+| Standard | ID | Title | Confidence | Fit |
+|----------|----|-------|------------|-----|
+| CWE | CWE-922 | Insecure Storage of Sensitive Information | Verified | Direct. `Benign/.../MainActivity.java` lines 24 to 31 store the SSN image in external storage without limiting read access, and `MalActivity.java` line 57 reads it. Mapping notes review: the Rationale says this Class might have Base-level children that would be more appropriate and the Comment says to examine them. The children one level down are CWE-312 (Cleartext Storage of Sensitive Information) and CWE-921 (Storage of Sensitive Data in a Mechanism without Access Control). CWE-312 is not chosen because the Secure fix changes the location, not the encryption. CWE-921 fits more precisely (its extended description names Android external storage) but is not in the reference file, so CWE-922 is kept and CWE-921 is listed under Candidates. Usage ALLOWED-WITH-REVIEW. |
+| CWE | CWE-359 | Exposure of Private Personal Information to an Unauthorized Actor | Verified | Partial. The exposed file is an SSN card image (`Benign/app/src/main/res/raw/ssn.png`, copied at `MainActivity.java` line 27). Partial because the exposure depends on the storage weakness above and on Malicious holding `READ_EXTERNAL_STORAGE`. Usage ALLOWED. |
+| OWASP MASVS v2 | MASVS-STORAGE-1 | The app securely stores sensitive data. | Verified | Direct. The sensitive file is written to external storage at `Benign/.../MainActivity.java` line 24; Secure moves it to `getFilesDir()` at `Secure/.../MainActivity.java` line 24. |
+| OWASP MASVS v2 | MASVS-STORAGE-2 | The app prevents leakage of sensitive data. | Verified | Partial. The leak to Malicious (`MalActivity.java` lines 55 to 57) follows from the storage location; the control is broader than storage. |
+
+CWE-200 (Exposure of Sensitive Information to an Unauthorized Actor) was considered and is DISCOURAGED in `standards-reference.md`, so it is not in the table; CWE-922 and CWE-359 are used instead.
+
+No MASTG test or MASWE entry in the reference file fits: the MASTG tests cover IPC components and the MASWE entries cover app components, intents, overlays and untrusted input, while this leak goes through a shared file.
+
+MITRE ATT&CK for Mobile: No direct match. No technique was verified on attack.mitre.org that describes reading another app's file from external storage.
+
+- **Candidates to check:**
+  - CWE-921 (Storage of Sensitive Data in a Mechanism without Access Control): Base child of CWE-922, Usage ALLOWED; matches line 24 directly.
+  - MASWE-0002 (Sensitive Data Stored Unencrypted Outside of Private Storage): listed as current on https://mas.owasp.org/MASWE/ (downloaded 2026-11-01).
+  - MASTG-TEST-0200 (Files Written to External Storage): listed as current on https://mas.owasp.org/MASTG/tests/ (downloaded 2026-11-01).
+  - MASTG-TEST-0001 (Testing Local Storage for Sensitive Data): listed as deprecated on the same index page.
+- **Evidence plan:** On ghera27 (API 27, inside the README range), install and launch Benign, then install and launch Malicious (allow storage access) and expect "ImageView loaded with SSN" with the image shown; repeat with Secure and expect "Unable to load image". Not yet run.
+- **README vs code differences:**
+  - `README.md` line 16 says Malicious "has write permission to *ExternalStorage*"; `Malicious/app/src/main/AndroidManifest.xml` line 5 requests only `READ_EXTERNAL_STORAGE` (the same README line later says read permission).
+- **Open questions:** None.
+
+### InternalStorage-DirectoryTraversal-Lean
+
+- **Summary:** An app that takes a file path from another app and writes that file in its internal storage without sanitizing the path lets the caller write files anywhere in the app's internal file system.
+- **Android versions (from README):** "Tested on Android 5.1.1 - Android 8.1"
+- **What the code does:** Benign's `MainActivity`, exported through its launcher intent filter (`Benign/app/src/main/AndroidManifest.xml` lines 11 to 16), takes the `fileName` and `fileContent` extras and writes the file as `new File(getFilesDir()/custom, fileName)` with no check on the name, then sets `RESULT_OK` (`Benign/app/src/main/java/edu/ksu/cs/benign/MainActivity.java` lines 25 to 45). Malicious starts it with `fileName` set to `../../cache/malicious.txt` and shows success when `RESULT_OK` comes back (`Malicious/app/src/main/java/edu/ksu/cs/malicious/MainActivity.java` lines 29 to 36 and 45 to 47). Secure accepts the request only when `fileName` equals `demo.txt` and returns `RESULT_CANCELED` otherwise (`Secure/app/src/main/java/edu/ksu/cs/benign/MainActivity.java` lines 27 to 34).
+
+| Standard | ID | Title | Confidence | Fit |
+|----------|----|-------|------------|-----|
+| CWE | CWE-22 | Improper Limitation of a Pathname to a Restricted Directory | Verified | Direct. `Benign/.../MainActivity.java` lines 28 and 37 use the caller's `fileName` under `files/custom` without limiting it to that directory, and Malicious line 29 escapes it with `../../cache/`. Mapping notes review: the Rationale says this entry might have children that would be more appropriate; the Comment says to consider CWE-23 (or its descendants) for relative path traversal or CWE-36 for absolute path traversal. The children one level down are CWE-23 (Relative Path Traversal) and CWE-36 (Absolute Path Traversal). CWE-23 matches the `../` input better but is not in the reference file, so CWE-22 is kept and CWE-23 is listed under Candidates; CWE-36 does not apply because the input is relative. Usage ALLOWED-WITH-REVIEW. |
+| OWASP MASVS v2 | MASVS-CODE-4 | The app validates and sanitizes all untrusted inputs. | Verified | Direct. Benign uses the extra as is (line 28); Secure checks it against a fixed name (`Secure/.../MainActivity.java` line 29). |
+| OWASP MASVS v2 | MASVS-PLATFORM-1 | The app uses IPC mechanisms securely. | Verified | Partial. The path arrives as an intent extra to an exported activity (`Benign/.../MainActivity.java` line 25). Partial because the fix is input validation, not a change to the IPC surface. |
+| OWASP MASTG test | MASTG-TEST-0364 | Exported And Unprotected Activities That Expose Sensitive Functionality | Verified | Partial. `MainActivity` is exported by its launcher intent filter with no permission (`Benign/app/src/main/AndroidManifest.xml` lines 11 to 16) and writes files named by the caller (lines 37 to 40). Partial because a launcher activity has to be exported and Secure keeps it exported; the fix is in input handling. |
+| OWASP MASTG test | MASTG-TEST-0029 | Testing for Sensitive Functionality Exposure Through IPC | Verified | Partial. Deprecated, kept for reference only. |
+| OWASP MASWE | MASWE-0050 | Unsafe Handling of Untrusted Data | Verified | Direct. An untrusted intent extra becomes part of a file path (`Benign/.../MainActivity.java` lines 28 and 37). Controls shown on the page: MASVS-CODE-4. |
+| OWASP MASWE | MASWE-0032 | Insecure Intents | Verified | Partial. `MainActivity` acts on the incoming intent's extras without validation (lines 25 to 30), which the page covers as acting on untrusted intents. Partial because the harm comes from the file path, not from the intent itself. Controls shown on the page: MASVS-PLATFORM-1, MASVS-STORAGE-2. |
+
+CWE-20 (Improper Input Validation) was considered and is DISCOURAGED in `standards-reference.md`, so it is not in the table; CWE-22 is used instead, with CWE-23 as a candidate.
+
+MITRE ATT&CK for Mobile: No direct match. No technique was verified on attack.mitre.org that describes path traversal through another app's exported activity.
+
+- **Candidates to check:**
+  - CWE-23 (Relative Path Traversal): child of CWE-22 named in its mapping notes; matches the `../../cache/malicious.txt` input at Malicious line 29.
+- **Evidence plan:** On ghera27 (API 27, inside the README range), install Benign and Malicious, open Malicious, tap its button, press Back and expect "Data injection succeeded", then check `adb shell run-as edu.ksu.cs.benign ls -l cache` for `malicious.txt`; repeat with Secure and expect "Data injection failed" and no `malicious.txt`. Not yet run.
+- **README vs code differences:**
+  - `README.md` line 52 (step 7) says to launch Malicious and press Back; the request is only sent after tapping the Malicious button (`Malicious/.../MainActivity.java` lines 25 to 37), which the test does before pressing Back.
+  - `README.md` line 12 names the file `../../cache/Malicious.txt`; the code uses `../../cache/malicious.txt` (`Malicious/.../MainActivity.java` line 29).
+  - `README.md` line 12 says `MainActivity` returns a failure or success result code depending on whether the file was written; Benign throws a `RuntimeException` on an `IOException` instead of returning a failure code (`Benign/.../MainActivity.java` lines 41 to 42).
+- **Open questions:**
+  - In Secure, the `IOException` handler sets `RESULT_CANCELED` (`Secure/.../MainActivity.java` line 47) but execution continues to `setResult(RESULT_OK)` at line 51, so a failed write would still be reported as success. This does not affect the traversal fix but means the result code is not reliable.
+
+### InternalToExternalStorage-InformationLeak-Lean
+
+- **Summary:** An app component that copies files from internal storage to external storage on request, without telling trusted callers from untrusted ones, lets another app read the app's internal files.
+- **Android versions (from README):** "Tested on Android 5.1.1 - Android 8.1"
+- **What the code does:** Benign saves the text field to the private file `sensitive_file` (`Benign/app/src/main/java/edu/ksu/cs/benign/MainActivity.java` lines 35 to 38). Its `DownloadService` is exported with no permission (`Benign/app/src/main/AndroidManifest.xml` lines 19 to 27); for any intent with a `filename` extra it reads that internal file, writes it to `getExternalFilesDir(null)`, and broadcasts to the package and action named in the intent (`Benign/app/src/main/java/edu/ksu/cs/benign/DownloadService.java` lines 34 to 62). Malicious starts the service for `sensitive_file`, and its `Result` activity then reads the copy from Benign's external directory (`Malicious/app/src/main/java/edu/ksu/cs/malicious/MainActivity.java` lines 50 to 57; `Malicious/app/src/main/java/edu/ksu/cs/malicious/Result.java` lines 26 to 39). Secure protects the service with a signature-level permission (`Secure/app/src/main/AndroidManifest.xml` lines 5 to 9 and 27); the service code is unchanged.
+
+| Standard | ID | Title | Confidence | Fit |
+|----------|----|-------|------------|-----|
+| CWE | CWE-926 | Improper Export of Android Application Components | Verified | Direct. `DownloadService` is `android:exported="true"` with no permission (`Benign/app/src/main/AndroidManifest.xml` lines 19 to 21), so any app can make it copy an internal file out. Secure adds `android:permission="edu.ksu.cs.SecurePermission"` with `signature` level (`Secure/app/src/main/AndroidManifest.xml` lines 5 to 8 and 27). Usage ALLOWED. |
+| CWE | CWE-922 | Insecure Storage of Sensitive Information | Verified | Partial. `DownloadService.java` lines 36 and 48 to 50 copy the private file to external storage, where any app with storage read permission can read it. Mapping notes review: the Rationale says this Class might have Base-level children that would be more appropriate and the Comment says to examine them. Of the children one level down, CWE-312 (Cleartext Storage of Sensitive Information) is about encryption and does not fit; CWE-921 (Storage of Sensitive Data in a Mechanism without Access Control) fits the external-storage half better but is not in the reference file, so it is listed under Candidates. Partial because the README's weakness is the unrestricted service, and Secure keeps the copy to external storage (`Secure/.../DownloadService.java` lines 47 to 49). Usage ALLOWED-WITH-REVIEW. |
+| OWASP MASVS v2 | MASVS-PLATFORM-1 | The app uses IPC mechanisms securely. | Verified | Direct. The exported, unprotected service (manifest lines 19 to 27) is the entry point. |
+| OWASP MASVS v2 | MASVS-STORAGE-2 | The app prevents leakage of sensitive data. | Verified | Partial. The private file leaves the sandbox through `DownloadService.java` line 48. Partial because the control is broader than this IPC path. |
+| OWASP MASTG test | MASTG-TEST-0365 | Exported And Unprotected Services That Expose Sensitive Functionality | Verified | Direct. `DownloadService` is exported with no permission and copies internal files out on request (`DownloadService.java` lines 34 to 50). |
+| OWASP MASTG test | MASTG-TEST-0007 | Determining Whether Sensitive Stored Data Has Been Exposed via IPC Mechanisms | Verified | Partial. Stored data (`sensitive_file`) is exposed through an IPC component. Deprecated, kept for reference only. |
+| OWASP MASTG test | MASTG-TEST-0029 | Testing for Sensitive Functionality Exposure Through IPC | Verified | Partial. Deprecated, kept for reference only. |
+| OWASP MASWE | MASWE-0018 | Lack of Authentication or Authorization on App Components | Verified | Direct. `DownloadService` is reachable by any app without access control (manifest lines 19 to 21). Controls shown on the page: MASVS-AUTH-1, MASVS-PLATFORM-1, MASVS-STORAGE-2. |
+
+CWE-200 (Exposure of Sensitive Information to an Unauthorized Actor) was considered and is DISCOURAGED in `standards-reference.md`, so it is not in the table; CWE-926 and CWE-922 are used instead.
+
+MITRE ATT&CK for Mobile: No direct match. No technique was verified on attack.mitre.org that describes calling another app's exported service to copy its private files to shared storage.
+
+- **Candidates to check:**
+  - CWE-921 (Storage of Sensitive Data in a Mechanism without Access Control): Base child of CWE-922, Usage ALLOWED; matches the copy to external storage at `DownloadService.java` line 48.
+  - MASTG-TEST-0200 (Files Written to External Storage): listed as current on https://mas.owasp.org/MASTG/tests/ (downloaded 2026-11-01).
+  - MASWE-0002 (Sensitive Data Stored Unencrypted Outside of Private Storage): listed as current on https://mas.owasp.org/MASWE/ (downloaded 2026-11-01).
+- **Evidence plan:** On ghera27 (API 27, inside the README range), install Benign and Malicious, type text in Benign and tap Save, open Malicious (allow storage access), tap its service button and expect the `Result` screen to show the typed text and `adb logcat -d | grep "Benign/DownloadService"` to show "Written to external storage in = ..."; repeat with Secure and expect Malicious to show "SecurityException". Not yet run.
+- **README vs code differences:**
+  - `README.md` step 9 says the log shows that the file was written to external storage "successfully"; the code logs "Written to external storage in = " followed by the path (`Benign/.../DownloadService.java` line 56).
+- **Open questions:**
+  - `README.md` line 9 calls copying internal files to external storage "inherently insecure", yet Secure keeps the copy and its own "Download to sdcard" button still triggers it (`Secure/app/src/main/java/edu/ksu/cs/benign/MainActivity.java` line 50; `Secure/.../DownloadService.java` lines 47 to 49). After that button is used, any app with storage read permission could read the file the way `Result.java` lines 26 to 29 do. Whether the benchmark intends Secure to cover only the service access is not stated.
+  - `DownloadService` broadcasts to a package and action taken from the caller's extras (`Benign/.../DownloadService.java` lines 57 to 62; same in Secure lines 56 to 61). This is not part of the README's description.
+
+### SQLite-execSQL-Lean
+
+- **Summary:** An app that builds a SQL statement from outside input and runs it with `SQLiteDatabase.execSQL()`, without parameters, is open to SQL injection.
+- **Android versions (from README):** "Tested on Android 5.1.1 - 8.1"
+- **What the code does:** Benign's `MiddleActivity` is exported through an intent filter for action `edu.ksu.cs.benign.DB` with no permission (`Benign/app/src/main/AndroidManifest.xml` lines 23 to 28). When `requestCode` is 100 it reads the `key` and `value` extras, concatenates them into an `UPDATE` statement, runs it with `execSQL`, and returns every row of the table to the caller (`Benign/app/src/main/java/edu/ksu/cs/benign/MiddleActivity.java` lines 28 to 33, 49 to 54 and 73 to 78). Malicious sends `value` set to `666' WHERE 1=1 -- ` so every row is updated (`Malicious/app/src/main/java/edu/ksu/cs/malicious/MainActivity.java` lines 29 to 36). Secure replaces the concatenation with `db.update()` and a `?` placeholder for the key (`Secure/app/src/main/java/edu/ksu/cs/benign/MiddleActivity.java` lines 52 to 55).
+
+| Standard | ID | Title | Confidence | Fit |
+|----------|----|-------|------------|-----|
+| CWE | CWE-89 | Improper Neutralization of Special Elements used in an SQL Command | Verified | Direct. `MiddleActivity.java` lines 49 to 51 build the `UPDATE` from the `value` and `key` extras and line 54 runs it with `execSQL`; the Malicious payload at line 30 closes the quote and comments out the rest. Usage ALLOWED. |
+| CWE | CWE-926 | Improper Export of Android Application Components | Verified | Partial. `MiddleActivity` is exported by its intent filter with no permission (`Benign/app/src/main/AndroidManifest.xml` lines 23 to 28), which lets any app supply the input. Partial because the benchmark's weakness is the injection, and Secure keeps the activity exported (`Secure/app/src/main/AndroidManifest.xml` lines 23 to 30). Usage ALLOWED. |
+| OWASP MASVS v2 | MASVS-CODE-4 | The app validates and sanitizes all untrusted inputs. | Verified | Direct. Untrusted extras go into SQL text (lines 49 to 51). |
+| OWASP MASVS v2 | MASVS-PLATFORM-1 | The app uses IPC mechanisms securely. | Verified | Partial. The input arrives through an exported activity (manifest lines 23 to 28). Partial because the fix is parameterization, not IPC protection. |
+| OWASP MASTG test | MASTG-TEST-0364 | Exported And Unprotected Activities That Expose Sensitive Functionality | Verified | Partial. `MiddleActivity` is exported without a permission, updates the database and returns all rows to the caller (`MiddleActivity.java` lines 73 to 78). Partial because Secure keeps this exposure and only fixes the query. |
+| OWASP MASTG test | MASTG-TEST-0029 | Testing for Sensitive Functionality Exposure Through IPC | Verified | Partial. Deprecated, kept for reference only. |
+| OWASP MASWE | MASWE-0050 | Unsafe Handling of Untrusted Data | Verified | Direct. Intent extras are used unsanitized in a SQL statement (lines 30 to 31 and 49 to 54). Controls shown on the page: MASVS-CODE-4. |
+| OWASP MASWE | MASWE-0018 | Lack of Authentication or Authorization on App Components | Verified | Partial. `MiddleActivity` is reachable by any app without access control (manifest lines 23 to 28). Partial because the README's weakness is the injection. Controls shown on the page: MASVS-AUTH-1, MASVS-PLATFORM-1, MASVS-STORAGE-2. |
+
+CWE-20 (Improper Input Validation) was considered and is DISCOURAGED in `standards-reference.md`, so it is not in the table; CWE-89 is used instead.
+
+The content-provider tests in the reference file (MASTG-TEST-0355, MASTG-TEST-0356, MASTG-TEST-0357) do not fit: this benchmark has no content provider.
+
+MITRE ATT&CK for Mobile: No direct match. No technique was verified on attack.mitre.org that describes SQL injection through another app's exported activity.
+
+- **Candidates to check:**
+  - MASTG-TEST-0025 (Testing for Injection Flaws): listed as deprecated on https://mas.owasp.org/MASTG/tests/ (downloaded 2026-11-01); covers SQL injection in general, not only through content providers.
+- **Evidence plan:** On ghera27 (API 27, inside the README range), install Benign, tap TRUNCATE TABLE then Insert data, install Malicious, tap Data injection and expect both rows in `MiddleActivity` to show value 666, then press Back and expect "Success"; repeat with Secure and expect values 100 and 200 and "Failure". Not yet run.
+- **README vs code differences:**
+  - `README.md` line 12 gives the payload as "666 where clause 1=1"; the code sends `666' WHERE 1=1 -- ` (`Malicious/.../MainActivity.java` line 30).
+  - `README.md` line 14 names the buttons Truncate Table and Insert Table and line 46 says Insert Data; the layout labels are "TRUNCATE TABLE" and "Insert data" (`Benign/app/src/main/res/layout/activity_main.xml` lines 28 and 33).
+  - `README.md` line 62 presents "Success" as the sign of the exploit; Malicious shows "Success" for any `RESULT_OK` (`Malicious/.../MainActivity.java` lines 45 to 46), and `MiddleActivity` returns `RESULT_OK` whenever the table has rows (`Benign/.../MiddleActivity.java` lines 71 to 78), whether or not the injection changed anything.
+- **Open questions:**
+  - Secure passes `"WHERE " + key + " = ?"` as the `whereClause` of `db.update()` (`Secure/.../MiddleActivity.java` line 55). If `update()` adds its own `WHERE`, as the Android documentation describes, the statement would contain `WHERE WHERE` and fail for every input, ending in `RESULT_CANCELED` (line 61). The Secure test's "Failure" check (`Testing/secure_app/src/androidTest/java/edu/ksu/cs/secure/Tests.java` line 108) would then pass even for a harmless request.
+  - Both Benign and Secure declare a `signature` permission `edu.ks.cs.benign.MYCP_READ_PERMISSION` that no component uses (`Benign/app/src/main/AndroidManifest.xml` lines 5 to 7; `Secure/app/src/main/AndroidManifest.xml` lines 5 to 7), and Malicious requests it (`Malicious/app/src/main/AndroidManifest.xml` line 5).
+  - Secure still returns every row of the table to any caller (`Secure/.../MiddleActivity.java` lines 75 to 80).
+
+### SQLlite-RawQuery-SQLInjection-Lean
+
+- **Summary:** An app that builds a query from outside input and runs it with `SQLiteDatabase.rawQuery()`, without parameters, is open to SQL injection.
+- **Android versions (from README):** "Tested on Android 5.1.1 - Android 8.1"
+- **What the code does:** Benign's `MiddleActivity` is exported with no permission (`Benign/app/src/main/AndroidManifest.xml` lines 23 to 30). When `requestCode` is 100 it concatenates the `username` and `password` extras into the `WHERE` clause and runs the query with `rawQuery(query, null)`, then returns all matching usernames and passwords to the caller (`Benign/app/src/main/java/edu/ksu/cs/benign/MiddleActivity.java` lines 28 to 33, 76 to 82 and 40 to 45). Malicious sends `password` set to `"password" OR 1=1` and logs every returned pair (`Malicious/app/src/main/java/edu/ksu/cs/malicious/MainActivity.java` lines 31 to 38 and 49 to 53). Secure uses `?` placeholders and passes the extras as `selectionArgs` (`Secure/app/src/main/java/edu/ksu/cs/benign/MiddleActivity.java` lines 30 to 33 and 81).
+
+| Standard | ID | Title | Confidence | Fit |
+|----------|----|-------|------------|-----|
+| CWE | CWE-89 | Improper Neutralization of Special Elements used in an SQL Command | Verified | Direct. `MiddleActivity.java` line 31 builds the selection from the extras and line 82 runs it with `rawQuery(query, null)`. Usage ALLOWED. |
+| CWE | CWE-926 | Improper Export of Android Application Components | Verified | Partial. `MiddleActivity` is `android:exported="true"` with no permission (`Benign/app/src/main/AndroidManifest.xml` lines 23 to 25). Partial because the weakness is the injection, and Secure keeps the same export (`Secure/app/src/main/AndroidManifest.xml` lines 22 to 24). Usage ALLOWED. |
+| OWASP MASVS v2 | MASVS-CODE-4 | The app validates and sanitizes all untrusted inputs. | Verified | Direct. Untrusted extras go into SQL text (line 31). |
+| OWASP MASVS v2 | MASVS-PLATFORM-1 | The app uses IPC mechanisms securely. | Verified | Partial. The input arrives through an exported activity (manifest lines 23 to 30). Partial because the fix is parameterization. |
+| OWASP MASTG test | MASTG-TEST-0364 | Exported And Unprotected Activities That Expose Sensitive Functionality | Verified | Partial. `MiddleActivity` is exported without a permission and returns usernames and passwords to the caller (`MiddleActivity.java` lines 40 to 45). Partial because Secure keeps this exposure for callers that supply a valid pair. |
+| OWASP MASTG test | MASTG-TEST-0029 | Testing for Sensitive Functionality Exposure Through IPC | Verified | Partial. Deprecated, kept for reference only. |
+| OWASP MASWE | MASWE-0050 | Unsafe Handling of Untrusted Data | Verified | Direct. Intent extras are used unsanitized in a SQL query (lines 28 to 31 and 82). Controls shown on the page: MASVS-CODE-4. |
+| OWASP MASWE | MASWE-0018 | Lack of Authentication or Authorization on App Components | Verified | Partial. `MiddleActivity` is reachable by any app without access control (manifest lines 23 to 25). Partial because the README's weakness is the injection. Controls shown on the page: MASVS-AUTH-1, MASVS-PLATFORM-1, MASVS-STORAGE-2. |
+
+CWE-20 (Improper Input Validation) was considered and is DISCOURAGED in `standards-reference.md`, so it is not in the table; CWE-89 is used instead.
+
+The content-provider tests in the reference file (MASTG-TEST-0355, MASTG-TEST-0356, MASTG-TEST-0357) do not fit: although the README names a content provider, the code has none.
+
+MITRE ATT&CK for Mobile: No direct match. No technique was verified on attack.mitre.org that describes SQL injection through another app's exported activity.
+
+- **Candidates to check:**
+  - MASTG-TEST-0025 (Testing for Injection Flaws): listed as deprecated on https://mas.owasp.org/MASTG/tests/ (downloaded 2026-11-01).
+- **Evidence plan:** On ghera27 (API 27, inside the README range), install Benign and tap Insert data, install Malicious, tap Data injection, press Back and expect "Success" and `adb logcat -d | grep "Malicious"` to list both username and password pairs; repeat with Secure and expect "Failure". Not yet run.
+- **README vs code differences:**
+  - `README.md` line 12 says `Benign/MyContentProvider` runs the non-parameterized query and is exported; Benign has no content provider. The query is in `MiddleActivity` (`Benign/.../MiddleActivity.java` lines 31 and 76 to 82), and `MiddleActivity` is the exported component (`Benign/app/src/main/AndroidManifest.xml` lines 23 to 30).
+- **Open questions:**
+  - Benign and Secure declare a `signature` permission `edu.ks.cs.benign.MYCP_READ_PERMISSION` that no component uses (`Benign/app/src/main/AndroidManifest.xml` lines 5 to 7; `Secure/app/src/main/AndroidManifest.xml` lines 5 to 7), and Malicious requests it (`Malicious/app/src/main/AndroidManifest.xml` line 5). It may be left over from a content-provider version.
+  - Benign logs each username and password and the full query text (`Benign/.../MiddleActivity.java` lines 60 and 81); Secure still logs the pairs and the arguments (`Secure/.../MiddleActivity.java` lines 61 and 82). This is outside the README's scope.
+  - `Secure/app/src/main/res/layout/activity_middleware.xml` names `edu.ksu.cs.benign.Middleware` as its context (line 7); no such class exists in Secure.
+
+### SQLlite-SQLInjection-Lean
+
+- **Summary:** An app that builds select, update or delete conditions from outside input without using `selectionArgs` is open to SQL injection.
+- **Android versions (from README):** "Tested on Android 5.1.1 - Android 8.1"
+- **What the code does:** Benign's `MiddleActivity` is exported with no permission (`Benign/app/src/main/AndroidManifest.xml` lines 30 to 37) and concatenates the `username` and `password` extras into a selection string that it passes, with `null` selection arguments, to its own content provider (`Benign/app/src/main/java/edu/ksu/cs/benign/MiddleActivity.java` lines 28 to 34). The provider is not exported and is guarded by a `signature` permission (manifest lines 23 to 28); its `query` passes the selection straight to `db.query` (`Benign/app/src/main/java/edu/ksu/cs/benign/MyContentProvider.java` line 57), and `MiddleActivity` returns all matching pairs to the caller (lines 42 to 47). Malicious sends `"password" OR 1=1` as the password (`Malicious/app/src/main/java/edu/ksu/cs/malicious/MainActivity.java` lines 29 to 36); Secure builds the selection with `?` and passes the extras as `selectionArgs` (`Secure/app/src/main/java/edu/ksu/cs/benign/MiddleActivity.java` lines 30 to 36).
+
+| Standard | ID | Title | Confidence | Fit |
+|----------|----|-------|------------|-----|
+| CWE | CWE-89 | Improper Neutralization of Special Elements used in an SQL Command | Verified | Direct. `MiddleActivity.java` line 30 builds the selection from the extras and `MyContentProvider.java` line 57 runs it without `selectionArgs`. Usage ALLOWED. |
+| CWE | CWE-926 | Improper Export of Android Application Components | Verified | Partial. `MiddleActivity` is `android:exported="true"` with no permission (`Benign/app/src/main/AndroidManifest.xml` lines 30 to 32) and gives other apps indirect access to the unexported provider. Partial because the weakness is the injection, and Secure keeps the same export (`Secure/app/src/main/AndroidManifest.xml` lines 30 to 32). Usage ALLOWED. |
+| OWASP MASVS v2 | MASVS-CODE-4 | The app validates and sanitizes all untrusted inputs. | Verified | Direct. Untrusted extras go into the selection (line 30). |
+| OWASP MASVS v2 | MASVS-PLATFORM-1 | The app uses IPC mechanisms securely. | Verified | Partial. The input arrives through an exported activity (manifest lines 30 to 37). Partial because the fix is parameterization. |
+| OWASP MASTG test | MASTG-TEST-0364 | Exported And Unprotected Activities That Expose Sensitive Functionality | Verified | Partial. `MiddleActivity` is exported without a permission and returns usernames and passwords to the caller (`MiddleActivity.java` lines 42 to 47). Partial because Secure keeps this exposure for callers that supply a valid pair. |
+| OWASP MASTG test | MASTG-TEST-0029 | Testing for Sensitive Functionality Exposure Through IPC | Verified | Partial. Deprecated, kept for reference only. |
+| OWASP MASWE | MASWE-0050 | Unsafe Handling of Untrusted Data | Verified | Direct. Intent extras are used unsanitized in a SQL selection (lines 28 to 34). Controls shown on the page: MASVS-CODE-4. |
+| OWASP MASWE | MASWE-0018 | Lack of Authentication or Authorization on App Components | Verified | Partial. `MiddleActivity` is reachable by any app without access control (manifest lines 30 to 32). Partial because the README's weakness is the injection. Controls shown on the page: MASVS-AUTH-1, MASVS-PLATFORM-1, MASVS-STORAGE-2. |
+
+CWE-20 (Improper Input Validation) was considered and is DISCOURAGED in `standards-reference.md`, so it is not in the table; CWE-89 is used instead.
+
+MASTG-TEST-0355 and MASTG-TEST-0356 do not fit: there is a content provider, but it is `android:exported="false"` and guarded by a `signature` permission (manifest lines 27 to 28), so other apps reach the database only through `MiddleActivity`. MASTG-TEST-0357 does not fit because the provider is not file-based.
+
+MITRE ATT&CK for Mobile: No direct match. No technique was verified on attack.mitre.org that describes SQL injection through another app's exported activity.
+
+- **Candidates to check:**
+  - MASTG-TEST-0339 (SQL Injection in Content Providers): named in `standards-reference.md` as filed under MASVS-CODE and not included there; the injectable `db.query` is inside a content provider (`MyContentProvider.java` line 57), but the provider is not exported.
+  - MASTG-TEST-0025 (Testing for Injection Flaws): listed as deprecated on https://mas.owasp.org/MASTG/tests/ (downloaded 2026-11-01).
+- **Evidence plan:** On ghera27 (API 27, inside the README range), install and launch Benign (which inserts the rows), install Malicious, tap Data injection, press Back and expect "Success" and `adb logcat -d | grep "Malicious"` to list both pairs; repeat with Secure and expect "Failure". Not yet run.
+- **README vs code differences:**
+  - `README.md` line 2 covers select, update and delete queries; `MyContentProvider` implements only `query`, while `delete` and `update` throw `UnsupportedOperationException` (`MyContentProvider.java` lines 17 to 20 and 61 to 66).
+  - `README.md` steps 8 and 9 do not mention pressing Back to return to Malicious; the test presses Back before reading the result (`Testing/benign_app/src/androidTest/java/edu/ksu/cs/benign/Tests.java` lines 74 to 79).
+- **Open questions:**
+  - The provider is both `exported="false"` and guarded by `edu.ks.cs.benign.MYCP_READ_PERMISSION` (manifest lines 27 to 28); Malicious requests that permission (`Malicious/app/src/main/AndroidManifest.xml` line 5), which has no effect on the attack path.
+  - Benign's `MainActivity.onCreate` inserts the two rows on every launch (`Benign/app/src/main/java/edu/ksu/cs/benign/MainActivity.java` line 18, `MyContentProvider.java` lines 33 to 39), so rows repeat over runs.
+  - Benign and Secure log each username and password (`Benign/.../MiddleActivity.java` line 62; `Secure/.../MiddleActivity.java` line 64). This is outside the README's scope.
+
