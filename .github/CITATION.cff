@@ -1,0 +1,39 @@
+cff-version: 1.2.0
+message: "This project builds on the Ghera benchmarks and the Rekha evaluation. If you use it, please cite both papers listed under references."
+title: "android-threat-engine"
+type: software
+authors:
+  - given-names: Ronan
+references:
+  - type: conference-paper
+    title: "Ghera: A Repository of Android App Vulnerability Benchmarks"
+    authors:
+      - family-names: Mitra
+        given-names: Joydeep
+      - family-names: Ranganath
+        given-names: Venkatesh-Prasad
+    collection-title: "Proceedings of the 13th International Conference on Predictive Models and Data Analytics in Software Engineering (PROMISE 2017)"
+    conference:
+      name: "PROMISE 2017"
+    publisher:
+      name: "ACM"
+    year: 2017
+    start: 43
+    end: 52
+    doi: "10.1145/3127005.3127010"
+  - type: article
+    title: "Are free Android app security analysis tools effective in detecting known vulnerabilities?"
+    authors:
+      - family-names: Ranganath
+        given-names: Venkatesh-Prasad
+      - family-names: Mitra
+        given-names: Joydeep
+    journal: "Empirical Software Engineering"
+    publisher:
+      name: "Springer"
+    year: 2019
+    volume: 25
+    issue: 1
+    start: 178
+    end: 219
+    doi: "10.1007/s10664-019-09749-y"
