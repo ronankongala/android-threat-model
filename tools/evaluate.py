@@ -50,8 +50,8 @@ is not a false positive under this rule; it is under false_positive_any.
 A count is left blank when the APK is missing or the tool fails; the scores then
 treat it as 0 findings, and the reason is printed.
 
-Usage: python tools/evaluate.py [--no-dynamic | --dynamic] [--auto-readme] [--out CSV]
-       python tools/evaluate.py --rescore [--dynamic] [--out CSV]
+Usage: python tools/evaluate.py [--no-dynamic | --dynamic] [--auto-readme] [--diff-mode] [--out CSV]
+       python tools/evaluate.py --rescore [--dynamic] [--diff-mode] [--out CSV]
 
 --no-dynamic (the default) scores the static layers only: manifest rules, smali
 code patterns and taint analysis. --dynamic also passes --dynamic to ate.py, so
@@ -95,6 +95,20 @@ alike. Runs with and without it are not directly comparable.
 data/evaluation-results.csv. A --rescore run writes a CSV only when --out is given.
 --only BENCH (repeatable) restricts the run to the named benchmarks; combine it
 with --out so the full results file is not overwritten.
+
+--diff-mode (P-8) scores differential findings only. Both APKs are analyzed
+as usual; then a Benign finding is kept only when the Secure APK has no finding
+with the same issue, CWE and class (the class compared without its package,
+since some Secure apps use another package name, e.g. edu.ksu.cs.secure), and a
+Secure finding is kept only when the Benign APK has no such finding. True and
+false positives are then scored on what is left, with the definitions above: a
+true positive is a ground-truth CWE among the findings the fix removed, a false
+positive one among the findings the fix added. When the Secure APK is missing
+or the tool failed on it, no difference can be taken and the benchmark is
+scored as in the standard mode. Diff mode needs the fixed app, so it measures
+whether the tool sees what a fix changed; it is not the precision of the tool
+on a single unknown APK, and its numbers are not comparable with the standard
+mode. It works with --rescore as well.
 
 --rescore runs nothing: it rescans the reports a previous run left in
 data/eval-tmp/<benchmark>/<Benign|Secure>/app-api27-debug-report.json and scores
@@ -249,7 +263,26 @@ def merge_new(findings, extra):
     return (findings or []) + added, added
 
 
-def score_row(bench, gt_entry, benign, secure, two_app=None, readme=None):
+def diff_key(finding):
+    """(issue, cwe, class without package) used to match a finding of the
+    Benign APK with one of the Secure APK (P-8)."""
+    component = str(finding.get('component') or '')
+    return finding.get('issue'), finding.get('cwe'), component.rsplit('.', 1)[-1]
+
+
+def diff_findings(benign, secure):
+    """P-8: (Benign findings not in Secure, Secure findings not in Benign),
+    matched by diff_key. When either list is None (APK missing or tool
+    failed) both are returned unchanged."""
+    if benign is None or secure is None:
+        return benign, secure
+    b_keys = {diff_key(f) for f in benign}
+    s_keys = {diff_key(f) for f in secure}
+    return ([f for f in benign if diff_key(f) not in s_keys],
+            [f for f in secure if diff_key(f) not in b_keys])
+
+
+def score_row(bench, gt_entry, benign, secure, two_app=None, readme=None, diff=False):
     """Score one benchmark; return (CSV row dict, expanded matching CWEs).
 
     benign and secure are findings lists, or None when the APK was missing or
@@ -259,6 +292,8 @@ def score_row(bench, gt_entry, benign, secure, two_app=None, readme=None):
     Secure findings respectively. readme is the list of README replay findings
     (None: not run); they describe the Benign app and are added to the Benign
     findings only, skipping any whose issue and CWE are already present.
+    With diff (P-8, --diff-mode), only the differential findings are scored
+    (diff_findings) and the finding counts are those of the differential lists.
     """
     two_app = two_app or {}
     counts = {}
@@ -275,6 +310,8 @@ def score_row(bench, gt_entry, benign, secure, two_app=None, readme=None):
         merged, readme_added = merge_new(benign, readme)
         if readme_added:
             benign = merged
+    if diff:
+        benign, secure = diff_findings(benign, secure)
     benign_n = len(benign) if benign is not None else 0
     secure_n = len(secure) if secure is not None else 0
     strict, matched = matching_cwes({f['cwe'] for f in benign or []}, gt_entry['cwes'],
@@ -307,7 +344,7 @@ def is_dynamic(finding):
     return str(finding.get('issue', '')).startswith('dynamic-')
 
 
-def rescore(benchmarks, gt, dynamic=False, tmp=None, auto_readme=False):
+def rescore(benchmarks, gt, dynamic=False, tmp=None, auto_readme=False, diff=False):
     """Score the reports a previous run left in `tmp` (default data/eval-tmp),
     without running anything."""
     tmp = tmp or TMP
@@ -333,7 +370,8 @@ def rescore(benchmarks, gt, dynamic=False, tmp=None, auto_readme=False):
                 import readme_runner
                 base = os.path.join(ROOT, 'benchmarks', 'ghera', gt[bench]['category'], bench)
                 readme = readme_findings(benign_only(observations), readme_runner.bench_apps(base))
-        row, matched = score_row(bench, gt[bench], result['Benign'], result['Secure'], two_app, readme)
+        row, matched = score_row(bench, gt[bench], result['Benign'], result['Secure'], two_app, readme,
+                                 diff)
         print('%-58s benign=%-3s secure=%-3s tp=%d strict_tp=%d fp=%d fp_any=%d two_app=%s/%s readme=%s %s'
               % (bench, row['benign_findings'], row['secure_findings'], row['true_positive'],
                  row['strict_true_positive'], row['false_positive'], row['false_positive_any'],
@@ -530,6 +568,9 @@ def main(argv=None):
     p.add_argument('--with-malicious', action='store_true',
                    help="pass the benchmark's Malicious APK as --second-apk to the Benign "
                         'and Secure runs (static two-APK rules)')
+    p.add_argument('--diff-mode', action='store_true',
+                   help='P-8: score only the findings that differ between the Benign and '
+                        'Secure APK of each benchmark')
     p.add_argument('--rescore', action='store_true',
                    help='run nothing; rescore the reports already in data/eval-tmp')
     p.add_argument('--out', help='CSV to write (default data/evaluation-results.csv; '
@@ -545,13 +586,17 @@ def main(argv=None):
     if args.rescore:
         print('Rescore of data/eval-tmp (%s)' % ('all findings' if args.dynamic
                                                  else 'static layers only, dynamic-* findings dropped'))
-        rows = rescore(benchmarks, gt, args.dynamic, auto_readme=args.auto_readme)
+        if args.diff_mode:
+            print('Differential mode (--diff-mode): Benign minus Secure, Secure minus Benign')
+        rows = rescore(benchmarks, gt, args.dynamic, auto_readme=args.auto_readme,
+                       diff=args.diff_mode)
         print('\n' + '\n'.join(summary(rows)))
         if args.out:
             write_rows(rows, args.out)
         return 0
 
-    print('Mode: %s' % ('static and dynamic' if args.dynamic else 'static only (--no-dynamic)'))
+    print('Mode: %s%s' % ('static and dynamic' if args.dynamic else 'static only (--no-dynamic)',
+                          ', differential (--diff-mode)' if args.diff_mode else ''))
     if args.with_malicious:
         print('Static two-APK rules on: Malicious APK passed as --second-apk (--with-malicious)')
     print('Benchmarks with a successful api27 build: %d' % len(benchmarks))
@@ -605,7 +650,8 @@ def main(argv=None):
             readme = extra
         else:
             readme = None
-        row, matched = score_row(bench, gt[bench], result['Benign'], result['Secure'], two_app, readme)
+        row, matched = score_row(bench, gt[bench], result['Benign'], result['Secure'], two_app, readme,
+                                 args.diff_mode)
         print('   true_positive=%d (matching CWEs: %s) strict_true_positive=%d false_positive=%d '
               'false_positive_any=%d'
               % (row['true_positive'], ', '.join(matched) or 'none', row['strict_true_positive'],
