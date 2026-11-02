@@ -1,0 +1,33 @@
+name: Docs lint
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  lint-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install pytest
+        run: python -m pip install --upgrade pip pytest
+
+      # lint_docs.py exits 1 when there is any blocking finding, which fails the job.
+      # The report is also added to the job summary.
+      - name: Run tools/lint_docs.py
+        run: |
+          set +e -o pipefail
+          python tools/lint_docs.py --out lint-report-ci.md | tee lint-output.txt
+          status=${PIPESTATUS[0]}
+          cat lint-report-ci.md >> "$GITHUB_STEP_SUMMARY"
+          exit $status
