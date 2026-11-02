@@ -90,8 +90,9 @@ Patterns:
                                whose flags argument is a constant with neither
                                FLAG_IMMUTABLE (0x4000000) nor FLAG_MUTABLE
                                (0x2000000), which apps targeting API 31+ must set.
-                               Reported whatever the targetSdkVersion (the evidence
-                               names it); flags the register model cannot resolve
+                               P-4: skipped when targetSdkVersion (apktool.yml or
+                               the manifest) is below 31; reported when it is 31+
+                               or unknown. Flags the register model cannot resolve
                                to a constant are not reported
   dynamic_receiver_no_permission  (high) Context.registerReceiver with no
                                broadcastPermission: the (receiver, filter) or
@@ -245,6 +246,8 @@ PENDING_INTENT_FACTORIES = ('getActivity', 'getActivities', 'getBroadcast', 'get
                             'getForegroundService')
 FLAG_IMMUTABLE = 0x4000000   # PendingIntent.FLAG_IMMUTABLE
 FLAG_MUTABLE = 0x2000000     # PendingIntent.FLAG_MUTABLE (API 31)
+# FLAG_IMMUTABLE or FLAG_MUTABLE is required for apps targeting this API level or higher.
+MUTABILITY_REQUIRED_SDK = 31
 RECEIVER_NOT_EXPORTED = 0x4  # Context.RECEIVER_NOT_EXPORTED (API 33)
 SINK_KINDS = {'iv': 'constant_iv', 'key': 'hardcoded_key', 'pbe_salt': 'hardcoded_key_pbe',
               'pbe_pass': 'hardcoded_key_pbe'}
@@ -788,6 +791,8 @@ class _Method:
         if flags[1] & (FLAG_IMMUTABLE | FLAG_MUTABLE):
             return
         target = self.ctx.target_sdk
+        if target is not None and target < MUTABILITY_REQUIRED_SDK:
+            return   # P-4: the flag is only required from API 31
         evidence = ('%s [flags 0x%x: neither FLAG_IMMUTABLE nor FLAG_MUTABLE; required '
                     'for apps targeting API 31+ (targetSdkVersion %s), a mutable '
                     'PendingIntent lets the receiving app fill in its Intent]'
@@ -1942,11 +1947,23 @@ def _webview_client_rules(ctx, classes):
 
 # ---------------------------------------------------------------- entry point
 
+def _target_sdk(decoded_dir):
+    """targetSdkVersion from apktool.yml, else from <uses-sdk> in the decoded
+    AndroidManifest.xml, else None."""
+    target = apk._sdk_info(decoded_dir).get('target_sdk')
+    if target is None:
+        try:
+            target = apk.parse_manifest(os.path.join(decoded_dir, 'AndroidManifest.xml'))                 .get('target_sdk')
+        except (OSError, ET.ParseError):
+            target = None
+    return target
+
+
 def analyze(decoded_dir):
     """Return the code findings for the apktool output folder `decoded_dir`."""
     classes = [c for c in (_parse_class(p, decoded_dir) for p in _class_files(decoded_dir)) if c]
     ctx = _Context(classes)
-    ctx.target_sdk = apk._sdk_info(decoded_dir).get('target_sdk')
+    ctx.target_sdk = _target_sdk(decoded_dir)
     ctx.password_ids = _password_fields(decoded_dir)
     ctx.find_input_readers(decoded_dir)
     for _ in range(PASSES):

@@ -51,7 +51,7 @@ def _run(tmp_path, flags_line, factory='getActivity', target=None):
 @pytest.mark.parametrize('factory', ['getActivity', 'getBroadcast', 'getService',
                                      'getForegroundService'])
 def test_no_mutability_flag_fires(tmp_path, factory):
-    hits = _run(tmp_path, '    const/high16 v3, 0x8000000', factory, target=27)
+    hits = _run(tmp_path, '    const/high16 v3, 0x8000000', factory, target=31)
     assert len(hits) == 1
     f = hits[0]
     assert f['cwe'] == 'CWE-927'
@@ -59,7 +59,7 @@ def test_no_mutability_flag_fires(tmp_path, factory):
     assert f['component'] == 'a.b.Main'
     assert 'PendingIntent;->%s' % factory in f['evidence']
     assert 'flags 0x8000000' in f['evidence']
-    assert 'API 31' in f['evidence'] and 'targetSdkVersion 27' in f['evidence']
+    assert 'API 31' in f['evidence'] and 'targetSdkVersion 31' in f['evidence']
 
 
 def test_zero_flags_fire(tmp_path):
