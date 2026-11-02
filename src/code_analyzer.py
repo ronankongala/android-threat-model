@@ -29,11 +29,16 @@ Patterns:
   hardcoded_key                SecretKeySpec (or a seeded KeyGenerator) from a constant
   hardcoded_key_pbe            PBEKeySpec with a constant salt (low when only the
                                password is constant)
-  empty_trustmanager           X509TrustManager whose check*Trusted is empty
-  hostname_not_verified        HostnameVerifier.verify that returns true, or
-                               ALLOW_ALL_HOSTNAME_VERIFIER
+  empty_trustmanager           X509TrustManager whose check*Trusted is empty (high),
+                               or a checkServerTrusted with code but no throw and
+                               no call to a method named *check* or *verify* (medium)
+  hostname_not_verified        HostnameVerifier.verify that returns true: only
+                               const/4 vN, 0x1 and return (high), or any branch-free
+                               body that returns a const/4 0x1 register (medium);
+                               or ALLOW_ALL_HOSTNAME_VERIFIER
   insecure_ssl_socket_factory  SSLCertificateSocketFactory.getInsecure, or
-                               createSocket on an InetAddress (no hostname check)
+                               createSocket / getSocket taking an InetAddress (no
+                               hostname check)
   js_enabled                   WebSettings.setJavaScriptEnabled(true)
   webview_file_access          setAllowFileAccess* / setAllowUniversalAccess* (true)
   sql_injection_raw            rawQuery/execSQL on a string built by concatenation
@@ -671,19 +676,60 @@ def _only(method):
     return [t for _, t in _code(method['body'])]
 
 
+CHECK_WORDS = ('check', 'verify')
+
+
+def _validates(code):
+    """True when a check*Trusted body throws, or calls a method whose name
+    contains 'check' or 'verify' (for example a delegate trust manager)."""
+    for text in code:
+        op = text.split()[0]
+        if op == 'throw':
+            return True
+        if op.startswith('invoke-'):
+            m = INVOKE_RE.match(text)
+            ref = METHOD_REF_RE.match(m.group(3)) if m else None
+            if ref and any(w in ref.group(2).lower() for w in CHECK_WORDS):
+                return True
+    return False
+
+
+def _always_true(code):
+    """True when a boolean method has no branch and returns a register last set
+    by const/4 vN, 0x1."""
+    if not code or any(t.startswith(('if-', 'packed-switch', 'sparse-switch')) for t in code):
+        return False
+    last = code[-1].split()
+    if last[0] != 'return' or len(last) < 2:
+        return False
+    reg = last[1]
+    for text in reversed(code[:-1]):
+        ops = [o.strip() for o in text.split(None, 1)[-1].split(',')]
+        if ops and ops[0] == reg and not text.startswith(NO_DEST):
+            return text.startswith('const/4') and ops[-1] == '0x1'
+    return False
+
+
 def _class_rules(ctx, cls):
     if 'Ljavax/net/ssl/X509TrustManager;' in cls['implements']:
         for m in cls['methods']:
-            if m['name'] in ('checkServerTrusted', 'checkClientTrusted') and _only(m) == ['return-void']:
+            if m['name'] not in ('checkServerTrusted', 'checkClientTrusted'):
+                continue
+            code = _only(m)
+            if code == ['return-void']:
                 ctx.emit(cls, 'empty_trustmanager', 'high', m['line'], m['decl'])
+            elif m['name'] == 'checkServerTrusted' and code and not _validates(code):
+                # Has instructions, but none of them throws or calls a check.
+                ctx.emit(cls, 'empty_trustmanager', 'medium', m['line'], m['decl'])
     if 'Ljavax/net/ssl/HostnameVerifier;' in cls['implements']:
         for m in cls['methods']:
             if m['name'] != 'verify' or m['ret'] != 'Z':
                 continue
             code = _only(m)
-            if len(code) == 2 and code[0].startswith('const/4') and code[0].endswith('0x1') \
-                    and code[1].split()[0] == 'return' and code[1].split()[-1] == code[0].split()[1].rstrip(','):
+            if len(code) == 2 and _always_true(code):
                 ctx.emit(cls, 'hostname_not_verified', 'high', m['line'], m['decl'])
+            elif _always_true(code):
+                ctx.emit(cls, 'hostname_not_verified', 'medium', m['line'], m['decl'])
 
 
 # ---------------------------------------------------------------- entry point
