@@ -3,8 +3,8 @@
 find(apk) returns a list of findings, each a dict with:
   component, component_type, issue, cwe, confidence (high, medium or low)
 
-The rules in this file read only the manifest dict. Of the eleven issue
-kinds in CWE below, five can be seen in a manifest and have rules here:
+The rules in this file read only the manifest dict. Of the twelve issue
+kinds in CWE below, six can be seen in a manifest and have rules here:
 
   exported-no-permission  exported component with no permission
   implicit-intent         component exported only because it has an intent filter
@@ -28,6 +28,19 @@ kinds in CWE below, five can be seen in a manifest and have rules here:
                           or 3), whatever its taskAffinity, since it starts or
                           joins a task by affinity (confidence medium). An
                           activity hit by both rules yields one finding (high)
+
+  provider-path-permission-only
+                          exported content provider whose <path-permission>
+                          children protect some paths while the provider itself
+                          has no android:permission, readPermission or
+                          writePermission, so every other path is open; also a
+                          path-permission that uses android:path (exact match)
+                          rather than pathPrefix or pathPattern, so subpaths of
+                          that path are unprotected (confidence medium). Mapped
+                          to CWE-284 as a candidate only: CWE-284 is DISCOURAGED
+                          in standards-reference.md, so the finding carries a
+                          'note' key saying children such as CWE-285 or CWE-732
+                          are to be reviewed
 
 The other six (dynamic-receiver-no-permission, missing-certificate-validation,
 sql-no-parameterization, js-enabled-webview, hardcoded-key, weak-cipher) are
@@ -62,6 +75,11 @@ CWE = {
     'hardcoded-key': 'CWE-321',
     'weak-cipher': 'CWE-327',
     'task-affinity-hijack': 'CWE-1021',
+    # Candidate mapping. CWE-284 (Pillar) is DISCOURAGED in
+    # docs/threat-models/standards-reference.md; it is used because the ground
+    # truth of InadequatePathPermission-InformationExposure-Lean lists it.
+    # Children such as CWE-285 or CWE-732 are to be reviewed.
+    'provider-path-permission-only': 'CWE-284',
 }
 
 ISSUES = tuple(CWE)
@@ -130,6 +148,52 @@ def _path_not_sanitized(comp):
     if comp.get('grant_uri_permissions'):
         return 'low'
     return None
+
+
+PATH_PERMISSION_NOTE = ('candidate CWE-284 (DISCOURAGED in standards-reference.md; '
+                        'children such as CWE-285/CWE-732 to be reviewed)')
+
+
+def _pp_xml(pp):
+    attrs = ' '.join('android:%s="%s"' % (k, pp[k]) for k in
+                     ('path', 'pathPrefix', 'pathPattern', 'permission',
+                      'readPermission', 'writePermission') if pp.get(k))
+    return '<path-permission %s/>' % attrs if attrs else '<path-permission/>'
+
+
+def _provider_path_permission(comp):
+    """(confidence, evidence) for provider-path-permission-only, or None.
+
+    Fires for an exported provider (comp['exported'] already applies the
+    default export rule: providers were exported by default when
+    targetSdkVersion < 17) that has <path-permission> children when either
+      - the provider has no android:permission, readPermission or
+        writePermission of its own, so paths outside the path-permissions are
+        open to any app, or
+      - a path-permission uses android:path (exact match) with no pathPrefix or
+        pathPattern and the provider permissions do not cover everything, so
+        subpaths of that path are unprotected.
+    """
+    if comp['type'] != 'provider' or not comp['exported']:
+        return None
+    pps = comp.get('path_permissions') or []
+    if not pps or _protected(comp):
+        return None
+    reasons = []
+    if not (comp.get('permission') or comp.get('read_permission')
+            or comp.get('write_permission')):
+        reasons.append('provider has no android:permission, android:readPermission '
+                       'or android:writePermission, so other paths are unprotected')
+    exact = [pp for pp in pps
+             if pp.get('path') and not pp.get('pathPrefix') and not pp.get('pathPattern')]
+    if exact:
+        reasons.append('android:path (exact match) leaves subpaths unprotected: %s'
+                       % ', '.join(pp['path'] for pp in exact))
+    if not reasons:
+        return None
+    evidence = '%s; %s; %s' % (' '.join(_pp_xml(pp) for pp in pps),
+                               '; '.join(reasons), PATH_PERMISSION_NOTE)
+    return 'medium', evidence
 
 
 LAUNCH_MODES_NEW_TASK = ('singleTask', 'singleInstance', '2', '3')
@@ -259,6 +323,12 @@ def _manifest_findings(apk):
         if hit:
             f = _finding(comp, 'task-affinity-hijack', hit[0])
             f['evidence'] = hit[1]
+            findings.append(f)
+        hit = _provider_path_permission(comp)
+        if hit:
+            f = _finding(comp, 'provider-path-permission-only', hit[0])
+            f['evidence'] = hit[1]
+            f['note'] = PATH_PERMISSION_NOTE
             findings.append(f)
     conf = _cleartext(apk)
     if conf:
