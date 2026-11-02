@@ -56,6 +56,14 @@ By category: Crypto precision 0.44, recall 0.80 (5 benchmarks); ICC precision 0.
 
 ![Permission denial log](docs/screenshots/step01_26_secure-permission-denial-log.png)
 
+## Tool in Action
+
+![Tool findings](docs/screenshots/step_demo_02_tool-report-output.png)
+*The analysis tool detecting CWE-925, CWE-927 and a taint flow (CWE-926) in the DynamicRegBroadcastReceiver Benign APK*
+
+![Tool report](docs/screenshots/step_demo_03_tool-report-file.png)
+*The generated Markdown report showing component, issue type, CWE, confidence and evidence*
+
 ## Repo structure
 
 ```text
