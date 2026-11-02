@@ -48,8 +48,12 @@ Patterns:
   dynamic_code_load            DexClassLoader / PathClassLoader created
   sticky_broadcast             sendStickyBroadcast / sendStickyOrderedBroadcast
   implicit_broadcast           sendBroadcast with an Intent that names no target
-  pending_intent_empty         PendingIntent wrapping an empty Intent
-  pending_intent_implicit      PendingIntent wrapping an Intent with only an action
+  pending_intent_empty         PendingIntent wrapping an empty Intent, or one built
+                               with new Intent() and no action in the constructor
+  pending_intent_implicit      PendingIntent.getActivity / getBroadcast / getService
+                               wrapping an Intent built in the same method with no
+                               setPackage, setClass, setClassName (or other target)
+                               call before the PendingIntent call
   no_validity_check            onReceive starts a component without checking the action
   unique_ids                   device identifiers (IMEI, serial, ANDROID_ID)
 """
@@ -358,7 +362,9 @@ class _Method:
         if name == '<init>':
             o = self.obj(recv, 'intent')
             if o is not None:
-                if 'Ljava/lang/Class;' in desc or 'Landroid/content/ComponentName;' in desc:
+                if desc == '':
+                    o['flags'].add('noarg')   # new Intent(): no action given
+                elif 'Ljava/lang/Class;' in desc or 'Landroid/content/ComponentName;' in desc:
                     o['flags'].add('explicit')
                 elif desc.startswith('Landroid/content/Intent;'):
                     o['flags'].add('unknown')
@@ -540,11 +546,10 @@ class _Method:
                 flags = o['flags']
                 if flags & {'explicit', 'unknown'}:
                     return
-                flag_arg = args[3] if len(args) > 3 else None
-                immutable = flag_arg and flag_arg[0] == 'int' and (flag_arg[1] or 0) & 0x4000000
-                if 'action' in flags and not immutable:
-                    self.report('pending_intent_implicit', 'medium', no, text)
-                else:
+                # No setPackage, setClass, setClassName (or other target) call
+                # on the Intent earlier in this method.
+                self.report('pending_intent_implicit', 'medium', no, text)
+                if 'noarg' in flags or 'action' not in flags:
                     self.report('pending_intent_empty', 'high', no, text)
         elif name in CONTEXT_START and self.is_on_receive and not self.action_checked:
             self.report('no_validity_check', 'medium', no, text)
