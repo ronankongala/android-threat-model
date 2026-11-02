@@ -40,6 +40,15 @@ equals / equalsIgnoreCase taking a tainted register (every register carrying
 the same source value is cleared), and a sink inside a :try_start/:try_end
 range is not reported.
 
+Validation (P-6): a flow whose value, before the sink in the linear scan, is
+passed to matches, contains, startsWith, endsWith, contentEquals (or equals),
+or to an app method whose body calls one of these or throws, or that meets a
+throw instruction while it is tainted, is still reported but at confidence low,
+with '[validated on the path: ...]' at the end of the evidence. Validation in a
+caller carries into the callees it scans. Branches are not followed, so the
+check may guard a different path than the sink; low marks the flow as likely
+handled, not as safe.
+
 Interprocedural: when a tainted register is passed to an app method, the
 matching parameter register of the callee is tainted and the callee is
 analyzed in turn, up to MAX_DEPTH calls deep, using the call graph built by
@@ -153,6 +162,10 @@ _INTENT_PUTS = ('putExtra', 'putExtras', 'setData', 'setDataAndType',
                 'putParcelableArrayListExtra',
                 'putCharSequenceArrayListExtra', 'replaceExtras')
 _EQUALS = ('equals', 'equalsIgnoreCase')
+# P-6: calls that check a value; a tainted register passed to one (or to an app
+# method whose body calls one or throws) marks its flow as validated.
+_VALIDATORS = ('equals', 'equalsIgnoreCase', 'matches', 'contains', 'startsWith', 'endsWith',
+               'contentEquals')
 
 _CLEARS = ('const', 'new-instance', 'new-array', 'filled-new-array', 'sget',
            'iget', 'instance-of', 'array-length', 'move-exception', 'cmp',
@@ -264,6 +277,27 @@ class _Context:
         self.dynamic = {}     # action -> classes registered with registerReceiver
         self.icc = None       # (hops, path) while scanning a receiving component
         self.edges = {}       # (receiver class, sender file, line) -> (hops, path)
+        self.validated = frozenset()   # P-6: origins validated by the callers on the stack
+        self.validators = {}  # signature -> what the method checks (P-6), or ''
+
+    def validation_in(self, method):
+        """P-6: short description of the first check in method's own body (a
+        call to one of _VALIDATORS, or a throw), or '' when it has none."""
+        sig = method['signature']
+        if sig not in self.validators:
+            found = ''
+            for _no, line in method['body']:
+                op = line.split(' ', 1)[0]
+                if op == 'throw':
+                    found = 'throw'
+                    break
+                if op.startswith('invoke-'):
+                    inv = cg.parse_invoke(line)
+                    if inv and cg.split_ref(inv[2])[1] in _VALIDATORS:
+                        found = cg.split_ref(inv[2])[1]
+                        break
+            self.validators[sig] = found
+        return self.validators[sig]
 
     def resolve(self, sig):
         if sig in self.app:
@@ -484,10 +518,19 @@ def _implicit_activity(label, args, vals):
     return False
 
 
-def _record(ctx, method, origin, label, no, line, depth, cwe=None):
+def _origin_id(origin):
+    return origin[1], origin[2]
+
+
+def _record(ctx, method, origin, label, no, line, depth, cwe=None, validated=None):
+    """validated: {origin id: what checked it} for the flows validated before
+    this sink (P-6); a validated flow is reported low."""
     src_label, _src_file, src_no, src_text, hops = origin[:5]
     key = (method['file'], no, src_no)
     conf = CONFIDENCE[min(depth + hops, 2)]
+    check = (validated or {}).get(_origin_id(origin))
+    if check:
+        conf = 'low'
     old = ctx.findings.get(key)
     if old and CONFIDENCE.index(old['confidence']) <= CONFIDENCE.index(conf):
         return
@@ -500,9 +543,10 @@ def _record(ctx, method, origin, label, no, line, depth, cwe=None):
         'confidence': conf,
         'file': method['file'],
         'line': no,
-        'evidence': ('%ssource L%d: %s | sink L%d: %s'
+        'evidence': ('%ssource L%d: %s | sink L%d: %s%s'
                      % (origin[5] + ' | ' if len(origin) > 5 else '',
-                        src_no, src_text, no, line)),
+                        src_no, src_text, no, line,
+                        ' [validated on the path: %s]' % check if check else '')),
         'source_line': src_no,
         'sink_line': no,
     }
@@ -589,10 +633,17 @@ def _scan(ctx, method, seeds, depth):
     pending = None           # what the next move-result receives
     vals = {}                # register -> ('str'|'class'|'intent'|..., value)
     pending_val = None
+    # P-6: origin id -> what validated it, before this point of a linear scan
+    # (inherited from the callers on the stack).
+    validated = {o: 'in a caller' for o in ctx.validated}
 
     def clear(reg):
         taint.pop(reg, None)
         cursors.discard(reg)
+
+    def mark(origins, how):
+        for o in origins:
+            validated.setdefault(_origin_id(o), how)
 
     for idx, (no, line) in enumerate(body):
         if line[0] in '.:#':
@@ -627,6 +678,8 @@ def _scan(ctx, method, seeds, depth):
             hit = [taint[r] for r in regs if r in taint]
             pending_val = _val_invoke(cls, name, desc, recv, args, vals)
 
+            if name in _VALIDATORS and hit:
+                mark(hit, name + '()')
             if name in _EQUALS and hit:
                 for origin in hit:
                     for r in [r for r, o in taint.items() if o == origin]:
@@ -639,7 +692,7 @@ def _scan(ctx, method, seeds, depth):
                 in_try = any(a <= idx <= b for a, b in tries)
                 if arg_hit and not in_try:
                     cwe = 'CWE-927' if _implicit_activity(label, args, vals) else None
-                    _record(ctx, method, arg_hit[0], label, no, line, depth, cwe)
+                    _record(ctx, method, arg_hit[0], label, no, line, depth, cwe, validated)
                 if label in _ICC_TYPES:
                     _icc_edges(ctx, method, label, args, taint, vals, no, depth)
 
@@ -692,7 +745,15 @@ def _scan(ctx, method, seeds, depth):
                     base = ctx.nlocals(callee)
                     callee_seeds = {base + i: taint[r]
                                     for i, r in enumerate(regs) if r in taint}
+                    outer = ctx.validated
+                    ctx.validated = frozenset(validated)
                     back = _scan(ctx, callee, callee_seeds, depth + 1)
+                    ctx.validated = outer
+                    check = ctx.validation_in(callee) if hit else ''
+                    if check:
+                        # The tainted value went through a method that checks it.
+                        mark(hit, '%s in %s.%s' % ('throw' if check == 'throw' else check + '()',
+                                                   _dotted(callee['class']), callee['name']))
                     if back and not pending:
                         # one more call level between the source and the caller
                         pending = back[:4] + (back[4] + 1,) + back[5:]
@@ -702,6 +763,9 @@ def _scan(ctx, method, seeds, depth):
         _val_op(op, rest, ops, vals, None)
         if not ops:
             continue
+        if op == 'throw':
+            # P-6: an exception thrown before the sink (linear scan) is a check.
+            mark(list(taint.values()), 'throw L%d' % no)
         if op in ('return', 'return-object', 'return-wide'):
             returned = returned or taint.get(ops[0])
         elif op.startswith('move'):
