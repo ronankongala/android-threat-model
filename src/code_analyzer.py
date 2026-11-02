@@ -170,7 +170,12 @@ Rules from the miss analysis (A4-2, docs/notes/miss-analysis.md):
                                getInetAddress / getRemoteSocketAddress / getPort
   external_storage_io          (medium) File stream opened on a path under external
                                storage (getExternalFilesDir, Environment
-                               getExternalStorageDirectory and similar)
+                               getExternalStorageDirectory and similar). P-5: low
+                               when the rest of the path is only string literals
+                               with no sensitive word (password, key, token,
+                               credential, private, secret, ssn); medium when a
+                               part comes from an intent extra or user input or
+                               cannot be resolved
   webview_ssl_proceed          onReceivedSslError calling SslErrorHandler.proceed
                                (high with no branch before it, else medium)
   webview_override_allows_all  (low) branch-free shouldOverrideUrlLoading returning false
@@ -1834,6 +1839,47 @@ FILE_STREAMS = ('Ljava/io/FileInputStream;', 'Ljava/io/FileReader;', 'Ljava/io/F
                 'Ljava/io/FileWriter;', 'Ljava/io/RandomAccessFile;')
 
 
+# P-5: words in a hardcoded external storage path that keep the finding at medium.
+SENSITIVE_PATH_WORDS = ('password', 'passwd', 'key', 'token', 'credential', 'private',
+                        'secret', 'ssn')
+# Calls whose result is input from another app or the user (P-5 taint sources).
+PATH_INPUT_CALLS = TAINT_SOURCES + ('getText', 'getDataString', 'getQueryParameter',
+                                    'getLastPathSegment')
+BUNDLE_GETTERS = ('getString', 'getCharSequence', 'get')
+
+
+def _path_info(lits=(), taint=False, unknown=False):
+    return {'lits': list(lits), 'taint': taint, 'unknown': unknown}
+
+
+def _merge_info(*infos):
+    out = _path_info()
+    for i in infos:
+        if i:
+            out['lits'] += i['lits']
+            out['taint'] = out['taint'] or i['taint']
+            out['unknown'] = out['unknown'] or i['unknown']
+    return out
+
+
+def _path_confidence(info):
+    """(confidence, note) for an external storage stream whose path parts are
+    described by info (P-5): medium when a part comes from an intent extra or
+    user input, or cannot be resolved, or a literal part has a sensitive word;
+    low when the path is made only of literals with no sensitive word."""
+    info = info or _path_info(unknown=True)
+    if info['taint']:
+        return 'medium', 'path from an intent extra or user input'
+    if info['unknown'] or not info['lits']:
+        return 'medium', None
+    words = [w for w in SENSITIVE_PATH_WORDS if any(w in s.lower() for s in info['lits'])]
+    if words:
+        return 'medium', 'hardcoded path %s contains %s' % (
+            '+'.join('"%s"' % s for s in info['lits']), ', '.join(words))
+    return 'low', 'hardcoded path %s with no sensitive word' % (
+        '+'.join('"%s"' % s for s in info['lits']))
+
+
 def _external_storage_rules(ctx, classes):
     """external_storage_io (CWE-922): a file under shared external storage
     (getExternalFilesDir, getExternalCacheDir, Environment
@@ -1843,18 +1889,53 @@ def _external_storage_rules(ctx, classes):
     27 any app with the storage permission can read and write these folders.
     The path is followed in one method through File(File, String),
     File(String), getAbsolutePath and similar, StringBuilder and String
-    concatenation. Whether the data is sensitive is not judged."""
+    concatenation.
+
+    P-5: the parts of the path below the external folder are followed too:
+    string literals (const-string), values read from an intent (getStringExtra
+    and the other TAINT_SOURCES, a Bundle from getExtras, getDataString,
+    getQueryParameter) or from an input field (getText), and anything else
+    (unknown). A path made only of literals with none of SENSITIVE_PATH_WORDS
+    (for example a cache file name) is reported low; a path with input from an
+    intent or the user, an unknown part, or a sensitive word stays medium. The
+    evidence says which."""
     for cls in classes:
         for m in cls['methods']:
             ext, pending = set(), False
+            lit, taint, info = {}, set(), {}
+            pending_taint, pending_info = False, None
+
+            def info_of(r):
+                if r in info:
+                    return info[r]
+                if r in lit:
+                    return _path_info([lit[r]])
+                if r in taint:
+                    return _path_info(taint=True)
+                if r in ext:
+                    return _path_info()
+                return _path_info(unknown=True)
+
+            def clear(r):
+                ext.discard(r)
+                lit.pop(r, None)
+                taint.discard(r)
+                info.pop(r, None)
+
             for no, text in _code(m['body']):
                 op = text.split()[0]
                 if op.startswith('move-result'):
                     dest = _operand_regs(text)[0]
-                    (ext.add if pending else ext.discard)(dest)
-                    pending = False
+                    clear(dest)
+                    if pending:
+                        ext.add(dest)
+                    if pending_taint:
+                        taint.add(dest)
+                    if pending_info is not None:
+                        info[dest] = pending_info
+                    pending, pending_taint, pending_info = False, False, None
                     continue
-                pending = False
+                pending, pending_taint, pending_info = False, False, None
                 if op.startswith('invoke-'):
                     inv = INVOKE_RE.match(text)
                     ref = METHOD_REF_RE.match(inv.group(3)) if inv else None
@@ -1866,34 +1947,66 @@ def _external_storage_rules(ctx, classes):
                     recv = regs[0] if regs and not static else None
                     args = regs if static else regs[1:]
                     from_ext = any(a in ext for a in args)
+                    if name in PATH_INPUT_CALLS or (
+                            owner == 'Landroid/os/Bundle;' and name in BUNDLE_GETTERS
+                            and recv in taint):
+                        pending_taint = True
                     if name in EXTERNAL_DIRS:
                         pending = True
+                        pending_info = _path_info()
                     elif name == '<init>' and owner in FILE_STREAMS:
                         if args and args[0] in ext:
-                            ctx.emit(cls, 'external_storage_io', 'medium', no, text)
+                            conf, note = _path_confidence(info_of(args[0]))
+                            ctx.emit(cls, 'external_storage_io', conf, no,
+                                     '%s [%s]' % (text, note) if note else text)
                     elif name == '<init>' and owner in ('Ljava/io/File;', 'Ljava/lang/StringBuilder;'):
                         if recv:
-                            (ext.add if args and args[0] in ext else ext.discard)(recv)
+                            parts = _merge_info(*[info_of(a) for a in args]) if args else _path_info()
+                            clear(recv)
+                            info[recv] = parts
+                            if args and args[0] in ext:
+                                ext.add(recv)
                     elif owner == 'Ljava/io/File;' and name in FILE_PATH_CALLS:
                         pending = recv in ext
+                        pending_info = info.get(recv)
                     elif owner == 'Ljava/lang/StringBuilder;' and name == 'append':
+                        info[recv] = _merge_info(info.get(recv), *[info_of(a) for a in args])
                         if from_ext:
                             ext.add(recv)
                         pending = recv in ext
+                        pending_info = info[recv]
                     elif owner == 'Ljava/lang/StringBuilder;' and name == 'toString':
                         pending = recv in ext
+                        pending_info = info.get(recv)
                     elif owner == 'Ljava/lang/String;' and name in ('concat', 'valueOf'):
                         pending = from_ext or recv in ext
+                        pending_info = _merge_info(*[info_of(a) for a in
+                                                     ([recv] if recv else []) + args])
+                    continue
+                c = CONST_STRING_RE.match(text)
+                if c:
+                    clear(c.group(1))
+                    lit[c.group(1)] = c.group(2)
                     continue
                 ops = _operand_regs(text)
                 dest = _writes(text)
                 if not dest:
                     continue
-                if (op.startswith('aget') or op.startswith('move')) and len(ops) > 1 \
-                        and ops[1] in ext:
-                    ext.add(dest)
-                else:
-                    ext.discard(dest)
+                src = ops[1] if (op.startswith('aget') or op.startswith('move')) and len(ops) > 1 \
+                    else None
+                if src == dest:
+                    continue
+                was = (src in ext, lit.get(src), src in taint, info.get(src)) if src else None
+                clear(dest)
+                if was:
+                    if was[0]:
+                        ext.add(dest)
+                    if was[1] is not None and op.startswith('move'):
+                        lit[dest] = was[1]
+                    if was[2]:
+                        taint.add(dest)
+                    if was[3] is not None:
+                        info[dest] = was[3]
 
 
 SSL_ERROR_DESC = 'Landroid/webkit/WebView;Landroid/webkit/SslErrorHandler;Landroid/net/http/SslError;'
