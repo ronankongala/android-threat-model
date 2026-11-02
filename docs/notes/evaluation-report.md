@@ -1,10 +1,10 @@
 # Evaluation report
 
-Run of the analysis tool (`src/ate.py`) against the Ghera ground truth (`data/ground-truth.csv`), produced by `python tools/evaluate.py --no-dynamic` on 2026-11-01 after Fix A to Fix E (listed below). The earlier fixes (Fix 1 to Fix 7) are included. Raw output: `docs/notes/evaluation-run.log`. Per-benchmark results: `data/evaluation-results.csv`.
+Run of the analysis tool (`src/ate.py`) against the Ghera ground truth (`data/ground-truth.csv`), produced by `python tools/evaluate.py --no-dynamic` on 2026-11-02 after the Phase 1 and Phase 2 detection improvements (P1-1 to P1-5, P2-1 to P2-5; listed below). The earlier fixes (Fix 1 to Fix 7, Fix A to Fix E) are included. The run was split into two halves with `--only` that ran side by side; `python tools/evaluate.py --rescore` then wrote `data/evaluation-results.csv` from the saved reports in `data/eval-tmp/`.
 
 ## Scope
 
-The evaluator takes every benchmark with a successful `api27` build in `data/build-results.csv`: 53 benchmarks across all eight categories. The Secure APK of `MergeManifest-UnintendedBehavior-Lean` was not built, so that benchmark is scored with 0 Secure findings. The main run uses the static layers only (`--no-dynamic`): manifest rules, code patterns and taint analysis. The dynamic run is reported separately below. Neither run uses `--auto-readme` (Fix E), for the reason given under "Fix E" below.
+The evaluator takes every benchmark with a successful `api27` build in `data/build-results.csv`: 53 benchmarks across all eight categories. The Secure APK of `MergeManifest-UnintendedBehavior-Lean` was not built, so that benchmark is scored with 0 Secure findings. This round reports the static layers only: manifest rules, code patterns and taint analysis. The full emulator run (`--dynamic --auto-readme`, which also covers two-app scoring) was stopped for low system memory after 2 of 53 benchmarks, so no dynamic, two-app or README runner score is reported for this round (see "Dynamic evaluation").
 
 ## Definitions
 
@@ -20,8 +20,9 @@ Per benchmark (from `tools/evaluate.py`):
   | CWE-346 | CWE-927 |
   | CWE-441 | CWE-926 |
 
-  The mapping is applied one step only. The evaluator also records the strict match, with direct CWE matches only, in the `strict_true_positive` column, so the effect of the mapping can be seen on its own.
+  The mapping is applied one step only. Since P1-3 a finding whose CWE is listed in the row's `secondary_cwe_ids` column also counts (see "Ground truth correction" below). The evaluator also records the strict match, with `cwe_ids` matches only, in the `strict_true_positive` column, so the effect of both can be seen on its own.
 - **False positive (FP)**: the Secure APK has at least one finding (of any kind).
+- With `--dynamic`, two-app findings (P1-4) are added on both sides: Benign plus Malicious to the Benign findings, Secure plus Malicious to the Secure findings. With `--auto-readme`, README runner findings (P1-5) are added to the Benign findings only, so they can add true positives but never false positives.
 
 Per category:
 - **Precision** = TP / (TP + FP).
@@ -32,16 +33,16 @@ Per category:
 | Category | Benchmarks evaluated | TP | FP | Precision | Recall |
 |----------|---------------------:|---:|---:|----------:|-------:|
 | Crypto | 5 | 4 | 4 | 0.50 | 0.80 |
-| ICC | 16 | 10 | 11 | 0.48 | 0.62 |
-| Networking | 8 | 6 | 7 | 0.46 | 0.75 |
+| ICC | 16 | 11 | 11 | 0.50 | 0.69 |
+| Networking | 8 | 7 | 8 | 0.47 | 0.88 |
 | NonAPI | 1 | 1 | 0 | 1.00 | 1.00 |
 | Permission | 2 | 1 | 1 | 0.50 | 0.50 |
 | Storage | 7 | 5 | 4 | 0.56 | 0.71 |
-| System | 6 | 5 | 0 | 1.00 | 0.83 |
-| Web | 8 | 5 | 8 | 0.38 | 0.62 |
-| **Overall** | **53** | **37** | **35** | **0.51** | **0.70** |
+| System | 6 | 6 | 0 | 1.00 | 1.00 |
+| Web | 8 | 6 | 8 | 0.43 | 0.75 |
+| **Overall** | **53** | **41** | **36** | **0.53** | **0.77** |
 
-With the strict CWE match (no secondary mapping) the numbers are the same: 37 TP, precision 0.51, recall 0.70.
+With the strict CWE match (`cwe_ids` only, no secondary CWEs): 39 TP, precision 0.52, recall 0.74.
 
 ### Change from the previous run
 
@@ -49,37 +50,67 @@ With the strict CWE match (no secondary mapping) the numbers are the same: 37 TP
 |-----|---:|---:|----------:|-------:|
 | Before Fix 1 to Fix 7 (commit 8e2d04b) | 34 | 35 | 0.49 | 0.64 |
 | After Fix 1 to Fix 7 (commit 6e8ac60) | 36 | 35 | 0.51 | 0.68 |
-| After Fix A to Fix E | 37 | 35 | 0.51 | 0.70 |
+| After Fix A to Fix E (commit 05c7a3c) | 37 | 35 | 0.51 | 0.70 |
+| After P1 and P2, strict CWE match | 39 | 36 | 0.52 | 0.74 |
+| After P1 and P2, with secondary CWEs | 41 | 36 | 0.53 | 0.77 |
 
-The one new true positive is `OrderedBroadcast-DataInjection-Lean`. Its effect on each fix:
+Per benchmark:
+- `FragmentInjection-PrivEscalation-Lean`: new TP (strict). `fragment_injection` (P1-2, CWE-470) reports the Benign app, which loads a fragment by a name read from an intent extra through `Class.forName`. The Secure app checks the name in `isValidFragment` and is not reported.
+- `UnpinnedCertificates-MITM-Lean`: new TP (strict). `certificate_pinning_missing` (P1-1, CWE-295) reports the Benign app. The Secure app pins in code with a KeyStore-backed TrustManagerFactory, which the rule skips.
+- `ClipboardUse-InformationExposure-Lean`: new TP through the P1-3 secondary CWE-200 (`clipboard_sensitive`). Its Secure app has no finding.
+- `WebViewAllowFileAccess-UnauthorizedFileAccess-Lean`: new TP through the P1-3 secondary CWE-829 (`webview_file_access`). Its Secure app was already a false positive.
+- `UnEncryptedSocketComm-MITM-Lean`: new FP. `certificate_pinning_missing` reports its Secure app, which opens a network connection with no pinning. The rule also fires on the Secure apps of `CheckValidity`, `IncorrectHostNameVerification`, `InsecureSSLSocketFactory`, `InvalidCertificateAuthority` and `HttpConnection`, which already had other findings.
 
-- **Fix A (secondary CWE mapping): no change on this set.** No missed benchmark has a Benign finding whose CWE maps to one of its ground-truth CWEs. For example, `webview_file_access` reports CWE-829, which maps to CWE-749, but `WebViewAllowFileAccess-UnauthorizedFileAccess-Lean` lists CWE-830, not CWE-749. Its main effect would be on dynamic findings with CWE-925 in benchmarks that list CWE-926.
-- **Fix B (ordered broadcast): +1 TP, no FP change.** `FormatOutgoingCallReceiver` in `OrderedBroadcast-DataInjection-Lean` declares no priority but calls `setResultData` on itself in `onReceive`, so the extended `ordered_broadcast_priority` rule now reports it (CWE-927, medium). The rule also fires on the Secure app, which calls `setResultData` too. That Secure app already had other findings, so the false positive count does not change.
-- **Fix C (singleTask and singleInstance): no change on this set.** None of the 110 built Benign and Secure APKs sets `android:launchMode`. Only the Malicious app of `TaskAffinity-PhishingAttack-Lean`, which is not scored, uses `singleTask`. The rule matters for real-world APKs. `TaskAffinity-LauncherActivity-PhishingAttack-Lean` and `TaskAffinityAndReparenting-PhishingAndDoSAttack-Lean` remain misses: their weakness is the default task affinity, which no rule covers.
-- **Fix D (two-app dynamic testing): not part of the scored run.** `ate.py --dynamic-two-app MALICIOUS_APK` installs the Benign and Malicious apps together. On `TaskAffinity-ActivityHijack-Lean`, the Benign plus Malicious run reports `dynamic-task-hijack` (CWE-1021): the malicious task holds the affinity `edu.ksu.santos.benign.editImage` declared by the benign app. The Secure plus Malicious run reports nothing. `tools/evaluate.py` scores single APKs, so these findings are not in the tables.
-- **Fix E (README runner): not part of the scored run.** `tools/readme_runner.py` parses 58 of the 59 Ghera READMEs. A dry run maps 81% of the steps that are not emulator setup (206 of 484 steps in all) to an automated action: install, launch, tap, back or an `adb` command. `tools/evaluate.py --auto-readme` replays each README and adds the observations as Benign findings. The README steps exercise only the Benign app, so these findings can add true positives but never false positives. Mixing them into the score would bias precision, so the numbers above do not use the flag.
+Rules of this round with no score change on this set:
+- P2-1 (class hierarchy taint) and P2-2 (inter-component taint): no taint finding added or removed on the 48 ICC and Storage APKs. P2-2 resolves 12 cross-component edges in 6 benchmarks, but no receiving component has a new sink reachable from the extras.
+- P2-3 (`webview_js_interface`, CWE-749): 0 findings on the 110 Benign and Secure APKs. The two Web benchmarks that use `addJavascriptInterface` expose a location getter and SharedPreferences access, which are not in the rule's sensitive list.
+- P2-4 (`sticky_broadcast_receiver`, CWE-927): 0 findings. `StickyBroadcast-DataInjection-Lean` sends a sticky broadcast but has no receiver of its own.
+- P2-5 (`provider-path-permission-only`, candidate CWE-284): fires on the Benign app of `InadequatePathPermission-InformationExposure-Lean` and not on its Secure app. That benchmark was already a TP through CWE-926. CWE-284 is DISCOURAGED in `standards-reference.md`, so the finding carries a candidate note.
 
-### Benchmarks with no true positive (16)
+### Ground truth correction (P1-3)
 
-ICC: `FragmentInjection-PrivEscalation-Lean`, `HighPriority-ActivityHijack-Lean`, `TaskAffinity-LauncherActivity-PhishingAttack-Lean`, `TaskAffinityAndReparenting-PhishingAndDoSAttack-Lean`, `UnhandledException-DOS-Lean`, `WeakChecksOnDynamicInvocation-DataInjection-Lean` (no ground-truth CWE, so it can never score).
+For each benchmark that had findings but no true positive, each Benign finding CWE was checked against the threat model or mapping and the README. Only CWEs that name the benchmark's own weakness were added to `secondary_cwe_ids`.
+
+| Benchmark | Finding CWE (issue) | Decision | Reason |
+|-----------|---------------------|----------|--------|
+| ClipboardUse-InformationExposure-Lean | CWE-200 (clipboard_sensitive) | accepted | The finding is the README weakness: the secret is copied to the clipboard and read by Malicious. CWE-359 in the ground truth is a child of CWE-200; the mapping chose CWE-359 because CWE-200 is DISCOURAGED for primary mapping, not because it does not apply. |
+| WebViewAllowFileAccess-UnauthorizedFileAccess-Lean | CWE-829 (webview_file_access) | accepted | The README names `setAllowFileAccessFromFileURLs(true)` as what lets the injected script read internal files. CWE-830 in the ground truth is a Variant child of CWE-829. |
+| WebViewAllowFileAccess-UnauthorizedFileAccess-Lean | CWE-749 (js_enabled), CWE-319 (cleartext-http), CWE-926 (dynamic receiver) | rejected | JavaScript is only a precondition; the cleartext flag and the WebView internal receivers are unrelated to the weakness. |
+| WebViewIgnoreSSLWarning-MITM-Lean | CWE-319, CWE-749, CWE-926 | rejected | The weakness is `handler.proceed()` on SSL errors (CWE-295). |
+| WebViewOverrideUrl-MITM-Lean | CWE-319, CWE-749, CWE-926 | rejected | The weakness is `shouldOverrideUrlLoading` returning false (CWE-829 in the model); HTTP only delivers the attack. |
+| HighPriority-ActivityHijack-Lean | CWE-926 (taint-flow) | rejected | ImageEditor is not exported; the weakness is the implicit intent (CWE-927). |
+| WeakChecksOnDynamicInvocation-DataInjection-Lean | CWE-926 (two findings) | rejected | The row has no `cwe_ids`; adding a secondary CWE would create new ground truth. |
+| OpenSocket-InformationLeak-Lean | CWE-319 (cleartext-http) | rejected | The weakness is a ServerSocket that never verifies its peer (CWE-940). |
+| UnpinnedCertificates-MITM-Lean | CWE-319 (cleartext-http) | rejected | The app uses TLS; the weakness is the missing pinning (CWE-295), now found by P1-1. |
+
+### Benchmarks with no true positive (12)
+
+ICC: `HighPriority-ActivityHijack-Lean`, `TaskAffinity-LauncherActivity-PhishingAttack-Lean`, `TaskAffinityAndReparenting-PhishingAndDoSAttack-Lean`, `UnhandledException-DOS-Lean`, `WeakChecksOnDynamicInvocation-DataInjection-Lean` (no ground-truth CWE, so it can never score).
 Crypto: `ExposedCredentials-InformationExposure-Lean`.
-Networking: `OpenSocket-InformationLeak-Lean`, `UnpinnedCertificates-MITM-Lean`.
+Networking: `OpenSocket-InformationLeak-Lean`.
 Permission: `WeakPermission-UnauthorizedAccess-Lean`.
 Storage: `ExternalStorage-DataInjection-Lean`, `ExternalStorage-InformationLeak-Lean`.
-System: `ClipboardUse-InformationExposure-Lean`.
-Web: `WebViewAllowFileAccess-UnauthorizedFileAccess-Lean`, `WebViewIgnoreSSLWarning-MITM-Lean`, `WebViewOverrideUrl-MITM-Lean`.
+Web: `WebViewIgnoreSSLWarning-MITM-Lean`, `WebViewOverrideUrl-MITM-Lean`.
 
-Most of these need rules that do not exist yet: external storage writes, WebView SSL error handlers, open server sockets, the default task affinity, intent filter priority on activities, fragment injection and uncaught exceptions. In the Web benchmarks, some rules fire under a CWE that neither the ground truth nor the secondary mapping lists.
+Most of these need rules that do not exist yet: external storage writes, WebView SSL error handlers, open server sockets, the default task affinity, intent filter priority on activities and uncaught exceptions.
 
 ### Why most Secure APKs are false positives
 
-A Secure APK counts as a false positive when it has any finding, of any kind. Many Secure apps still export components or keep code that the rules report, so precision stays near 0.5 even where the actual weakness is fixed.
+A Secure APK counts as a false positive when it has any finding, of any kind. Many Secure apps still export components or keep code that the rules report, so precision stays near 0.5 even where the actual weakness is fixed. `docs/notes/secure-app-bugs.md` also documents two Secure apps whose permission protection works only by accident.
+
+## Drift study (P3-1)
+
+`python tools/drift_study.py --static-only` wrote `data/drift-matrix-results.csv` (53 API 27 rows; the dynamic columns are blank because they were not measured) and `data/drift-static-patterns.csv` (the static patterns each Benign app fires). Only the API 27 system image is installed, so no other level could be run, and the emulator run of this round did not complete. The most common static patterns on the Benign apps are `exported-no-permission` (21 apps), `cleartext-http` (16), `implicit-intent`, `certificate_pinning_missing` and `js_enabled` (7 each) and `taint-flow` (6).
 
 ## Comparison with Rekha
 
 The Rekha evaluation (Ranganath and Mitra; preprint 2018, Empirical Software Engineering 2019) ran a different set of tools, on an earlier version of Ghera, with its own definition of a detection. The numbers here use a different tool, a CWE-based match and a 53-benchmark sample, so any comparison with Rekha is directional only.
 
-## Dynamic evaluation results
+## Dynamic evaluation
+
+This round: `python tools/evaluate.py --dynamic --auto-readme` was started on the `ghera27` emulator and stopped for low system memory after 2 of 53 benchmarks, so it produced no score. Two-app scoring (P1-4) was checked live on `TaskAffinity-ActivityHijack-Lean`: Benign plus Malicious reports `dynamic-task-hijack` (CWE-1021), Secure plus Malicious reports nothing. The numbers below are from the previous round (after Fix A to Fix E) and do not include the P1 and P2 rules.
+
+### Previous round
 
 Run of `python tools/evaluate.py --dynamic` on 2026-11-01, after Fix A to Fix E, on the `ghera27` emulator (`emulator-5554`), over the same 53 benchmarks. Each Benign and Secure APK was passed to `src/ate.py --dynamic`, so the static layers ran first and then the APK was installed and exercised on the emulator (Layer 4). Per-benchmark results: `data/evaluation-results-dynamic.csv`. The definitions above apply, including the Fix A secondary CWE mapping. As before, the Secure APK of `MergeManifest-UnintendedBehavior-Lean` was not built and is scored with 0 Secure findings. Every other APK ran without errors.
 

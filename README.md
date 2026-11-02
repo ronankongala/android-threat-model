@@ -33,21 +33,21 @@ android-threat-engine is an Android app security research project built on the [
 
 ## Results
 
-Static evaluation (`python tools/evaluate.py --no-dynamic`, 2026-11-01) on the 53 benchmarks with an `api27` build, across all eight categories, using manifest rules, code patterns (Layer 2) and taint analysis (Layer 3):
+Static evaluation (`python tools/evaluate.py --no-dynamic`, 2026-11-02) on the 53 benchmarks with an `api27` build, across all eight categories, using manifest rules, code patterns (Layer 2) and taint analysis (Layer 3), after the Phase 1 and Phase 2 detection improvements:
 
 | Category | Benchmarks | TP | FP | Precision | Recall |
 |----------|-----------:|---:|---:|----------:|-------:|
 | Crypto | 5 | 4 | 4 | 0.50 | 0.80 |
-| ICC | 16 | 10 | 11 | 0.48 | 0.62 |
-| Networking | 8 | 6 | 7 | 0.46 | 0.75 |
+| ICC | 16 | 11 | 11 | 0.50 | 0.69 |
+| Networking | 8 | 7 | 8 | 0.47 | 0.88 |
 | NonAPI | 1 | 1 | 0 | 1.00 | 1.00 |
 | Permission | 2 | 1 | 1 | 0.50 | 0.50 |
 | Storage | 7 | 5 | 4 | 0.56 | 0.71 |
-| System | 6 | 5 | 0 | 1.00 | 0.83 |
-| Web | 8 | 5 | 8 | 0.38 | 0.62 |
-| **Overall** | **53** | **37** | **35** | **0.51** | **0.70** |
+| System | 6 | 6 | 0 | 1.00 | 1.00 |
+| Web | 8 | 6 | 8 | 0.43 | 0.75 |
+| **Overall** | **53** | **41** | **36** | **0.53** | **0.77** |
 
-The dynamic run (`--dynamic`, Layer 4 on the `ghera27` emulator) gives the same scores. A Secure APK counts as a false positive when it has any finding, so precision stays near 0.5 even where the actual weakness is fixed. Details and limits: [docs/notes/evaluation-report.md](docs/notes/evaluation-report.md).
+Best recall so far: 0.77 (precision 0.53), up from 0.70. With a strict CWE match (no reviewed secondary CWEs) the scores are precision 0.52 and recall 0.74. A Secure APK counts as a false positive when it has any finding, so precision stays near 0.5 even where the actual weakness is fixed. Details and limits: [docs/notes/evaluation-report.md](docs/notes/evaluation-report.md).
 
 ## Screenshots
 
