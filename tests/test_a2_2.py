@@ -63,9 +63,10 @@ def test_not_exported_silent(tmp_path):
 
 @pytest.mark.parametrize('attr,missing', [('android:readPermission="x.R"', 'writePermission'),
                                           ('android:writePermission="x.W"', 'readPermission')])
-def test_partial_permission_medium(tmp_path, attr, missing):
+def test_partial_permission_low(tmp_path, attr, missing):
+    # P-2 lowered this from medium: the provider has a permission of some kind.
     hits = _926(_manifest(tmp_path, 'android:exported="true" ' + attr))
-    assert [f['confidence'] for f in hits] == ['medium']
+    assert [f['confidence'] for f in hits] == ['low']
     assert hits[0]['evidence'].endswith('no android:' + missing)
 
 

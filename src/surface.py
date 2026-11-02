@@ -10,8 +10,9 @@ kinds in CWE below, six can be seen in a manifest and have rules here:
                           provider (exported explicitly, through an intent
                           filter or by the pre-API 17 default): high when it
                           has no android:permission, readPermission or
-                          writePermission, medium when only one of
-                          readPermission and writePermission is set
+                          writePermission, low when only one of
+                          readPermission and writePermission is set (P-2:
+                          medium or high only with no permission of any kind)
   implicit-intent         component exported only because it has an intent filter
                           (no android:exported), reachable by implicit intents
   cleartext-http          app may send cleartext HTTP (usesCleartextTraffic, the
@@ -182,12 +183,21 @@ def _exported_no_permission(comp):
     Content providers (A2-2): high when the provider is exported (explicitly,
     or by the pre-API 17 default) and has none of android:permission,
     readPermission and writePermission, whatever <path-permission> children it
-    has (those are reported separately as provider-path-permission-only);
-    medium when only one of readPermission and writePermission is set."""
+    has (those are reported separately as provider-path-permission-only).
+
+    P-2: only a component with no permission of any kind is flagged at medium
+    or high. comp['exported'] is false for android:exported="false" (with or
+    without an intent filter) and for a component with neither the attribute
+    nor an intent filter, so those are never flagged. Any android:permission
+    protects the component (a custom permission declared with protectionLevel
+    signature is strong and intentional; a normal or dangerous one is reported
+    by weak-permission-protection instead). A provider with only one of
+    readPermission and writePermission has a permission, so it drops to low:
+    the evidence still names the side that is open."""
     if not comp['exported'] or _protected(comp):
         return None
     if comp['type'] == 'provider':
-        return 'medium' if _provider_permissions(comp) else 'high'
+        return 'low' if _provider_permissions(comp) else 'high'
     if comp['type'] in ('activity', 'activity-alias') and _has_launcher_category(comp):
         return None
     if comp.get('exported_attr') == 'true':
