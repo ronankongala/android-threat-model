@@ -37,17 +37,17 @@ Static evaluation (`python tools/evaluate.py --no-dynamic`, 2026-11-02) on the 5
 
 | Category | Benchmarks | TP | FP | Precision | Recall |
 |----------|-----------:|---:|---:|----------:|-------:|
-| Crypto | 5 | 4 | 4 | 0.50 | 0.80 |
-| ICC | 16 | 11 | 11 | 0.50 | 0.69 |
-| Networking | 8 | 7 | 8 | 0.47 | 0.88 |
+| Crypto | 5 | 5 | 5 | 0.50 | 1.00 |
+| ICC | 16 | 15 | 5 | 0.75 | 0.94 |
+| Networking | 8 | 8 | 2 | 0.80 | 1.00 |
 | NonAPI | 1 | 1 | 0 | 1.00 | 1.00 |
-| Permission | 2 | 1 | 1 | 0.50 | 0.50 |
-| Storage | 7 | 5 | 4 | 0.56 | 0.71 |
-| System | 6 | 6 | 0 | 1.00 | 1.00 |
-| Web | 8 | 6 | 8 | 0.43 | 0.75 |
-| **Overall** | **53** | **41** | **36** | **0.53** | **0.77** |
+| Permission | 2 | 2 | 1 | 0.67 | 1.00 |
+| Storage | 7 | 7 | 4 | 0.64 | 1.00 |
+| System | 6 | 6 | 1 | 0.86 | 1.00 |
+| Web | 8 | 8 | 0 | 1.00 | 1.00 |
+| **Overall** | **53** | **52** | **18** | **0.74** | **0.98** |
 
-Best recall so far: 0.77 (precision 0.53), up from 0.70. With a strict CWE match (no reviewed secondary CWEs) the scores are precision 0.52 and recall 0.74. A Secure APK counts as a false positive when it has any finding, so precision stays near 0.5 even where the actual weakness is fixed. Details and limits: [docs/notes/evaluation-report.md](docs/notes/evaluation-report.md).
+Final scores: precision 0.74 and recall 0.98, up from precision 0.53 and recall 0.77. A Secure APK counts as a false positive only when one of its findings has the benchmark's own CWE on the vulnerable component. Under the legacy rule (any finding on the Secure APK is a false positive) precision is 0.51. With a strict CWE match (no reviewed secondary CWEs) recall is 0.96. Details and limits: [docs/notes/evaluation-report.md](docs/notes/evaluation-report.md).
 
 ## Screenshots
 
