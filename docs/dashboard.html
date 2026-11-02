@@ -1,0 +1,538 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Evaluation Dashboard</title>
+<style>
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --text: #1b1f24;
+  --muted: #5b6470;
+  --border: #dde1e6;
+  --grid: #e7eaee;
+  --tp: #2f6fb3;
+  --fp: #c2571a;
+  --tp-soft: #e3eef9;
+  --fp-soft: #fbeadf;
+  --miss: #6b7280;
+  --miss-soft: #eceef1;
+  --accent: #2f6fb3;
+  --row-alt: #fafbfc;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111418;
+    --surface: #1a1f25;
+    --text: #e6e9ed;
+    --muted: #9aa4af;
+    --border: #2d343c;
+    --grid: #262c33;
+    --tp: #6ba6e6;
+    --fp: #ec8f55;
+    --tp-soft: #1d3147;
+    --fp-soft: #43291a;
+    --miss: #a3abb5;
+    --miss-soft: #2a3038;
+    --accent: #6ba6e6;
+    --row-alt: #1d232a;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  overflow-x: hidden;
+}
+.wrap { max-width: 1100px; margin: 0 auto; padding: 24px 16px 48px; }
+h1 { font-size: 1.7rem; margin: 0 0 4px; }
+h2 { font-size: 1.2rem; margin: 0 0 12px; }
+.sub { color: var(--muted); margin: 0 0 24px; }
+section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 18px;
+  margin-bottom: 20px;
+  min-width: 0;
+}
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+.card { border: 1px solid var(--border); border-radius: 8px; padding: 14px; background: var(--bg); }
+.card h3 { margin: 0 0 8px; font-size: 0.95rem; color: var(--muted); font-weight: 600; }
+.metrics { display: flex; gap: 20px; flex-wrap: wrap; }
+.metric .v { font-size: 1.8rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.metric .l { font-size: 0.8rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.counts { margin-top: 8px; font-size: 0.9rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.check { margin-top: 12px; font-size: 0.85rem; color: var(--muted); }
+.check.ok::before { content: "\2713 "; color: var(--tp); font-weight: 700; }
+.check.bad { color: var(--fp); }
+.toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 12px; }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.seg button {
+  font: inherit; font-size: 0.9rem; padding: 6px 14px; border: 0; cursor: pointer;
+  background: var(--surface); color: var(--text);
+}
+.seg button + button { border-left: 1px solid var(--border); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+@media (prefers-color-scheme: dark) { .seg button[aria-pressed="true"] { color: #0d1117; } }
+.legend { display: flex; gap: 16px; font-size: 0.9rem; color: var(--muted); }
+.legend span::before {
+  content: ""; display: inline-block; width: 12px; height: 12px; border-radius: 2px;
+  margin-right: 6px; vertical-align: -1px; background: var(--c);
+}
+#chart { width: 100%; }
+#chart svg { display: block; width: 100%; height: auto; }
+input[type="search"], select {
+  font: inherit; font-size: 0.9rem; padding: 6px 10px; border: 1px solid var(--border);
+  border-radius: 6px; background: var(--surface); color: var(--text); min-width: 0;
+}
+input[type="search"] { flex: 1 1 200px; }
+.table-scroll { overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; }
+table { border-collapse: collapse; width: 100%; font-size: 0.88rem; }
+th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+th { background: var(--bg); font-weight: 600; white-space: nowrap; }
+tbody tr:nth-child(even) { background: var(--row-alt); }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+td.bench { word-break: break-word; min-width: 220px; }
+.badge {
+  display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 0.78rem;
+  font-weight: 600; margin: 1px 4px 1px 0; white-space: nowrap;
+}
+.b-tp { background: var(--tp-soft); color: var(--tp); }
+.b-fp { background: var(--fp-soft); color: var(--fp); }
+.b-miss { background: var(--miss-soft); color: var(--miss); }
+.count-line { font-size: 0.85rem; color: var(--muted); margin: 8px 0 0; }
+.note {
+  margin-top: 12px; font-size: 0.88rem; color: var(--muted);
+  border-left: 3px solid var(--border); padding: 4px 0 4px 12px;
+}
+.note p { margin: 4px 0; }
+.mine td { font-weight: 600; }
+footer { color: var(--muted); font-size: 0.82rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Evaluation Dashboard</h1>
+  <p class="sub">Results of the analysis tool on 53 Ghera lean benchmarks (api27 builds), static and dynamic runs. Source: data/evaluation-results.csv and data/evaluation-results-dynamic.csv; definitions in docs/notes/evaluation-report.md.</p>
+
+  <section aria-labelledby="h-summary">
+    <h2 id="h-summary">Precision and recall</h2>
+    <div class="cards" id="cards"></div>
+    <div class="check" id="check"></div>
+  </section>
+
+  <section aria-labelledby="h-chart">
+    <h2 id="h-chart">True and false positives by category</h2>
+    <div class="toolbar">
+      <div class="seg" role="group" aria-label="Run">
+        <button type="button" data-run="static" aria-pressed="true">Static</button>
+        <button type="button" data-run="dynamic" aria-pressed="false">Dynamic</button>
+      </div>
+      <div class="legend">
+        <span style="--c: var(--tp)">True positives</span>
+        <span style="--c: var(--fp)">False positives</span>
+      </div>
+    </div>
+    <div id="chart"></div>
+  </section>
+
+  <section aria-labelledby="h-table">
+    <h2 id="h-table">Benchmarks</h2>
+    <div class="toolbar">
+      <div class="seg" role="group" aria-label="Run for table">
+        <button type="button" data-trun="static" aria-pressed="true">Static</button>
+        <button type="button" data-trun="dynamic" aria-pressed="false">Dynamic</button>
+      </div>
+      <select id="cat" aria-label="Category filter"><option value="">All categories</option></select>
+      <input type="search" id="q" placeholder="Search benchmarks" aria-label="Search benchmarks">
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Benchmark</th>
+            <th>Category</th>
+            <th class="num">Benign findings</th>
+            <th class="num">Secure findings</th>
+            <th>Result</th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+    <p class="count-line" id="count-line"></p>
+  </section>
+
+  <section aria-labelledby="h-rekha">
+    <h2 id="h-rekha">Comparison with Rekha</h2>
+    <p class="sub" style="margin-bottom:12px">Ranganath and Mitra, "Are free Android app security analysis tools effective in detecting known vulnerabilities?", Empirical Software Engineering 2019 (arXiv:1806.09059 v8). The study evaluated 14 vulnerability detection tools on 42 Ghera lean benchmarks. No single tool detected more than 15 of 42.</p>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Tool</th>
+            <th>Benchmarks</th>
+            <th class="num">Precision</th>
+            <th class="num">Recall</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody id="rekha"></tbody>
+      </table>
+    </div>
+    <div class="note">
+      <p><strong>Directional comparison only.</strong> As docs/notes/evaluation-report.md states, the numbers are not directly comparable. Rekha used an earlier Ghera version with 42 benchmarks; this evaluation uses 53. The precision definitions also differ: Rekha counts per-benchmark verdicts, while here a Secure app with any finding at all counts as a false positive, which pushes precision down.</p>
+    </div>
+  </section>
+
+  <footer>
+    The Secure APK of MergeManifest-UnintendedBehavior-Lean was not built; its empty secure_findings value is scored as 0 findings, as in the evaluator.
+  </footer>
+</div>
+
+<script>
+// Embedded copy of data/evaluation-results.csv (static run).
+var STATIC_CSV = [
+  "benchmark,category,benign_findings,secure_findings,true_positive,false_positive,strict_true_positive",
+  "BlockCipher-ECB-InformationExposure-Lean,Crypto,7,2,1,1,1",
+  "BlockCipher-NonRandomIV-InformationExposure-Lean,Crypto,3,1,1,1,1",
+  "ConstantKey-ForgeryAttack-Lean,Crypto,4,2,1,1,1",
+  "ExposedCredentials-InformationExposure-Lean,Crypto,0,0,0,0,0",
+  "PBE-ConstantSalt-InformationExposure-Lean,Crypto,2,2,1,1,1",
+  "EmptyPendingIntent-PrivEscalation-Lean,ICC,1,1,1,1,1",
+  "FragmentInjection-PrivEscalation-Lean,ICC,0,0,0,0,0",
+  "HighPriority-ActivityHijack-Lean,ICC,1,1,0,1,0",
+  "ImplicitPendingIntent-IntentHijack-Lean,ICC,1,0,1,0,1",
+  "InadequatePathPermission-InformationExposure-Lean,ICC,4,2,1,1,1",
+  "IncorrectHandlingImplicitIntent-UnauthorizedAccess-Lean,ICC,2,1,1,1,1",
+  "NoValidityCheckOnBroadcastMsg-UnintendedInvocation-Lean,ICC,3,2,1,1,1",
+  "OrderedBroadcast-DataInjection-Lean,ICC,2,2,1,1,1",
+  "StickyBroadcast-DataInjection-Lean,ICC,1,1,1,1,1",
+  "TaskAffinity-ActivityHijack-Lean,ICC,2,1,1,1,1",
+  "TaskAffinityAndReparenting-PhishingAndDoSAttack-Lean,ICC,0,0,0,0,0",
+  "TaskAffinity-LauncherActivity-PhishingAttack-Lean,ICC,0,0,0,0,0",
+  "TaskAffinity-PhishingAttack-Lean,ICC,2,1,1,1,1",
+  "UnhandledException-DOS-Lean,ICC,0,0,0,0,0",
+  "UnprotectedBroadcastRecv-PrivEscalation-Lean,ICC,3,2,1,1,1",
+  "WeakChecksOnDynamicInvocation-DataInjection-Lean,ICC,2,1,0,1,0",
+  "CheckValidity-InformationExposure-Lean,Networking,3,3,1,1,1",
+  "IncorrectHostNameVerification-MITM-Lean,Networking,3,1,1,1,1",
+  "InsecureSSLSocketFactory-MITM-Lean,Networking,3,1,1,1,1",
+  "InsecureSSLSocket-MITM-Lean,Networking,3,2,1,1,1",
+  "InvalidCertificateAuthority-MITM-Lean,Networking,3,1,1,1,1",
+  "OpenSocket-InformationLeak-Lean,Networking,1,1,0,1,0",
+  "UnEncryptedSocketComm-MITM-Lean,Networking,1,0,1,0,1",
+  "UnpinnedCertificates-MITM-Lean,Networking,1,1,0,1,0",
+  "MergeManifest-UnintendedBehavior-Lean,NonAPI,1,,1,0,1",
+  "UnnecesaryPerms-PrivEscalation-Lean,Permission,1,1,1,1,1",
+  "WeakPermission-UnauthorizedAccess-Lean,Permission,0,0,0,0,0",
+  "ExternalStorage-DataInjection-Lean,Storage,0,0,0,0,0",
+  "ExternalStorage-InformationLeak-Lean,Storage,0,0,0,0,0",
+  "InternalStorage-DirectoryTraversal-Lean,Storage,1,0,1,0,1",
+  "InternalToExternalStorage-InformationLeak-Lean,Storage,2,1,1,1,1",
+  "SQLite-execSQL-Lean,Storage,4,3,1,1,1",
+  "SQLlite-RawQuery-SQLInjection-Lean,Storage,2,2,1,1,1",
+  "SQLlite-SQLInjection-Lean,Storage,2,1,1,1,1",
+  "CheckCallingOrSelfPermission-PrivilegeEscalation-Lean,System,1,0,1,0,1",
+  "CheckPermission-PrivilegeEscalation-Lean,System,1,0,1,0,1",
+  "ClipboardUse-InformationExposure-Lean,System,1,0,0,0,0",
+  "EnforceCallingOrSelfPermission-PrivilegeEscalation-Lean,System,1,0,1,0,1",
+  "EnforcePermission-PrivilegeEscalation-Lean,System,1,0,1,0,1",
+  "UniqueIDs-IdentityLeak-Lean,System,1,0,1,0,1",
+  "HttpConnection-MITM-Lean,Web,1,1,1,1,1",
+  "JavaScriptExecution-CodeInjection-Lean,Web,2,1,1,1,1",
+  "UnsafeIntentURLImpl-InformationExposure-Lean,Web,4,4,1,1,1",
+  "WebViewAllowFileAccess-UnauthorizedFileAccess-Lean,Web,3,3,0,1,0",
+  "WebViewIgnoreSSLWarning-MITM-Lean,Web,2,2,0,1,0",
+  "WebViewInterceptRequest-MITM-Lean,Web,3,3,1,1,1",
+  "WebView-NoUserPermission-InformationExposure-Lean,Web,2,2,1,1,1",
+  "WebViewOverrideUrl-MITM-Lean,Web,2,2,0,1,0"
+];
+
+// Embedded copy of data/evaluation-results-dynamic.csv (dynamic run).
+var DYNAMIC_CSV = [
+  "benchmark,category,benign_findings,secure_findings,true_positive,false_positive,strict_true_positive",
+  "BlockCipher-ECB-InformationExposure-Lean,Crypto,7,2,1,1,1",
+  "BlockCipher-NonRandomIV-InformationExposure-Lean,Crypto,3,1,1,1,1",
+  "ConstantKey-ForgeryAttack-Lean,Crypto,4,2,1,1,1",
+  "ExposedCredentials-InformationExposure-Lean,Crypto,0,0,0,0,0",
+  "PBE-ConstantSalt-InformationExposure-Lean,Crypto,2,2,1,1,1",
+  "EmptyPendingIntent-PrivEscalation-Lean,ICC,1,1,1,1,1",
+  "FragmentInjection-PrivEscalation-Lean,ICC,0,0,0,0,0",
+  "HighPriority-ActivityHijack-Lean,ICC,1,1,0,1,0",
+  "ImplicitPendingIntent-IntentHijack-Lean,ICC,1,0,1,0,1",
+  "InadequatePathPermission-InformationExposure-Lean,ICC,4,2,1,1,1",
+  "IncorrectHandlingImplicitIntent-UnauthorizedAccess-Lean,ICC,2,1,1,1,1",
+  "NoValidityCheckOnBroadcastMsg-UnintendedInvocation-Lean,ICC,5,3,1,1,1",
+  "OrderedBroadcast-DataInjection-Lean,ICC,4,4,1,1,1",
+  "StickyBroadcast-DataInjection-Lean,ICC,1,1,1,1,1",
+  "TaskAffinity-ActivityHijack-Lean,ICC,2,1,1,1,1",
+  "TaskAffinityAndReparenting-PhishingAndDoSAttack-Lean,ICC,0,0,0,0,0",
+  "TaskAffinity-LauncherActivity-PhishingAttack-Lean,ICC,0,0,0,0,0",
+  "TaskAffinity-PhishingAttack-Lean,ICC,2,1,1,1,1",
+  "UnhandledException-DOS-Lean,ICC,0,0,0,0,0",
+  "UnprotectedBroadcastRecv-PrivEscalation-Lean,ICC,5,4,1,1,1",
+  "WeakChecksOnDynamicInvocation-DataInjection-Lean,ICC,2,1,0,1,0",
+  "CheckValidity-InformationExposure-Lean,Networking,3,3,1,1,1",
+  "IncorrectHostNameVerification-MITM-Lean,Networking,3,1,1,1,1",
+  "InsecureSSLSocketFactory-MITM-Lean,Networking,3,1,1,1,1",
+  "InsecureSSLSocket-MITM-Lean,Networking,3,2,1,1,1",
+  "InvalidCertificateAuthority-MITM-Lean,Networking,3,1,1,1,1",
+  "OpenSocket-InformationLeak-Lean,Networking,1,1,0,1,0",
+  "UnEncryptedSocketComm-MITM-Lean,Networking,1,0,1,0,1",
+  "UnpinnedCertificates-MITM-Lean,Networking,1,1,0,1,0",
+  "MergeManifest-UnintendedBehavior-Lean,NonAPI,1,,1,0,1",
+  "UnnecesaryPerms-PrivEscalation-Lean,Permission,1,1,1,1,1",
+  "WeakPermission-UnauthorizedAccess-Lean,Permission,0,0,0,0,0",
+  "ExternalStorage-DataInjection-Lean,Storage,0,0,0,0,0",
+  "ExternalStorage-InformationLeak-Lean,Storage,0,0,0,0,0",
+  "InternalStorage-DirectoryTraversal-Lean,Storage,1,0,1,0,1",
+  "InternalToExternalStorage-InformationLeak-Lean,Storage,2,1,1,1,1",
+  "SQLite-execSQL-Lean,Storage,4,3,1,1,1",
+  "SQLlite-RawQuery-SQLInjection-Lean,Storage,2,2,1,1,1",
+  "SQLlite-SQLInjection-Lean,Storage,2,1,1,1,1",
+  "CheckCallingOrSelfPermission-PrivilegeEscalation-Lean,System,1,0,1,0,1",
+  "CheckPermission-PrivilegeEscalation-Lean,System,1,0,1,0,1",
+  "ClipboardUse-InformationExposure-Lean,System,1,0,0,0,0",
+  "EnforceCallingOrSelfPermission-PrivilegeEscalation-Lean,System,1,0,1,0,1",
+  "EnforcePermission-PrivilegeEscalation-Lean,System,1,0,1,0,1",
+  "UniqueIDs-IdentityLeak-Lean,System,2,0,1,0,1",
+  "HttpConnection-MITM-Lean,Web,1,1,1,1,1",
+  "JavaScriptExecution-CodeInjection-Lean,Web,5,4,1,1,1",
+  "UnsafeIntentURLImpl-InformationExposure-Lean,Web,7,7,1,1,1",
+  "WebViewAllowFileAccess-UnauthorizedFileAccess-Lean,Web,6,6,0,1,0",
+  "WebViewIgnoreSSLWarning-MITM-Lean,Web,5,5,0,1,0",
+  "WebViewInterceptRequest-MITM-Lean,Web,6,6,1,1,1",
+  "WebView-NoUserPermission-InformationExposure-Lean,Web,6,6,1,1,1",
+  "WebViewOverrideUrl-MITM-Lean,Web,5,5,0,1,0"
+];
+
+var CATEGORIES = ["Crypto", "ICC", "Networking", "NonAPI", "Permission", "Storage", "System", "Web"];
+var EXPECTED = { benchmarks: 53, tp: 37, fp: 35, precision: 0.51, recall: 0.70 };
+
+function parseCsv(lines) {
+  var header = lines[0].split(",");
+  var out = [];
+  for (var i = 1; i < lines.length; i++) {
+    var cells = lines[i].split(",");
+    var row = {};
+    for (var j = 0; j < header.length; j++) row[header[j]] = cells[j];
+    out.push({
+      benchmark: row.benchmark,
+      category: row.category,
+      benign: parseInt(row.benign_findings, 10) || 0,
+      secure: parseInt(row.secure_findings, 10) || 0,
+      secureMissing: row.secure_findings === "",
+      tp: row.true_positive === "1",
+      fp: row.false_positive === "1",
+      strictTp: row.strict_true_positive === "1"
+    });
+  }
+  return out;
+}
+
+function summarize(rows) {
+  var s = { n: rows.length, tp: 0, fp: 0, strictTp: 0, byCat: {} };
+  CATEGORIES.forEach(function (c) { s.byCat[c] = { n: 0, tp: 0, fp: 0 }; });
+  rows.forEach(function (r) {
+    if (!s.byCat[r.category]) s.byCat[r.category] = { n: 0, tp: 0, fp: 0 };
+    var c = s.byCat[r.category];
+    c.n++;
+    if (r.tp) { s.tp++; c.tp++; }
+    if (r.fp) { s.fp++; c.fp++; }
+    if (r.strictTp) s.strictTp++;
+  });
+  s.precision = s.tp + s.fp ? s.tp / (s.tp + s.fp) : 0;
+  s.recall = s.n ? s.tp / s.n : 0;
+  return s;
+}
+
+var DATA = { static: parseCsv(STATIC_CSV), dynamic: parseCsv(DYNAMIC_CSV) };
+var SUMMARY = { static: summarize(DATA.static), dynamic: summarize(DATA.dynamic) };
+
+function fmt(x) { return x.toFixed(2); }
+function esc(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+// 1. Summary cards and expected-value check
+function renderCards() {
+  var html = "";
+  [["static", "Static run (manifest, code, taint)"], ["dynamic", "Dynamic run (static plus emulator)"]].forEach(function (p) {
+    var s = SUMMARY[p[0]];
+    html += '<div class="card"><h3>' + esc(p[1]) + '</h3><div class="metrics">' +
+      '<div class="metric"><div class="v">' + fmt(s.precision) + '</div><div class="l">Precision</div></div>' +
+      '<div class="metric"><div class="v">' + fmt(s.recall) + '</div><div class="l">Recall</div></div>' +
+      '</div><div class="counts">' + s.tp + ' TP, ' + s.fp + ' FP, ' + (s.n - s.tp) + ' missed, of ' + s.n + ' benchmarks</div></div>';
+  });
+  document.getElementById("cards").innerHTML = html;
+
+  var problems = [];
+  ["static", "dynamic"].forEach(function (k) {
+    var s = SUMMARY[k];
+    if (s.n !== EXPECTED.benchmarks) problems.push(k + ": " + s.n + " benchmarks");
+    if (s.tp !== EXPECTED.tp) problems.push(k + ": TP " + s.tp);
+    if (s.fp !== EXPECTED.fp) problems.push(k + ": FP " + s.fp);
+    if (fmt(s.precision) !== fmt(EXPECTED.precision)) problems.push(k + ": precision " + fmt(s.precision));
+    if (fmt(s.recall) !== fmt(EXPECTED.recall)) problems.push(k + ": recall " + fmt(s.recall));
+  });
+  var el = document.getElementById("check");
+  if (problems.length) {
+    el.className = "check bad";
+    el.textContent = "Mismatch with evaluation-report.md: " + problems.join("; ");
+  } else {
+    el.className = "check ok";
+    el.textContent = "Computed from the embedded data; matches evaluation-report.md (37 TP, 35 FP, precision 0.51, recall 0.70 for both runs).";
+  }
+}
+
+// 2. Bar chart (inline SVG)
+var chartRun = "static";
+var SVGNS = "http://www.w3.org/2000/svg";
+function svgEl(name, attrs, text) {
+  var e = document.createElementNS(SVGNS, name);
+  for (var k in attrs) if (Object.prototype.hasOwnProperty.call(attrs, k)) e.setAttribute(k, attrs[k]);
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+function renderChart() {
+  var host = document.getElementById("chart");
+  var s = SUMMARY[chartRun];
+  var W = Math.max(300, Math.min(host.clientWidth || 720, 1060));
+  var narrow = W < 560;
+  var H = narrow ? 300 : 340;
+  var m = { top: 20, right: 10, bottom: narrow ? 74 : 54, left: 46 };
+  var iw = W - m.left - m.right, ih = H - m.top - m.bottom;
+  var maxV = 0;
+  CATEGORIES.forEach(function (c) { maxV = Math.max(maxV, s.byCat[c].tp, s.byCat[c].fp); });
+  var top = Math.max(2, Math.ceil(maxV / 2) * 2);
+  var step = top <= 6 ? 1 : 2;
+  var y = function (v) { return m.top + ih - (v / top) * ih; };
+
+  var svg = svgEl("svg", { viewBox: "0 0 " + W + " " + H, width: W, height: H, role: "img",
+    "aria-label": "True and false positives per category, " + chartRun + " run" });
+  svg.style.fontFamily = "inherit";
+
+  for (var t = 0; t <= top; t += step) {
+    svg.appendChild(svgEl("line", { x1: m.left, x2: W - m.right, y1: y(t), y2: y(t), stroke: "var(--grid)", "stroke-width": 1 }));
+    svg.appendChild(svgEl("text", { x: m.left - 8, y: y(t) + 4, "text-anchor": "end", "font-size": 11, fill: "var(--muted)" }, String(t)));
+  }
+  svg.appendChild(svgEl("line", { x1: m.left, x2: W - m.right, y1: y(0), y2: y(0), stroke: "var(--muted)", "stroke-width": 1 }));
+
+  var band = iw / CATEGORIES.length;
+  var gap = 3;
+  var bw = Math.min(28, (band * 0.72 - gap) / 2);
+  CATEGORIES.forEach(function (c, i) {
+    var cx = m.left + band * i + band / 2;
+    var d = s.byCat[c];
+    [["tp", d.tp, "var(--tp)", -1], ["fp", d.fp, "var(--fp)", 1]].forEach(function (b) {
+      var x = b[3] < 0 ? cx - gap / 2 - bw : cx + gap / 2;
+      var h = y(0) - y(b[1]);
+      var rect = svgEl("rect", { x: x, y: y(b[1]), width: bw, height: Math.max(h, 0), fill: b[2], rx: 2 });
+      rect.appendChild(svgEl("title", {}, c + ": " + b[1] + (b[0] === "tp" ? " true positives" : " false positives")));
+      svg.appendChild(rect);
+      svg.appendChild(svgEl("text", { x: x + bw / 2, y: y(b[1]) - 5, "text-anchor": "middle", "font-size": 11,
+        "font-weight": 600, fill: "var(--text)" }, String(b[1])));
+    });
+    var lbl;
+    if (narrow) {
+      lbl = svgEl("text", { x: cx, y: y(0) + 12, "text-anchor": "end", "font-size": 11, fill: "var(--text)",
+        transform: "rotate(-40 " + cx + " " + (y(0) + 12) + ")" }, c);
+    } else {
+      lbl = svgEl("text", { x: cx, y: y(0) + 18, "text-anchor": "middle", "font-size": 12, fill: "var(--text)" }, c);
+    }
+    svg.appendChild(lbl);
+    svg.appendChild(svgEl("text", { x: cx, y: narrow ? H - 4 : y(0) + 33, "text-anchor": "middle", "font-size": 10, fill: "var(--muted)" },
+      narrow ? "" : "n=" + d.n));
+  });
+
+  svg.appendChild(svgEl("text", { x: m.left + iw / 2, y: H - 6, "text-anchor": "middle", "font-size": 12, fill: "var(--muted)" }, "Category"));
+  svg.appendChild(svgEl("text", { x: 14, y: m.top + ih / 2, "text-anchor": "middle", "font-size": 12, fill: "var(--muted)",
+    transform: "rotate(-90 14 " + (m.top + ih / 2) + ")" }, "Benchmarks"));
+
+  host.innerHTML = "";
+  host.appendChild(svg);
+}
+
+// 3. Benchmark table
+var tableRun = "static";
+function renderTable() {
+  var cat = document.getElementById("cat").value;
+  var q = document.getElementById("q").value.trim().toLowerCase();
+  var rows = DATA[tableRun].filter(function (r) {
+    return (!cat || r.category === cat) && (!q || r.benchmark.toLowerCase().indexOf(q) !== -1 || r.category.toLowerCase().indexOf(q) !== -1);
+  });
+  var html = "";
+  rows.forEach(function (r) {
+    var badges = r.tp ? '<span class="badge b-tp">True positive</span>' : '<span class="badge b-miss">Missed</span>';
+    if (r.fp) badges += '<span class="badge b-fp">False positive</span>';
+    html += "<tr><td class=\"bench\">" + esc(r.benchmark) + "</td><td>" + esc(r.category) + "</td>" +
+      '<td class="num">' + r.benign + '</td><td class="num">' + (r.secureMissing ? '<span title="Secure APK not built; scored as 0">0*</span>' : r.secure) + "</td>" +
+      "<td>" + badges + "</td></tr>";
+  });
+  if (!rows.length) html = '<tr><td colspan="5" style="color:var(--muted)">No benchmarks match.</td></tr>';
+  document.getElementById("rows").innerHTML = html;
+  var tp = 0, fp = 0;
+  rows.forEach(function (r) { if (r.tp) tp++; if (r.fp) fp++; });
+  document.getElementById("count-line").textContent = "Showing " + rows.length + " of " + DATA[tableRun].length +
+    " benchmarks (" + tableRun + " run): " + tp + " true positive, " + (rows.length - tp) + " missed, " + fp + " false positive. * Secure APK not built, scored as 0 findings.";
+}
+
+// 4. Rekha comparison
+function renderRekha() {
+  var rows = [
+    ["Rekha best single tool: Marvin-SA", "42 (Ghera, earlier version)", "0.938", "0.357", "Table 8; 15 of 42 detected"],
+    ["Rekha: QARK", "42 (Ghera, earlier version)", "1.000", "0.333", "Table 8"],
+    ["Rekha: MobSF", "42 (Ghera, earlier version)", "1.000", "0.310", "Table 8"],
+    ["Rekha: all 14 tools combined", "42 (Ghera, earlier version)", "not reported", "0.71", "30 of 42 detected by at least one tool"],
+    ["This tool, static run", "53 (Ghera, api27 builds)", fmt(SUMMARY.static.precision), fmt(SUMMARY.static.recall),
+      SUMMARY.static.tp + " of " + SUMMARY.static.n + " detected; " + SUMMARY.static.fp + " Secure apps with findings", true],
+    ["This tool, dynamic run", "53 (Ghera, api27 builds)", fmt(SUMMARY.dynamic.precision), fmt(SUMMARY.dynamic.recall),
+      SUMMARY.dynamic.tp + " of " + SUMMARY.dynamic.n + " detected; " + SUMMARY.dynamic.fp + " Secure apps with findings", true]
+  ];
+  document.getElementById("rekha").innerHTML = rows.map(function (r) {
+    return "<tr" + (r[5] ? ' class="mine"' : "") + "><td>" + esc(r[0]) + "</td><td>" + esc(r[1]) + '</td><td class="num">' +
+      esc(r[2]) + '</td><td class="num">' + esc(r[3]) + "</td><td>" + esc(r[4]) + "</td></tr>";
+  }).join("");
+}
+
+function setPressed(attr, value) {
+  var btns = document.querySelectorAll("[" + attr + "]");
+  for (var i = 0; i < btns.length; i++) btns[i].setAttribute("aria-pressed", btns[i].getAttribute(attr) === value ? "true" : "false");
+}
+
+function init() {
+  var sel = document.getElementById("cat");
+  CATEGORIES.forEach(function (c) {
+    var o = document.createElement("option");
+    o.value = c; o.textContent = c + " (" + SUMMARY.static.byCat[c].n + ")";
+    sel.appendChild(o);
+  });
+  sel.addEventListener("change", renderTable);
+  document.getElementById("q").addEventListener("input", renderTable);
+  var cb = document.querySelectorAll("[data-run]");
+  for (var i = 0; i < cb.length; i++) cb[i].addEventListener("click", function () {
+    chartRun = this.getAttribute("data-run"); setPressed("data-run", chartRun); renderChart();
+  });
+  var tb = document.querySelectorAll("[data-trun]");
+  for (var j = 0; j < tb.length; j++) tb[j].addEventListener("click", function () {
+    tableRun = this.getAttribute("data-trun"); setPressed("data-trun", tableRun); renderTable();
+  });
+  var timer = null;
+  window.addEventListener("resize", function () { clearTimeout(timer); timer = setTimeout(renderChart, 120); });
+  renderCards();
+  renderChart();
+  renderTable();
+  renderRekha();
+}
+
+if (typeof document !== "undefined") init();
+</script>
+</body>
+</html>
