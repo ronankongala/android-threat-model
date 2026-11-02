@@ -1,9 +1,7 @@
-# python tools/evaluate.py --no-dynamic (2026-11-01, after Layer 2 and 3)
 Mode: static only (--no-dynamic)
-Benchmarks with a successful api27 build: 19
+Benchmarks with a successful api27 build: 53
 == Crypto/BlockCipher-ECB-InformationExposure-Lean (ground truth CWEs: CWE-321, CWE-327, CWE-926)
-   Benign 8 findings in 5 components
-          CWE-926 exported-no-permission activity edu.ksu.cs.benign.ResetPasswordActivity (low)
+   Benign 7 findings in 4 components
           CWE-926 exported-no-permission activity edu.ksu.cs.benign.NewPasswordActivity (medium)
           CWE-927 implicit-intent activity edu.ksu.cs.benign.NewPasswordActivity (medium)
           CWE-327 ecb_mode class edu.ksu.cs.benign.NewPasswordActivity (high)
@@ -11,161 +9,362 @@ Benchmarks with a successful api27 build: 19
           CWE-327 ecb_mode class edu.ksu.cs.benign.ResetPasswordActivity (high)
           CWE-321 hardcoded_key class edu.ksu.cs.benign.ResetPasswordActivity (medium)
           CWE-926 taint-flow class edu.ksu.cs.benign.ResetPasswordActivity$2 (high)
-   Secure 3 findings in 2 components
-          CWE-926 exported-no-permission activity edu.ksu.cs.benign.ResetPasswordActivity (low)
+   Secure 2 findings in 1 components
           CWE-926 exported-no-permission activity edu.ksu.cs.benign.NewPasswordActivity (medium)
           CWE-927 implicit-intent activity edu.ksu.cs.benign.NewPasswordActivity (medium)
    true_positive=1 (matching CWEs: CWE-321, CWE-327, CWE-926) false_positive=1
 == Crypto/BlockCipher-NonRandomIV-InformationExposure-Lean (ground truth CWEs: CWE-321, CWE-329, CWE-926)
-   Benign 4 findings in 3 components
-          CWE-926 exported-no-permission activity edu.ksu.cs.benign.MainActivity (low)
+   Benign 3 findings in 2 components
           CWE-926 exported-no-permission provider edu.ksu.cs.benign.GradesContentProvider (high)
           CWE-321 hardcoded_key class edu.ksu.cs.benign.Util.Encrypt (medium)
           CWE-329 constant_iv class edu.ksu.cs.benign.Util.Encrypt (medium)
-   Secure 2 findings in 2 components
-          CWE-926 exported-no-permission activity edu.ksu.cs.secure.MainActivity (low)
+   Secure 1 findings in 1 components
           CWE-926 exported-no-permission provider edu.ksu.cs.secure.GradesContentProvider (high)
    true_positive=1 (matching CWEs: CWE-321, CWE-329, CWE-926) false_positive=1
 == Crypto/ConstantKey-ForgeryAttack-Lean (ground truth CWEs: CWE-321, CWE-926)
-   Benign 5 findings in 4 components
-          CWE-926 exported-no-permission activity edu.ksu.cs.benign.ResetPasswordActivity (low)
+   Benign 4 findings in 3 components
           CWE-926 exported-no-permission activity edu.ksu.cs.benign.NewPasswordActivity (medium)
           CWE-927 implicit-intent activity edu.ksu.cs.benign.NewPasswordActivity (medium)
           CWE-321 hardcoded_key class edu.ksu.cs.benign.NewPasswordActivity (high)
           CWE-321 hardcoded_key class edu.ksu.cs.benign.ResetPasswordActivity$1 (high)
-   Secure 3 findings in 2 components
-          CWE-926 exported-no-permission activity edu.ksu.cs.benign.ResetPasswordActivity (low)
+   Secure 2 findings in 1 components
           CWE-926 exported-no-permission activity edu.ksu.cs.benign.NewPasswordActivity (medium)
           CWE-927 implicit-intent activity edu.ksu.cs.benign.NewPasswordActivity (medium)
    true_positive=1 (matching CWEs: CWE-321, CWE-926) false_positive=1
 == Crypto/ExposedCredentials-InformationExposure-Lean (ground truth CWEs: CWE-922)
-   Benign 1 findings in 1 components
-          CWE-926 exported-no-permission activity edu.ksu.cs.benign.MainActivity (low)
-   Secure 1 findings in 1 components
-          CWE-926 exported-no-permission activity edu.ksu.cs.benign.MainActivity (low)
-   true_positive=0 (matching CWEs: none) false_positive=1
+   Benign 0 findings in 0 components
+   Secure 0 findings in 0 components
+   true_positive=0 (matching CWEs: none) false_positive=0
 == Crypto/PBE-ConstantSalt-InformationExposure-Lean (ground truth CWEs: CWE-760, CWE-926)
-   Benign 3 findings in 3 components
-          CWE-926 exported-no-permission activity edu.ksu.cs.benign.MainActivity (low)
+   Benign 2 findings in 2 components
           CWE-926 exported-no-permission provider edu.ksu.cs.benign.GradesContentProvider (high)
           CWE-760 hardcoded_key_pbe class edu.ksu.cs.benign.Util.Encrypt (medium)
-   Secure 3 findings in 3 components
-          CWE-926 exported-no-permission activity edu.ksu.cs.secure.MainActivity (low)
+   Secure 2 findings in 2 components
           CWE-926 exported-no-permission provider edu.ksu.cs.secure.GradesContentProvider (high)
           CWE-760 hardcoded_key_pbe class edu.ksu.cs.secure.Util.Encrypt (low)
    true_positive=1 (matching CWEs: CWE-760, CWE-926) false_positive=1
 == ICC/EmptyPendingIntent-PrivEscalation-Lean (ground truth CWEs: CWE-441, CWE-927)
-   Benign 2 findings in 2 components
-          CWE-926 exported-no-permission activity edu.ksu.cs.benign.MainActivity (low)
+   Benign 1 findings in 1 components
           CWE-927 pending_intent_empty class edu.ksu.cs.benign.MainActivity$1 (high)
-   Secure 2 findings in 2 components
-          CWE-926 exported-no-permission activity edu.cs.ksu.benign.MainActivity (low)
+   Secure 1 findings in 1 components
           CWE-927 pending_intent_implicit class edu.cs.ksu.benign.MainActivity$1 (medium)
    true_positive=1 (matching CWEs: CWE-927) false_positive=1
 == ICC/FragmentInjection-PrivEscalation-Lean (ground truth CWEs: CWE-470, CWE-926)
-   Benign 1 findings in 1 components
-          CWE-926 exported-no-permission activity edu.ksu.cs.benign.MainActivity (low)
-   Secure 1 findings in 1 components
-          CWE-926 exported-no-permission activity edu.ksu.cs.benign.MainActivity (low)
-   true_positive=1 (matching CWEs: CWE-926) false_positive=1
+   Benign 0 findings in 0 components
+   Secure 0 findings in 0 components
+   true_positive=0 (matching CWEs: none) false_positive=0
 == ICC/HighPriority-ActivityHijack-Lean (ground truth CWEs: CWE-927)
-   Benign 2 findings in 2 components
-          CWE-926 exported-no-permission activity edu.ksu.cs.benign.LaunchActivity (low)
+   Benign 1 findings in 1 components
           CWE-926 taint-flow class edu.ksu.cs.benign.HomeActivity$1 (high)
-   Secure 2 findings in 2 components
-          CWE-926 exported-no-permission activity edu.ksu.cs.benign.LaunchActivity (low)
+   Secure 1 findings in 1 components
           CWE-926 taint-flow class edu.ksu.cs.benign.HomeActivity$1 (high)
    true_positive=0 (matching CWEs: none) false_positive=1
 == ICC/ImplicitPendingIntent-IntentHijack-Lean (ground truth CWEs: CWE-927)
-   Benign 2 findings in 2 components
-          CWE-926 exported-no-permission activity edu.ksu.cs.benign.MainActivity (low)
-          CWE-927 pending_intent_implicit class edu.ksu.cs.benign.MainActivity$1 (medium)
-   Secure 1 findings in 1 components
-          CWE-926 exported-no-permission activity edu.ksu.cs.benign.MainActivity (low)
-   true_positive=1 (matching CWEs: CWE-927) false_positive=1
+   Benign 1 findings in 1 components
+          CWE-927 pending_intent_empty class edu.ksu.cs.benign.MainActivity$1 (high)
+   Secure 0 findings in 0 components
+   true_positive=1 (matching CWEs: CWE-927) false_positive=0
 == ICC/InadequatePathPermission-InformationExposure-Lean (ground truth CWEs: CWE-863, CWE-926)
-   Benign 5 findings in 3 components
-          CWE-926 exported-no-permission activity edu.ksu.cs.benign.MainActivity (low)
+   Benign 4 findings in 2 components
           CWE-926 exported-no-permission activity edu.ksu.cs.benign.UserDetailsActivity (medium)
           CWE-927 implicit-intent activity edu.ksu.cs.benign.UserDetailsActivity (medium)
           CWE-926 exported-no-permission provider edu.ksu.cs.benign.provider.UserDetailsContentProvider (high)
           CWE-22 path-not-sanitized provider edu.ksu.cs.benign.provider.UserDetailsContentProvider (medium)
-   Secure 3 findings in 2 components
-          CWE-926 exported-no-permission activity edu.ksu.cs.benign.MainActivity (low)
+   Secure 2 findings in 1 components
           CWE-926 exported-no-permission activity edu.ksu.cs.benign.UserDetailsActivity (medium)
           CWE-927 implicit-intent activity edu.ksu.cs.benign.UserDetailsActivity (medium)
    true_positive=1 (matching CWEs: CWE-926) false_positive=1
 == ICC/IncorrectHandlingImplicitIntent-UnauthorizedAccess-Lean (ground truth CWEs: CWE-862, CWE-926)
-   Benign 3 findings in 2 components
-          CWE-926 exported-no-permission activity edu.ksu.cs.benign.MainActivity (low)
+   Benign 2 findings in 1 components
           CWE-926 exported-no-permission activity edu.ksu.cs.benign.SensitiveActivity (medium)
           CWE-927 implicit-intent activity edu.ksu.cs.benign.SensitiveActivity (medium)
-   Secure 2 findings in 2 components
-          CWE-926 exported-no-permission activity edu.ksu.cs.benign.MainActivity (low)
+   Secure 1 findings in 1 components
           CWE-927 implicit-intent activity edu.ksu.cs.benign.SensitiveActivity (medium)
    true_positive=1 (matching CWEs: CWE-926) false_positive=1
 == ICC/NoValidityCheckOnBroadcastMsg-UnintendedInvocation-Lean (ground truth CWEs: CWE-360, CWE-925, CWE-926)
-   Benign 4 findings in 3 components
-          CWE-926 exported-no-permission activity edu.ksu.cs.benign.MainActivity (low)
+   Benign 3 findings in 2 components
           CWE-926 exported-no-permission receiver edu.ksu.cs.benign.LowMemoryReceiver (medium)
           CWE-927 implicit-intent receiver edu.ksu.cs.benign.LowMemoryReceiver (low)
           CWE-925 no_validity_check class edu.ksu.cs.benign.LowMemoryReceiver (medium)
-   Secure 3 findings in 2 components
-          CWE-926 exported-no-permission activity edu.ksu.cs.benign.MainActivity (low)
+   Secure 2 findings in 1 components
           CWE-926 exported-no-permission receiver edu.ksu.cs.benign.LowMemoryReceiver (medium)
           CWE-927 implicit-intent receiver edu.ksu.cs.benign.LowMemoryReceiver (low)
    true_positive=1 (matching CWEs: CWE-925, CWE-926) false_positive=1
 == ICC/OrderedBroadcast-DataInjection-Lean (ground truth CWEs: CWE-348, CWE-532, CWE-925, CWE-927)
-   Benign 2 findings in 2 components
-          CWE-926 exported-no-permission activity edu.ksu.cs.benign.MainActivity (low)
+   Benign 1 findings in 1 components
           CWE-926 exported-no-permission receiver edu.ksu.cs.benign.FormatOutgoingCallReceiver (high)
-   Secure 2 findings in 2 components
-          CWE-926 exported-no-permission activity edu.ksu.cs.benign.MainActivity (low)
+   Secure 1 findings in 1 components
           CWE-926 exported-no-permission receiver edu.ksu.cs.benign.FormatOutgoingCallReceiver (high)
    true_positive=0 (matching CWEs: none) false_positive=1
 == ICC/StickyBroadcast-DataInjection-Lean (ground truth CWEs: CWE-532, CWE-925, CWE-926, CWE-927, CWE-940)
-   Benign 2 findings in 2 components
-          CWE-926 exported-no-permission activity edu.ksu.cs.benign.MainActivity (low)
+   Benign 1 findings in 1 components
           CWE-927 sticky_broadcast class edu.ksu.cs.benign.MainActivity (high)
-   Secure 2 findings in 2 components
-          CWE-926 exported-no-permission activity edu.ksu.cs.benign.MainActivity (low)
+   Secure 1 findings in 1 components
           CWE-927 implicit_broadcast class edu.ksu.cs.benign.MainActivity (medium)
-   true_positive=1 (matching CWEs: CWE-926, CWE-927) false_positive=1
+   true_positive=1 (matching CWEs: CWE-927) false_positive=1
 == ICC/TaskAffinity-ActivityHijack-Lean (ground truth CWEs: CWE-1021)
    Benign 2 findings in 2 components
-          CWE-926 exported-no-permission activity edu.ksu.cs.benign.LoginActivity (low)
+          CWE-1021 task-affinity-hijack activity edu.ksu.cs.benign.ImageEditor (high)
           CWE-926 taint-flow class edu.ksu.cs.benign.HomeActivity$2 (high)
-   Secure 2 findings in 2 components
-          CWE-926 exported-no-permission activity edu.ksu.cs.benign.LoginActivity (low)
+   Secure 1 findings in 1 components
           CWE-926 taint-flow class edu.ksu.cs.benign.HomeActivity$2 (high)
-   true_positive=0 (matching CWEs: none) false_positive=1
+   true_positive=1 (matching CWEs: CWE-1021) false_positive=1
 == ICC/TaskAffinityAndReparenting-PhishingAndDoSAttack-Lean (ground truth CWEs: CWE-1021)
-   Benign 1 findings in 1 components
-          CWE-926 exported-no-permission activity edu.ksu.cs.benign.LoginActivity (low)
-   Secure 1 findings in 1 components
-          CWE-926 exported-no-permission activity edu.ksu.cs.benign.LoginActivity (low)
-   true_positive=0 (matching CWEs: none) false_positive=1
+   Benign 0 findings in 0 components
+   Secure 0 findings in 0 components
+   true_positive=0 (matching CWEs: none) false_positive=0
 == ICC/TaskAffinity-LauncherActivity-PhishingAttack-Lean (ground truth CWEs: CWE-1021)
-   Benign 1 findings in 1 components
-          CWE-926 exported-no-permission activity edu.ksu.cs.benign.BenignMain (low)
-   Secure 1 findings in 1 components
-          CWE-926 exported-no-permission activity edu.ksu.cs.benign.BenignMain (low)
-   true_positive=0 (matching CWEs: none) false_positive=1
+   Benign 0 findings in 0 components
+   Secure 0 findings in 0 components
+   true_positive=0 (matching CWEs: none) false_positive=0
 == ICC/TaskAffinity-PhishingAttack-Lean (ground truth CWEs: CWE-1021)
    Benign 2 findings in 2 components
-          CWE-926 exported-no-permission activity edu.ksu.cs.benign.LoginActivity (low)
+          CWE-1021 task-affinity-hijack activity edu.ksu.cs.benign.ImageEditor (high)
           CWE-926 taint-flow class edu.ksu.cs.benign.HomeActivity$2 (high)
-   Secure 2 findings in 2 components
-          CWE-926 exported-no-permission activity edu.ksu.cs.benign.LoginActivity (low)
-          CWE-926 taint-flow class edu.ksu.cs.benign.HomeActivity$2 (high)
-   true_positive=0 (matching CWEs: none) false_positive=1
-== ICC/UnhandledException-DOS-Lean (ground truth CWEs: CWE-248, CWE-476)
-   Benign 1 findings in 1 components
-          CWE-926 exported-no-permission activity edu.ksu.cs.benign.MainActivity (low)
    Secure 1 findings in 1 components
-          CWE-926 exported-no-permission activity edu.ksu.cs.benign.MainActivity (low)
+          CWE-926 taint-flow class edu.ksu.cs.benign.HomeActivity$2 (high)
+   true_positive=1 (matching CWEs: CWE-1021) false_positive=1
+== ICC/UnhandledException-DOS-Lean (ground truth CWEs: CWE-248, CWE-476)
+   Benign 0 findings in 0 components
+   Secure 0 findings in 0 components
+   true_positive=0 (matching CWEs: none) false_positive=0
+== ICC/UnprotectedBroadcastRecv-PrivEscalation-Lean (ground truth CWEs: CWE-441, CWE-862, CWE-926, CWE-927)
+   Benign 3 findings in 3 components
+          CWE-926 exported-no-permission receiver edu.ksu.cs.benign.MyReceiver (high)
+          CWE-927 taint-flow class edu.ksu.cs.benign.MainActivity$1 (high)
+          CWE-200 taint-flow class edu.ksu.cs.benign.MyReceiver (high)
+   Secure 2 findings in 2 components
+          CWE-927 taint-flow class edu.ksu.cs.benign.MainActivity$1 (high)
+          CWE-200 taint-flow class edu.ksu.cs.benign.MyReceiver (high)
+   true_positive=1 (matching CWEs: CWE-926, CWE-927) false_positive=1
+== ICC/WeakChecksOnDynamicInvocation-DataInjection-Lean (ground truth CWEs: none)
+   Benign 2 findings in 2 components
+          CWE-926 exported-no-permission provider edu.ksu.cs.benign.FIleContentProvider (high)
+          CWE-926 taint-flow class edu.ksu.cs.benign.MainActivity$1 (high)
+   Secure 1 findings in 1 components
+          CWE-926 taint-flow class edu.ksu.cs.benign.MainActivity$1 (high)
+   true_positive=0 (matching CWEs: none) false_positive=1
+== Networking/CheckValidity-InformationExposure-Lean (ground truth CWEs: CWE-295, CWE-297)
+   Benign 3 findings in 3 components
+          CWE-319 cleartext-http application (application) (low)
+          CWE-297 hostname_not_verified class edu.ksu.cs.benign.MyIntentService$1 (high)
+          CWE-295 empty_trustmanager class edu.ksu.cs.benign.MyTrustManager (high)
+   Secure 3 findings in 3 components
+          CWE-319 cleartext-http application (application) (low)
+          CWE-297 hostname_not_verified class edu.ksu.cs.benign.MyIntentService$1 (high)
+          CWE-295 empty_trustmanager class edu.ksu.cs.benign.MyTrustManager (high)
+   true_positive=1 (matching CWEs: CWE-295, CWE-297) false_positive=1
+== Networking/IncorrectHostNameVerification-MITM-Lean (ground truth CWEs: CWE-295, CWE-297)
+   Benign 3 findings in 3 components
+          CWE-319 cleartext-http application (application) (low)
+          CWE-295 empty_trustmanager class edu.ksu.cs.benign.MyIntentService$1 (high)
+          CWE-297 hostname_not_verified class edu.ksu.cs.benign.MyIntentService$2 (high)
+   Secure 1 findings in 1 components
+          CWE-319 cleartext-http application (application) (low)
+   true_positive=1 (matching CWEs: CWE-295, CWE-297) false_positive=1
+== Networking/InsecureSSLSocketFactory-MITM-Lean (ground truth CWEs: CWE-295, CWE-297)
+   Benign 3 findings in 3 components
+          CWE-319 cleartext-http application (application) (low)
+          CWE-297 hostname_not_verified class edu.ksu.cs.benign.MyIntentService$1 (high)
+          CWE-295 insecure_ssl_socket_factory class edu.ksu.cs.benign.MyIntentService (high)
+   Secure 1 findings in 1 components
+          CWE-319 cleartext-http application (application) (low)
+   true_positive=1 (matching CWEs: CWE-295, CWE-297) false_positive=1
+== Networking/InsecureSSLSocket-MITM-Lean (ground truth CWEs: CWE-295, CWE-297)
+   Benign 3 findings in 3 components
+          CWE-319 cleartext-http application (application) (low)
+          CWE-295 empty_trustmanager class edu.ksu.cs.benign.MyIntentService$1 (high)
+          CWE-295 insecure_ssl_socket_factory class edu.ksu.cs.benign.MyIntentService (medium)
+   Secure 2 findings in 2 components
+          CWE-319 cleartext-http application (application) (low)
+          CWE-295 empty_trustmanager class edu.ksu.cs.benign.MyIntentService$1 (high)
+   true_positive=1 (matching CWEs: CWE-295) false_positive=1
+== Networking/InvalidCertificateAuthority-MITM-Lean (ground truth CWEs: CWE-295, CWE-297)
+   Benign 3 findings in 3 components
+          CWE-319 cleartext-http application (application) (low)
+          CWE-297 hostname_not_verified class edu.ksu.cs.benign.MyIntentService$1 (high)
+          CWE-295 empty_trustmanager class edu.ksu.cs.benign.MyTrustManager (high)
+   Secure 1 findings in 1 components
+          CWE-319 cleartext-http application (application) (low)
+   true_positive=1 (matching CWEs: CWE-295, CWE-297) false_positive=1
+== Networking/OpenSocket-InformationLeak-Lean (ground truth CWEs: CWE-359, CWE-940)
+   Benign 1 findings in 1 components
+          CWE-319 cleartext-http application (application) (low)
+   Secure 1 findings in 1 components
+          CWE-319 cleartext-http application (application) (low)
+   true_positive=0 (matching CWEs: none) false_positive=1
+== Networking/UnEncryptedSocketComm-MITM-Lean (ground truth CWEs: CWE-319)
+   Benign 1 findings in 1 components
+          CWE-319 cleartext-http application (application) (low)
+   Secure 0 findings in 0 components
+   true_positive=1 (matching CWEs: CWE-319) false_positive=0
+== Networking/UnpinnedCertificates-MITM-Lean (ground truth CWEs: CWE-295, CWE-297)
+   Benign 1 findings in 1 components
+          CWE-319 cleartext-http application (application) (low)
+   Secure 1 findings in 1 components
+          CWE-319 cleartext-http application (application) (low)
+   true_positive=0 (matching CWEs: none) false_positive=1
+== NonAPI/MergeManifest-UnintendedBehavior-Lean (ground truth CWEs: CWE-1395, CWE-926)
+   Benign 1 findings in 1 components
+          CWE-926 exported-no-permission service edu.ksu.cs.logutil.BackgroundService (high)
+   Secure APK not found: benchmarks\ghera\NonAPI\MergeManifest-UnintendedBehavior-Lean\Secure\app\build\outputs\apk\api27\debug\app-api27-debug.apk
+   true_positive=1 (matching CWEs: CWE-926) false_positive=0
+== Permission/UnnecesaryPerms-PrivEscalation-Lean (ground truth CWEs: CWE-250, CWE-441, CWE-926)
+   Benign 1 findings in 1 components
+          CWE-926 exported-no-permission service edu.ksu.cs.logutil.BackgroundService (high)
+   Secure 1 findings in 1 components
+          CWE-926 exported-no-permission service edu.ksu.cs.logutil.BackgroundService (high)
+   true_positive=1 (matching CWEs: CWE-926) false_positive=1
+== Permission/WeakPermission-UnauthorizedAccess-Lean (ground truth CWEs: CWE-863, CWE-926)
+   Benign 0 findings in 0 components
+   Secure 0 findings in 0 components
+   true_positive=0 (matching CWEs: none) false_positive=0
+== Storage/ExternalStorage-DataInjection-Lean (ground truth CWEs: CWE-922)
+   Benign 0 findings in 0 components
+   Secure 0 findings in 0 components
+   true_positive=0 (matching CWEs: none) false_positive=0
+== Storage/ExternalStorage-InformationLeak-Lean (ground truth CWEs: CWE-359, CWE-922)
+   Benign 0 findings in 0 components
+   Secure 0 findings in 0 components
+   true_positive=0 (matching CWEs: none) false_positive=0
+== Storage/InternalStorage-DirectoryTraversal-Lean (ground truth CWEs: CWE-22)
+   Benign 1 findings in 1 components
+          CWE-22 directory_traversal class edu.ksu.cs.benign.MainActivity (high)
+   Secure 0 findings in 0 components
+   true_positive=1 (matching CWEs: CWE-22) false_positive=0
+== Storage/InternalToExternalStorage-InformationLeak-Lean (ground truth CWEs: CWE-922, CWE-926)
+   Benign 2 findings in 2 components
+          CWE-926 exported-no-permission service edu.ksu.cs.benign.DownloadService (high)
+          CWE-22 directory_traversal class edu.ksu.cs.benign.DownloadService (high)
+   Secure 1 findings in 1 components
+          CWE-22 directory_traversal class edu.ksu.cs.benign.DownloadService (high)
+   true_positive=1 (matching CWEs: CWE-926) false_positive=1
+== Storage/SQLite-execSQL-Lean (ground truth CWEs: CWE-89, CWE-926)
+   Benign 4 findings in 3 components
+          CWE-926 exported-no-permission activity edu.ksu.cs.benign.MiddleActivity (medium)
+          CWE-927 implicit-intent activity edu.ksu.cs.benign.MiddleActivity (medium)
+          CWE-89 sql_injection_raw class edu.ksu.cs.benign.MainActivity$2 (high)
+          CWE-89 sql_injection_raw class edu.ksu.cs.benign.MiddleActivity (high)
+   Secure 3 findings in 3 components
+          CWE-926 exported-no-permission activity edu.ksu.cs.benign.MiddleActivity (high)
+          CWE-89 sql_injection_raw class edu.ksu.cs.benign.MainActivity$2 (high)
+          CWE-89 sql_injection_raw class edu.ksu.cs.benign.MiddleActivity (high)
+   true_positive=1 (matching CWEs: CWE-89, CWE-926) false_positive=1
+== Storage/SQLlite-RawQuery-SQLInjection-Lean (ground truth CWEs: CWE-89, CWE-926)
+   Benign 2 findings in 2 components
+          CWE-926 exported-no-permission activity edu.ksu.cs.benign.MiddleActivity (high)
+          CWE-89 sql_injection_raw class edu.ksu.cs.benign.MiddleActivity (high)
+   Secure 2 findings in 2 components
+          CWE-926 exported-no-permission activity edu.ksu.cs.benign.MiddleActivity (high)
+          CWE-89 sql_injection_raw class edu.ksu.cs.benign.MiddleActivity (high)
+   true_positive=1 (matching CWEs: CWE-89, CWE-926) false_positive=1
+== Storage/SQLlite-SQLInjection-Lean (ground truth CWEs: CWE-89, CWE-926)
+   Benign 2 findings in 2 components
+          CWE-926 exported-no-permission activity edu.ksu.cs.benign.MiddleActivity (high)
+          CWE-89 sql_injection_no_args class edu.ksu.cs.benign.MiddleActivity (medium)
+   Secure 1 findings in 1 components
+          CWE-926 exported-no-permission activity edu.ksu.cs.benign.MiddleActivity (high)
+   true_positive=1 (matching CWEs: CWE-89, CWE-926) false_positive=1
+== System/CheckCallingOrSelfPermission-PrivilegeEscalation-Lean (ground truth CWEs: CWE-441, CWE-863, CWE-926)
+   Benign 1 findings in 1 components
+          CWE-926 exported-no-permission service edu.ksu.cs.benign.MyService (high)
+   Secure 0 findings in 0 components
+   true_positive=1 (matching CWEs: CWE-926) false_positive=0
+== System/CheckPermission-PrivilegeEscalation-Lean (ground truth CWEs: CWE-441, CWE-863, CWE-926)
+   Benign 1 findings in 1 components
+          CWE-926 exported-no-permission service edu.ksu.cs.benign.MyService (high)
+   Secure 0 findings in 0 components
+   true_positive=1 (matching CWEs: CWE-926) false_positive=0
+== System/ClipboardUse-InformationExposure-Lean (ground truth CWEs: CWE-359)
+   Benign 1 findings in 1 components
+          CWE-200 clipboard_sensitive class edu.ksu.cs.benign.MainActivity$1 (medium)
+   Secure 0 findings in 0 components
+   true_positive=0 (matching CWEs: none) false_positive=0
+== System/EnforceCallingOrSelfPermission-PrivilegeEscalation-Lean (ground truth CWEs: CWE-441, CWE-863, CWE-926)
+   Benign 1 findings in 1 components
+          CWE-926 exported-no-permission service edu.ksu.cs.benign.MyService (high)
+   Secure 0 findings in 0 components
+   true_positive=1 (matching CWEs: CWE-926) false_positive=0
+== System/EnforcePermission-PrivilegeEscalation-Lean (ground truth CWEs: CWE-441, CWE-863, CWE-926)
+   Benign 1 findings in 1 components
+          CWE-926 exported-no-permission service edu.ksu.cs.benign.MyService (high)
+   Secure 0 findings in 0 components
+   true_positive=1 (matching CWEs: CWE-926) false_positive=0
+== System/UniqueIDs-IdentityLeak-Lean (ground truth CWEs: CWE-359, CWE-922)
+   Benign 1 findings in 1 components
+          CWE-359 unique_ids class edu.ksu.cs.benign.MainActivity (high)
+   Secure 0 findings in 0 components
+   true_positive=1 (matching CWEs: CWE-359) false_positive=0
+== Web/HttpConnection-MITM-Lean (ground truth CWEs: CWE-319)
+   Benign 1 findings in 1 components
+          CWE-319 cleartext-http application (application) (low)
+   Secure 1 findings in 1 components
+          CWE-319 cleartext-http application (application) (low)
+   true_positive=1 (matching CWEs: CWE-319) false_positive=1
+== Web/JavaScriptExecution-CodeInjection-Lean (ground truth CWEs: CWE-319, CWE-829)
+   Benign 2 findings in 2 components
+          CWE-319 cleartext-http application (application) (low)
+          CWE-749 js_enabled class edu.ksu.cs.benign.MainActivity (medium)
+   Secure 1 findings in 1 components
+          CWE-319 cleartext-http application (application) (low)
+   true_positive=1 (matching CWEs: CWE-319) false_positive=1
+== Web/UnsafeIntentURLImpl-InformationExposure-Lean (ground truth CWEs: CWE-927)
+   Benign 4 findings in 3 components
+          CWE-926 exported-no-permission activity edu.ksu.cs.benign.DisplayActivity (medium)
+          CWE-927 implicit-intent activity edu.ksu.cs.benign.DisplayActivity (medium)
+          CWE-319 cleartext-http application (application) (low)
+          CWE-749 js_enabled class edu.ksu.cs.benign.MainActivity (medium)
+   Secure 4 findings in 3 components
+          CWE-926 exported-no-permission activity edu.ksu.cs.benign.DisplayActivity (medium)
+          CWE-927 implicit-intent activity edu.ksu.cs.benign.DisplayActivity (medium)
+          CWE-319 cleartext-http application (application) (low)
+          CWE-749 js_enabled class edu.ksu.cs.benign.MainActivity (medium)
+   true_positive=1 (matching CWEs: CWE-927) false_positive=1
+== Web/WebViewAllowFileAccess-UnauthorizedFileAccess-Lean (ground truth CWEs: CWE-830)
+   Benign 3 findings in 2 components
+          CWE-319 cleartext-http application (application) (low)
+          CWE-829 webview_file_access class edu.ksu.cs.benign.MainActivity (high)
+          CWE-749 js_enabled class edu.ksu.cs.benign.MainActivity (medium)
+   Secure 3 findings in 2 components
+          CWE-319 cleartext-http application (application) (low)
+          CWE-829 webview_file_access class edu.ksu.cs.benign.MainActivity (medium)
+          CWE-749 js_enabled class edu.ksu.cs.benign.MainActivity (medium)
+   true_positive=0 (matching CWEs: none) false_positive=1
+== Web/WebViewIgnoreSSLWarning-MITM-Lean (ground truth CWEs: CWE-295)
+   Benign 2 findings in 2 components
+          CWE-319 cleartext-http application (application) (low)
+          CWE-749 js_enabled class edu.ksu.cs.benign.MainActivity (medium)
+   Secure 2 findings in 2 components
+          CWE-319 cleartext-http application (application) (low)
+          CWE-749 js_enabled class edu.ksu.cs.benign.MainActivity (medium)
+   true_positive=0 (matching CWEs: none) false_positive=1
+== Web/WebViewInterceptRequest-MITM-Lean (ground truth CWEs: CWE-749, CWE-829)
+   Benign 3 findings in 2 components
+          CWE-319 cleartext-http application (application) (low)
+          CWE-749 js_enabled class edu.ksu.cs.benign.MainActivity (medium)
+          CWE-829 webview_file_access class edu.ksu.cs.benign.MainActivity (high)
+   Secure 3 findings in 2 components
+          CWE-319 cleartext-http application (application) (low)
+          CWE-749 js_enabled class edu.ksu.cs.benign.MainActivity (medium)
+          CWE-829 webview_file_access class edu.ksu.cs.benign.MainActivity (high)
+   true_positive=1 (matching CWEs: CWE-749, CWE-829) false_positive=1
+== Web/WebView-NoUserPermission-InformationExposure-Lean (ground truth CWEs: CWE-359, CWE-749)
+   Benign 2 findings in 2 components
+          CWE-319 cleartext-http application (application) (low)
+          CWE-749 js_enabled class edu.ksu.cs.benign.MainActivity (medium)
+   Secure 2 findings in 2 components
+          CWE-319 cleartext-http application (application) (low)
+          CWE-749 js_enabled class edu.ksu.cs.benign.MainActivity (medium)
+   true_positive=1 (matching CWEs: CWE-749) false_positive=1
+== Web/WebViewOverrideUrl-MITM-Lean (ground truth CWEs: CWE-829)
+   Benign 2 findings in 2 components
+          CWE-319 cleartext-http application (application) (low)
+          CWE-749 js_enabled class edu.ksu.cs.benign.MainActivity (medium)
+   Secure 2 findings in 2 components
+          CWE-319 cleartext-http application (application) (low)
+          CWE-749 js_enabled class edu.ksu.cs.benign.MainActivity (medium)
    true_positive=0 (matching CWEs: none) false_positive=1
 
-Evaluated 19 benchmarks: 11 true positives, 19 false positives
-Precision 0.37, recall 0.58
-Wrote data/evaluation-results.csv
+Evaluated 53 benchmarks: 36 true positives, 35 false positives
+Precision 0.51, recall 0.68
+Wrote data\evaluation-results.csv

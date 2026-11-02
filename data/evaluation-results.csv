@@ -13,10 +13,10 @@ IncorrectHandlingImplicitIntent-UnauthorizedAccess-Lean,ICC,2,1,1,1
 NoValidityCheckOnBroadcastMsg-UnintendedInvocation-Lean,ICC,3,2,1,1
 OrderedBroadcast-DataInjection-Lean,ICC,1,1,0,1
 StickyBroadcast-DataInjection-Lean,ICC,1,1,1,1
-TaskAffinity-ActivityHijack-Lean,ICC,1,1,0,1
+TaskAffinity-ActivityHijack-Lean,ICC,2,1,1,1
 TaskAffinityAndReparenting-PhishingAndDoSAttack-Lean,ICC,0,0,0,0
 TaskAffinity-LauncherActivity-PhishingAttack-Lean,ICC,0,0,0,0
-TaskAffinity-PhishingAttack-Lean,ICC,1,1,0,1
+TaskAffinity-PhishingAttack-Lean,ICC,2,1,1,1
 UnhandledException-DOS-Lean,ICC,0,0,0,0
 UnprotectedBroadcastRecv-PrivEscalation-Lean,ICC,3,2,1,1
 WeakChecksOnDynamicInvocation-DataInjection-Lean,ICC,2,1,0,1
