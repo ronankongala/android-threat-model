@@ -6,7 +6,12 @@ find(apk) returns a list of findings, each a dict with:
 The rules in this file read only the manifest dict. Of the twelve issue
 kinds in CWE below, six can be seen in a manifest and have rules here:
 
-  exported-no-permission  exported component with no permission
+  exported-no-permission  exported component with no permission. For a content
+                          provider (exported explicitly, through an intent
+                          filter or by the pre-API 17 default): high when it
+                          has no android:permission, readPermission or
+                          writePermission, medium when only one of
+                          readPermission and writePermission is set
   implicit-intent         component exported only because it has an intent filter
                           (no android:exported), reachable by implicit intents
   cleartext-http          app may send cleartext HTTP (usesCleartextTraffic, the
@@ -40,7 +45,8 @@ kinds in CWE below, six can be seen in a manifest and have rules here:
                           to CWE-284 as a candidate only: CWE-284 is DISCOURAGED
                           in standards-reference.md, so the finding carries a
                           'note' key saying children such as CWE-285 or CWE-732
-                          are to be reviewed
+                          are to be reviewed. The report lists findings with
+                          a 'note' key under "Candidates to check"
 
 The other six (dynamic-receiver-no-permission, missing-certificate-validation,
 sql-no-parameterization, js-enabled-webview, hardcoded-key, weak-cipher) are
@@ -115,12 +121,24 @@ def _has_launcher_category(comp):
                for f in comp['intent_filters'])
 
 
+def _provider_permissions(comp):
+    return [k for k in ('permission', 'read_permission', 'write_permission') if comp.get(k)]
+
+
 def _exported_no_permission(comp):
     """Confidence: high when exported on purpose (android:exported="true"); medium
     when exported through an intent filter. Launcher activities are skipped: they
-    must be exported for the app to start, so they are not a vulnerability."""
+    must be exported for the app to start, so they are not a vulnerability.
+
+    Content providers (A2-2): high when the provider is exported (explicitly,
+    or by the pre-API 17 default) and has none of android:permission,
+    readPermission and writePermission, whatever <path-permission> children it
+    has (those are reported separately as provider-path-permission-only);
+    medium when only one of readPermission and writePermission is set."""
     if not comp['exported'] or _protected(comp):
         return None
+    if comp['type'] == 'provider':
+        return 'medium' if _provider_permissions(comp) else 'high'
     if comp['type'] in ('activity', 'activity-alias') and _has_launcher_category(comp):
         return None
     if comp.get('exported_attr') == 'true':
@@ -148,6 +166,19 @@ def _path_not_sanitized(comp):
     if comp.get('grant_uri_permissions'):
         return 'low'
     return None
+
+
+def _provider_evidence(comp):
+    how = ('android:exported="true"' if comp.get('exported_attr') == 'true'
+           else 'exported by default (targetSdkVersion < 17)')
+    present = _provider_permissions(comp)
+    if not present:
+        return ('%s with no android:permission, android:readPermission or '
+                'android:writePermission: any app can query and modify it' % how)
+    missing = 'android:writePermission' if comp.get('read_permission') else 'android:readPermission'
+    return '%s with %s but no %s' % (how, ', '.join('android:' + {
+        'permission': 'permission', 'read_permission': 'readPermission',
+        'write_permission': 'writePermission'}[k] for k in present), missing)
 
 
 PATH_PERMISSION_NOTE = ('candidate CWE-284 (DISCOURAGED in standards-reference.md; '
@@ -318,7 +349,10 @@ def _manifest_findings(apk):
                             ('path-not-sanitized', _path_not_sanitized)):
             conf = rule(comp)
             if conf:
-                findings.append(_finding(comp, issue, conf))
+                f = _finding(comp, issue, conf)
+                if issue == 'exported-no-permission' and comp['type'] == 'provider':
+                    f['evidence'] = _provider_evidence(comp)
+                findings.append(f)
         hit = _task_affinity(comp, apk.get('package'))
         if hit:
             f = _finding(comp, 'task-affinity-hijack', hit[0])

@@ -4,7 +4,9 @@ write(findings, name, out_dir, dynamic=None, privacy=None, policy_name=None) cre
   <out_dir>/<name>-report.json   the findings list as JSON (static, then dynamic)
   <out_dir>/<name>-report.md     a table: Component, Type, Issue, CWE, Confidence, Evidence
 and returns the two paths. Evidence is the line of code that triggered a code
-finding (blank for manifest findings).
+finding (blank for most manifest findings). Findings with a 'note' key (a
+candidate CWE mapping to review) are listed in a "Candidates to check" section
+with a Note column instead of the main table; the JSON keeps them all.
 
 dynamic is the list of dynamic_analyzer findings, or None when dynamic analysis
 was not run. The Markdown report has a "Dynamic Analysis Findings" section with
@@ -47,8 +49,26 @@ def _table(findings):
     return lines
 
 
+CANDIDATES_NOTE = ('Findings mapped to a candidate CWE that needs review before it is '
+                   'reported (see the Note column).')
+
+
+def _candidates(findings):
+    lines = ['## Candidates to check', '', CANDIDATES_NOTE, '',
+             '| ' + ' | '.join(h for h, _ in COLUMNS) + ' | Note |',
+             '|' + '|'.join('---' for _ in range(len(COLUMNS) + 1)) + '|']
+    for row, f in zip(_table(findings)[2:], findings):
+        lines.append(row + ' %s |' % _cell(f.get('note')))
+    return lines
+
+
 def to_markdown(findings, name, dynamic=None, privacy=None, policy_name=None):
-    lines = ['# %s report' % name, ''] + _table(findings)
+    """Findings with a 'note' key (candidate CWE mappings) go to a separate
+    "Candidates to check" section after the main table."""
+    candidates = [f for f in findings if f.get('note')]
+    lines = ['# %s report' % name, ''] + _table([f for f in findings if not f.get('note')])
+    if candidates:
+        lines += [''] + _candidates(candidates)
     lines += ['', '## Dynamic Analysis Findings', '']
     lines += [SKIPPED_NOTE] if dynamic is None else _table(dynamic)
     if privacy is not None:
