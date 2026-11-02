@@ -1,0 +1,54 @@
+[
+  {
+    "component": "com.drip.MainActivity",
+    "component_type": "activity",
+    "issue": "task-affinity-hijack",
+    "cwe": "CWE-1021",
+    "confidence": "medium",
+    "evidence": "android:launchMode=\"singleTask\""
+  },
+  {
+    "component": "com.dieam.reactnativepushnotification.modules.RNPushNotificationActions",
+    "component_type": "class",
+    "file": "smali/com/dieam/reactnativepushnotification/modules/RNPushNotificationActions.smali",
+    "line": 187,
+    "pattern": "implicit_broadcast",
+    "issue": "implicit_broadcast",
+    "cwe": "CWE-927",
+    "confidence": "medium",
+    "evidence": "invoke-virtual {p1, p2}, Landroid/content/Context;->sendBroadcast(Landroid/content/Intent;)V"
+  },
+  {
+    "component": "com.facebook.react.modules.systeminfo.AndroidInfoModule",
+    "component_type": "class",
+    "file": "smali/com/facebook/react/modules/systeminfo/AndroidInfoModule.smali",
+    "line": 149,
+    "pattern": "unique_ids",
+    "issue": "unique_ids",
+    "cwe": "CWE-359",
+    "confidence": "high",
+    "evidence": "invoke-static {v0, v1}, Landroid/provider/Settings$Secure;->getString(Landroid/content/ContentResolver;Ljava/lang/String;)Ljava/lang/String;"
+  },
+  {
+    "component": "me.leolin.shortcutbadger.impl.SonyHomeBadger",
+    "component_type": "class",
+    "file": "smali/me/leolin/shortcutbadger/impl/SonyHomeBadger.smali",
+    "line": 147,
+    "pattern": "implicit_broadcast",
+    "issue": "implicit_broadcast",
+    "cwe": "CWE-927",
+    "confidence": "medium",
+    "evidence": "invoke-virtual {p0, v0}, Landroid/content/Context;->sendBroadcast(Landroid/content/Intent;)V"
+  },
+  {
+    "component": "me.leolin.shortcutbadger.impl.VivoHomeBadger",
+    "component_type": "class",
+    "file": "smali/me/leolin/shortcutbadger/impl/VivoHomeBadger.smali",
+    "line": 60,
+    "pattern": "implicit_broadcast",
+    "issue": "implicit_broadcast",
+    "cwe": "CWE-927",
+    "confidence": "medium",
+    "evidence": "invoke-virtual {p1, v0}, Landroid/content/Context;->sendBroadcast(Landroid/content/Intent;)V"
+  }
+]

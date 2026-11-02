@@ -1,0 +1,505 @@
+[
+  {
+    "component": "net.openid.appauth.RedirectUriReceiverActivity",
+    "component_type": "activity",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "org.tasks.compose.FilterSelectionActivity",
+    "component_type": "activity",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "org.tasks.compose.IconPickerActivity",
+    "component_type": "activity",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "org.tasks.activities.UriHandler",
+    "component_type": "activity",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "org.tasks.widget.ShortcutConfigActivity",
+    "component_type": "activity",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "com.todoroo.astrid.activity.ShareLinkActivity",
+    "component_type": "activity",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "com.todoroo.astrid.activity.ShareLinkActivity",
+    "component_type": "activity",
+    "issue": "task-affinity-hijack",
+    "cwe": "CWE-1021",
+    "confidence": "high",
+    "evidence": "android:taskAffinity=\":share\""
+  },
+  {
+    "component": "org.tasks.widget.WidgetConfigActivity",
+    "component_type": "activity",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "org.tasks.reminders.SnoozeActivity",
+    "component_type": "activity",
+    "issue": "task-affinity-hijack",
+    "cwe": "CWE-1021",
+    "confidence": "high",
+    "evidence": "android:taskAffinity=\":snooze\""
+  },
+  {
+    "component": "org.tasks.reminders.NotificationActivity",
+    "component_type": "activity",
+    "issue": "task-affinity-hijack",
+    "cwe": "CWE-1021",
+    "confidence": "high",
+    "evidence": "android:taskAffinity=\":notification\""
+  },
+  {
+    "component": "org.tasks.dashclock.DashClockSettings",
+    "component_type": "activity",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "org.tasks.locale.ui.activity.TaskerCreateTaskActivity",
+    "component_type": "activity",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "com.todoroo.astrid.activity.MainActivity",
+    "component_type": "activity",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "com.todoroo.astrid.activity.MainActivity",
+    "component_type": "activity",
+    "issue": "task-affinity-hijack",
+    "cwe": "CWE-1021",
+    "confidence": "medium",
+    "evidence": "android:launchMode=\"singleTask\""
+  },
+  {
+    "component": "org.tasks.widget.WidgetClickActivity",
+    "component_type": "activity",
+    "issue": "task-affinity-hijack",
+    "cwe": "CWE-1021",
+    "confidence": "medium",
+    "evidence": "android:launchMode=\"singleTask\""
+  },
+  {
+    "component": "org.tasks.preferences.NotificationPreferences",
+    "component_type": "activity",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "net.openid.appauth.AuthorizationManagementActivity",
+    "component_type": "activity",
+    "issue": "task-affinity-hijack",
+    "cwe": "CWE-1021",
+    "confidence": "medium",
+    "evidence": "android:launchMode=\"singleTask\""
+  },
+  {
+    "component": "at.bitfire.cert4android.TrustCertificateActivity",
+    "component_type": "activity",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "at.bitfire.cert4android.TrustCertificateActivity",
+    "component_type": "activity",
+    "issue": "task-affinity-hijack",
+    "cwe": "CWE-1021",
+    "confidence": "medium",
+    "evidence": "android:launchMode=\"singleInstance\""
+  },
+  {
+    "component": "com.twofortyfouram.locale.example.setting.toast.ui.activity.PluginActivity",
+    "component_type": "activity-alias",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "org.tasks.widget.TasksWidget",
+    "component_type": "receiver",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "org.tasks.receivers.SystemEventReceiver",
+    "component_type": "receiver",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "org.tasks.receivers.ScheduleExactAlarmsPermissionReceiver",
+    "component_type": "receiver",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "org.tasks.receivers.MyPackageReplacedReceiver",
+    "component_type": "receiver",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "org.tasks.receivers.LocationProviderChangedReceiver",
+    "component_type": "receiver",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "org.tasks.locale.receiver.FireReceiver",
+    "component_type": "receiver",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "com.todoroo.astrid.provider.Astrid2TaskProvider",
+    "component_type": "provider",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "org.tasks.provider.TasksContentProvider",
+    "component_type": "provider",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "org.tasks.widget.WidgetIconProvider",
+    "component_type": "provider",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "org.tasks.widget.WidgetIconProvider",
+    "component_type": "provider",
+    "issue": "path-not-sanitized",
+    "cwe": "CWE-22",
+    "confidence": "low"
+  },
+  {
+    "component": "me.leolin.shortcutbadger.impl.SonyHomeBadger",
+    "component_type": "class",
+    "file": "smali/me/leolin/shortcutbadger/impl/SonyHomeBadger.smali",
+    "line": 331,
+    "pattern": "implicit_broadcast",
+    "issue": "implicit_broadcast",
+    "cwe": "CWE-927",
+    "confidence": "medium",
+    "evidence": "invoke-virtual {p1, p0}, Landroid/content/Context;->sendBroadcast(Landroid/content/Intent;)V"
+  },
+  {
+    "component": "org.dmfs.provider.tasks.utils.TableColumns",
+    "component_type": "class",
+    "file": "smali/org/dmfs/provider/tasks/utils/TableColumns.smali",
+    "line": 226,
+    "pattern": "sql_injection_raw",
+    "issue": "sql_injection_raw",
+    "cwe": "CWE-89",
+    "confidence": "high",
+    "evidence": "invoke-virtual {p1, p0, v0}, Landroid/database/sqlite/SQLiteDatabase;->rawQuery(Ljava/lang/String;[Ljava/lang/String;)Landroid/database/Cursor;"
+  },
+  {
+    "component": "org.tasks.pebble.PebbleProtocol",
+    "component_type": "class",
+    "file": "smali/org/tasks/pebble/PebbleProtocol.smali",
+    "line": 445,
+    "pattern": "implicit_broadcast",
+    "issue": "implicit_broadcast",
+    "cwe": "CWE-927",
+    "confidence": "medium",
+    "evidence": "invoke-virtual {p1, v0}, Landroid/content/Context;->sendBroadcast(Landroid/content/Intent;)V"
+  },
+  {
+    "component": "me.leolin.shortcutbadger.impl.VivoHomeBadger",
+    "component_type": "class",
+    "file": "smali_classes2/me/leolin/shortcutbadger/impl/VivoHomeBadger.smali",
+    "line": 89,
+    "pattern": "implicit_broadcast",
+    "issue": "implicit_broadcast",
+    "cwe": "CWE-927",
+    "confidence": "medium",
+    "evidence": "invoke-virtual {p1, p0}, Landroid/content/Context;->sendBroadcast(Landroid/content/Intent;)V"
+  },
+  {
+    "component": "org.dmfs.provider.tasks.TaskDatabaseHelper",
+    "component_type": "class",
+    "file": "smali_classes2/org/dmfs/provider/tasks/TaskDatabaseHelper.smali",
+    "line": 935,
+    "pattern": "sql_injection_raw",
+    "issue": "sql_injection_raw",
+    "cwe": "CWE-89",
+    "confidence": "medium",
+    "evidence": "invoke-virtual {v1, v2}, Landroid/database/sqlite/SQLiteDatabase;->execSQL(Ljava/lang/String;)V"
+  },
+  {
+    "component": "org.dmfs.provider.tasks.TaskProvider",
+    "component_type": "class",
+    "file": "smali_classes2/org/dmfs/provider/tasks/TaskProvider.smali",
+    "line": 235,
+    "pattern": "sql_injection_no_args",
+    "issue": "sql_injection_no_args",
+    "cwe": "CWE-89",
+    "confidence": "medium",
+    "evidence": "invoke-virtual {p0, v1, v0, p1, p2}, Landroid/database/sqlite/SQLiteDatabase;->update(Ljava/lang/String;Landroid/content/ContentValues;Ljava/lang/String;[Ljava/lang/String;)I"
+  },
+  {
+    "component": "org.dmfs.provider.tasks.Utils",
+    "component_type": "class",
+    "file": "smali_classes2/org/dmfs/provider/tasks/Utils.smali",
+    "line": 172,
+    "pattern": "implicit_broadcast",
+    "issue": "implicit_broadcast",
+    "cwe": "CWE-927",
+    "confidence": "medium",
+    "evidence": "invoke-virtual {p0, p1}, Landroid/content/Context;->sendBroadcast(Landroid/content/Intent;)V"
+  },
+  {
+    "component": "org.dmfs.provider.tasks.handler.PropertyHandler",
+    "component_type": "class",
+    "file": "smali_classes2/org/dmfs/provider/tasks/handler/PropertyHandler.smali",
+    "line": 72,
+    "pattern": "sql_injection_no_args",
+    "issue": "sql_injection_no_args",
+    "cwe": "CWE-89",
+    "confidence": "medium",
+    "evidence": "invoke-virtual {p1, p3, p0, p2}, Landroid/database/sqlite/SQLiteDatabase;->delete(Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;)I"
+  },
+  {
+    "component": "org.dmfs.provider.tasks.handler.RelationHandler",
+    "component_type": "class",
+    "file": "smali_classes2/org/dmfs/provider/tasks/handler/RelationHandler.smali",
+    "line": 390,
+    "pattern": "sql_injection_no_args",
+    "issue": "sql_injection_no_args",
+    "cwe": "CWE-89",
+    "confidence": "medium",
+    "evidence": "invoke-virtual {p0, v2, p4, p1, v0}, Landroid/database/sqlite/SQLiteDatabase;->update(Ljava/lang/String;Landroid/content/ContentValues;Ljava/lang/String;[Ljava/lang/String;)I"
+  },
+  {
+    "component": "org.dmfs.provider.tasks.model.ContentValuesListAdapter",
+    "component_type": "class",
+    "file": "smali_classes2/org/dmfs/provider/tasks/model/ContentValuesListAdapter.smali",
+    "line": 150,
+    "pattern": "sql_injection_no_args",
+    "issue": "sql_injection_no_args",
+    "cwe": "CWE-89",
+    "confidence": "medium",
+    "evidence": "invoke-virtual {p1, v4, v0, p0, v3}, Landroid/database/sqlite/SQLiteDatabase;->update(Ljava/lang/String;Landroid/content/ContentValues;Ljava/lang/String;[Ljava/lang/String;)I"
+  },
+  {
+    "component": "org.dmfs.provider.tasks.model.ContentValuesTaskAdapter",
+    "component_type": "class",
+    "file": "smali_classes2/org/dmfs/provider/tasks/model/ContentValuesTaskAdapter.smali",
+    "line": 150,
+    "pattern": "sql_injection_no_args",
+    "issue": "sql_injection_no_args",
+    "cwe": "CWE-89",
+    "confidence": "medium",
+    "evidence": "invoke-virtual {p1, v4, v0, p0, v3}, Landroid/database/sqlite/SQLiteDatabase;->update(Ljava/lang/String;Landroid/content/ContentValues;Ljava/lang/String;[Ljava/lang/String;)I"
+  },
+  {
+    "component": "org.dmfs.provider.tasks.model.CursorContentValuesListAdapter",
+    "component_type": "class",
+    "file": "smali_classes2/org/dmfs/provider/tasks/model/CursorContentValuesListAdapter.smali",
+    "line": 105,
+    "pattern": "sql_injection_no_args",
+    "issue": "sql_injection_no_args",
+    "cwe": "CWE-89",
+    "confidence": "medium",
+    "evidence": "invoke-virtual {p1, v2, v0, p0, v1}, Landroid/database/sqlite/SQLiteDatabase;->update(Ljava/lang/String;Landroid/content/ContentValues;Ljava/lang/String;[Ljava/lang/String;)I"
+  },
+  {
+    "component": "org.dmfs.provider.tasks.model.CursorContentValuesTaskAdapter",
+    "component_type": "class",
+    "file": "smali_classes2/org/dmfs/provider/tasks/model/CursorContentValuesTaskAdapter.smali",
+    "line": 143,
+    "pattern": "sql_injection_no_args",
+    "issue": "sql_injection_no_args",
+    "cwe": "CWE-89",
+    "confidence": "medium",
+    "evidence": "invoke-virtual {p1, v2, v0, p0, v1}, Landroid/database/sqlite/SQLiteDatabase;->update(Ljava/lang/String;Landroid/content/ContentValues;Ljava/lang/String;[Ljava/lang/String;)I"
+  },
+  {
+    "component": "org.dmfs.provider.tasks.processors.instances.TaskValueDelegate",
+    "component_type": "class",
+    "file": "smali_classes2/org/dmfs/provider/tasks/processors/instances/TaskValueDelegate.smali",
+    "line": 615,
+    "pattern": "sql_injection_no_args",
+    "issue": "sql_injection_no_args",
+    "cwe": "CWE-89",
+    "confidence": "medium",
+    "evidence": "invoke-virtual/range {v1 .. v8}, Landroid/database/sqlite/SQLiteDatabase;->query(Ljava/lang/String;[Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Landroid/database/Cursor;"
+  },
+  {
+    "component": "org.dmfs.provider.tasks.processors.lists.ListCommitProcessor",
+    "component_type": "class",
+    "file": "smali_classes2/org/dmfs/provider/tasks/processors/lists/ListCommitProcessor.smali",
+    "line": 70,
+    "pattern": "sql_injection_no_args",
+    "issue": "sql_injection_no_args",
+    "cwe": "CWE-89",
+    "confidence": "medium",
+    "evidence": "invoke-virtual {p1, p3, p0, p2}, Landroid/database/sqlite/SQLiteDatabase;->delete(Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;)I"
+  },
+  {
+    "component": "org.dmfs.provider.tasks.processors.tasks.AutoCompleting",
+    "component_type": "class",
+    "file": "smali_classes2/org/dmfs/provider/tasks/processors/tasks/AutoCompleting.smali",
+    "line": 1343,
+    "pattern": "sql_injection_no_args",
+    "issue": "sql_injection_no_args",
+    "cwe": "CWE-89",
+    "confidence": "medium",
+    "evidence": "invoke-virtual {p1, v1, p3, p2, v0}, Landroid/database/sqlite/SQLiteDatabase;->update(Ljava/lang/String;Landroid/content/ContentValues;Ljava/lang/String;[Ljava/lang/String;)I"
+  },
+  {
+    "component": "org.dmfs.provider.tasks.processors.tasks.Instantiating",
+    "component_type": "class",
+    "file": "smali_classes2/org/dmfs/provider/tasks/processors/tasks/Instantiating.smali",
+    "line": 187,
+    "pattern": "sql_injection_no_args",
+    "issue": "sql_injection_no_args",
+    "cwe": "CWE-89",
+    "confidence": "medium",
+    "evidence": "invoke-virtual/range {v0 .. v7}, Landroid/database/sqlite/SQLiteDatabase;->query(Ljava/lang/String;[Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Landroid/database/Cursor;"
+  },
+  {
+    "component": "org.dmfs.provider.tasks.processors.tasks.Moving",
+    "component_type": "class",
+    "file": "smali_classes2/org/dmfs/provider/tasks/processors/tasks/Moving.smali",
+    "line": 701,
+    "pattern": "sql_injection_no_args",
+    "issue": "sql_injection_no_args",
+    "cwe": "CWE-89",
+    "confidence": "medium",
+    "evidence": "invoke-virtual/range {v0 .. v7}, Landroid/database/sqlite/SQLiteDatabase;->query(Ljava/lang/String;[Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Landroid/database/Cursor;"
+  },
+  {
+    "component": "org.dmfs.provider.tasks.processors.tasks.TaskCommitProcessor",
+    "component_type": "class",
+    "file": "smali_classes2/org/dmfs/provider/tasks/processors/tasks/TaskCommitProcessor.smali",
+    "line": 133,
+    "pattern": "sql_injection_no_args",
+    "issue": "sql_injection_no_args",
+    "cwe": "CWE-89",
+    "confidence": "medium",
+    "evidence": "invoke-virtual {p1, p3, p0, p2}, Landroid/database/sqlite/SQLiteDatabase;->delete(Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;)I"
+  },
+  {
+    "component": "org.dmfs.provider.tasks.processors.tasks.Validating",
+    "component_type": "class",
+    "file": "smali_classes2/org/dmfs/provider/tasks/processors/tasks/Validating.smali",
+    "line": 1147,
+    "pattern": "sql_injection_no_args",
+    "issue": "sql_injection_no_args",
+    "cwe": "CWE-89",
+    "confidence": "medium",
+    "evidence": "invoke-virtual/range {v3 .. v10}, Landroid/database/sqlite/SQLiteDatabase;->query(Ljava/lang/String;[Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Landroid/database/Cursor;"
+  },
+  {
+    "component": "org.osmdroid.tileprovider.modules.SqlTileWriter$1",
+    "component_type": "class",
+    "file": "smali_classes2/org/osmdroid/tileprovider/modules/SqlTileWriter$1.smali",
+    "line": 284,
+    "pattern": "sql_injection_raw",
+    "issue": "sql_injection_raw",
+    "cwe": "CWE-89",
+    "confidence": "high",
+    "evidence": "invoke-virtual {v6, v0, v12}, Landroid/database/sqlite/SQLiteDatabase;->rawQuery(Ljava/lang/String;[Ljava/lang/String;)Landroid/database/Cursor;"
+  },
+  {
+    "component": "org.osmdroid.tileprovider.modules.SqlTileWriter",
+    "component_type": "class",
+    "file": "smali_classes2/org/osmdroid/tileprovider/modules/SqlTileWriter.smali",
+    "line": 556,
+    "pattern": "sql_injection_raw",
+    "issue": "sql_injection_raw",
+    "cwe": "CWE-89",
+    "confidence": "medium",
+    "evidence": "invoke-virtual {v1, v3}, Landroid/database/sqlite/SQLiteDatabase;->execSQL(Ljava/lang/String;)V"
+  },
+  {
+    "component": "org.tasks.calendars.CalendarProvider",
+    "component_type": "class",
+    "file": "smali_classes2/org/tasks/calendars/CalendarProvider.smali",
+    "line": 150,
+    "pattern": "sql_injection_no_args",
+    "issue": "sql_injection_no_args",
+    "cwe": "CWE-89",
+    "confidence": "medium",
+    "evidence": "invoke-virtual/range {v2 .. v7}, Landroid/content/ContentResolver;->query(Landroid/net/Uri;[Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;Ljava/lang/String;)Landroid/database/Cursor;"
+  },
+  {
+    "component": "org.tasks.data.OpenTaskDao$getEtags$2",
+    "component_type": "class",
+    "file": "smali_classes2/org/tasks/data/OpenTaskDao$getEtags$2.smali",
+    "line": 276,
+    "pattern": "sql_injection_no_args",
+    "issue": "sql_injection_no_args",
+    "cwe": "CWE-89",
+    "confidence": "medium",
+    "evidence": "invoke-virtual/range {v1 .. v6}, Landroid/content/ContentResolver;->query(Landroid/net/Uri;[Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;Ljava/lang/String;)Landroid/database/Cursor;"
+  },
+  {
+    "component": "org.tasks.data.OpenTaskDao$getLists$2",
+    "component_type": "class",
+    "file": "smali_classes2/org/tasks/data/OpenTaskDao$getLists$2.smali",
+    "line": 276,
+    "pattern": "sql_injection_no_args",
+    "issue": "sql_injection_no_args",
+    "cwe": "CWE-89",
+    "confidence": "medium",
+    "evidence": "invoke-virtual/range {v4 .. v9}, Landroid/content/ContentResolver;->query(Landroid/net/Uri;[Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;Ljava/lang/String;)Landroid/database/Cursor;"
+  },
+  {
+    "component": "org.tasks.pebble.PebbleService$register$receiver$1",
+    "component_type": "class",
+    "file": "smali_classes2/org/tasks/pebble/PebbleService$register$receiver$1.smali",
+    "line": 88,
+    "pattern": "implicit_broadcast",
+    "issue": "implicit_broadcast",
+    "cwe": "CWE-927",
+    "confidence": "medium",
+    "evidence": "invoke-virtual {p1, v0}, Landroid/content/Context;->sendBroadcast(Landroid/content/Intent;)V"
+  }
+]
