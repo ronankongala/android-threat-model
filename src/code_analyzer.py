@@ -46,6 +46,19 @@ Patterns:
   sql_injection_no_args        query/update/delete with a selection but null args
   directory_traversal          file created from a name read from an intent
   clipboard_sensitive          text from an input field put on the clipboard
+                               (setPrimaryClip in a method that calls getPassword
+                               or reads an input field). Also (medium) password
+                               text tracked in the register model:
+                               ClipData.newPlainText / newHtmlText with text from
+                               getPassword(), or from getText (then toString) on
+                               the view of findViewById(const id) where the id is a
+                               password field in res/layout*/*.xml (inputType
+                               textPassword, numberPassword, textVisiblePassword,
+                               textWebPassword, or password="true"; id names mapped
+                               to ints through res/values/public.xml), and the
+                               setPrimaryClip of that ClipData. Views and password
+                               text kept in instance fields are followed. The
+                               evidence names the password field
   dynamic_code_load            DexClassLoader / PathClassLoader created
   sticky_broadcast             sendStickyBroadcast / sendStickyOrderedBroadcast
   sticky_broadcast_receiver    (medium) onReceive of an app receiver registered for
@@ -424,6 +437,16 @@ class _Method:
             m = FIELD_REF_RE.search(rest)
             if m:
                 self.ctx.field_write(m.group(1), self.regs.get(dest), self.m['name'] == '<clinit>')
+        elif op.startswith('iput-object'):
+            # Views found by a password field id, and text read from one, kept
+            # in instance fields (clipboard_sensitive across methods).
+            m = FIELD_REF_RE.search(rest)
+            v = self.regs.get(dest)
+            if m and v and v[0] in ('view', 'pw'):
+                self.ctx.ui_fields[m.group(1)] = v
+        elif op.startswith('iget-object'):
+            m = FIELD_REF_RE.search(rest)
+            self.regs[dest] = self.ctx.ui_fields.get(m.group(1)) if m else None
         elif op.startswith(NO_DEST):
             pass
         elif dest:
@@ -481,6 +504,8 @@ class _Method:
                 if _const_strength(args[0]):
                     self.set_reg_value(recv, ('str', None, _const_strength(args[0])))
             return
+        if self.password_flow(owner, name, desc, ret, args, recv, vals):
+            return
         if ret == 'V':
             # Arrays handed to other code (SecureRandom.nextBytes and so on) may be filled.
             for v in vals:
@@ -524,6 +549,35 @@ class _Method:
             self.last = ('concat', any(_tainted(v, self.objs) for v in vals))
         elif owner == 'Ljava/lang/String;' and name in ('trim', 'toString', 'valueOf') and vals:
             self.last = vals[0] if vals[0] and vals[0][0] in ('str', 'taint', 'concat') else None
+
+    def password_flow(self, owner, name, desc, ret, args, recv, vals):
+        """Password text for clipboard_sensitive. findViewById(const id) gives
+        ('view', id); getText on a view whose id is a password field in the
+        layouts (ctx.password_ids), or any getPassword() call, gives
+        ('pw', field description), which toString / trim / valueOf /
+        subSequence keep; ClipData.newPlainText with such a text gives
+        ('clip', field description). True when the call was handled."""
+        if name in ('findViewById', 'requireViewById') and desc == 'I':
+            a = args[0] if args else None
+            self.last = ('view', a[1]) if a and a[0] == 'int' and a[1] is not None else None
+            return True
+        if name == 'getPassword' and not desc:
+            self.last = ('pw', 'text from %s->getPassword()' % owner)
+            return True
+        if name == 'getText' and not desc and recv and recv[0] == 'view':
+            field = self.ctx.password_ids.get(recv[1])
+            self.last = ('pw', 'password field %s' % field) if field else None
+            return field is not None
+        src = recv if recv and recv[0] == 'pw' else (vals[0] if vals and vals[0] and vals[0][0] == 'pw'
+                                                    else None)
+        if src and name in ('toString', 'trim', 'valueOf', 'subSequence', 'getText'):
+            self.last = src
+            return True
+        if owner == 'Landroid/content/ClipData;' and name in ('newPlainText', 'newHtmlText') \
+                and len(args) > 1 and args[1] and args[1][0] == 'pw':
+            self.last = ('clip', args[1][1])
+            return True
+        return False
 
     def set_reg_value(self, old, new):
         for r, v in list(self.regs.items()):
@@ -767,7 +821,16 @@ class _Method:
             in self.ctx.method_text(self.m)
 
     def misc(self, no, text, owner, name, args):
-        if owner.endswith('ClipboardManager;') and name == 'setPrimaryClip':
+        clip = args[0] if args else None
+        if owner == 'Landroid/content/ClipData;' and name in ('newPlainText', 'newHtmlText') \
+                and len(args) > 1 and args[1] and args[1][0] == 'pw':
+            self.report('clipboard_sensitive', 'medium', no,
+                        '%s [%s put in ClipData]' % (text, args[1][1]))
+        elif owner.endswith('ClipboardManager;') and name == 'setPrimaryClip' \
+                and clip and clip[0] == 'clip':
+            self.report('clipboard_sensitive', 'medium', no,
+                        '%s [%s copied to the clipboard]' % (text, clip[1]))
+        elif owner.endswith('ClipboardManager;') and name == 'setPrimaryClip':
             if 'getPassword' in self.seen or self.sig in self.ctx.input_readers:
                 self.report('clipboard_sensitive', 'medium', no, text)
         elif owner == 'Landroid/telephony/TelephonyManager;' and name in (
@@ -813,6 +876,8 @@ class _Context:
         self.sticky_actions = set()  # actions of sticky broadcasts sent by the app
         self.dyn_receivers = set()   # (receiver class, actions, permission given)
         self.target_sdk = None       # targetSdkVersion from apktool.yml, if known
+        self.password_ids = {}       # resource id -> password field description
+        self.ui_fields = {}          # instance field -> ('view', id) or ('pw', field)
 
     def field_write(self, ref, value, in_clinit):
         const = value if value and value[0] in ('str', 'lit') and in_clinit else None
@@ -1403,6 +1468,69 @@ def _sticky_receiver_rules(ctx, classes, decoded_dir):
                 ctx.emit(cls, 'sticky_broadcast_receiver', 'medium', m['line'], m['decl'])
 
 
+# ---------------------------------------------------------------- layouts
+
+PASSWORD_INPUT_TYPES = ('textPassword', 'numberPassword', 'textVisiblePassword',
+                        'textWebPassword')
+
+
+def _resource_ids(decoded_dir):
+    """{id name: resource int} from res/values/public.xml (type="id")."""
+    path = os.path.join(decoded_dir, 'res', 'values', 'public.xml')
+    try:
+        root = ET.parse(path).getroot()
+    except (OSError, ET.ParseError):
+        return {}
+    out = {}
+    for e in root.iter('public'):
+        if e.get('type') == 'id' and e.get('name') and e.get('id'):
+            n = _int(e.get('id'))
+            if n is not None:
+                out[e.get('name')] = n
+    return out
+
+
+def _password_fields(decoded_dir):
+    """{resource int: description} for the views in res/layout*/*.xml with an
+    android:inputType containing one of PASSWORD_INPUT_TYPES, or
+    android:password="true". The description names the id, the layout file and
+    the attribute, for the finding evidence."""
+    res = os.path.join(decoded_dir, 'res')
+    if not os.path.isdir(res):
+        return {}
+    ids, out = None, {}
+    for entry in sorted(os.listdir(res)):
+        folder = os.path.join(res, entry)
+        if not entry.startswith('layout') or not os.path.isdir(folder):
+            continue
+        for name in sorted(os.listdir(folder)):
+            if not name.endswith('.xml'):
+                continue
+            try:
+                root = ET.parse(os.path.join(folder, name)).getroot()
+            except (OSError, ET.ParseError):
+                continue
+            for e in root.iter():
+                input_type = e.get(ANDROID_NS + 'inputType') or ''
+                kinds = [t for t in input_type.split('|') if t.strip() in PASSWORD_INPUT_TYPES]
+                if kinds:
+                    how = 'inputType %s' % input_type
+                elif (e.get(ANDROID_NS + 'password') or '').lower() == 'true':
+                    how = 'password="true"'
+                else:
+                    continue
+                ref = e.get(ANDROID_NS + 'id') or ''
+                id_name = ref.split('/', 1)[1] if ref.startswith(('@id/', '@+id/')) else None
+                if not id_name:
+                    continue
+                if ids is None:
+                    ids = _resource_ids(decoded_dir)
+                n = ids.get(id_name)
+                if n is not None and n not in out:
+                    out[n] = "'%s' (res/%s/%s, %s)" % (id_name, entry, name, how)
+    return out
+
+
 # ---------------------------------------------------------------- entry point
 
 def analyze(decoded_dir):
@@ -1410,6 +1538,7 @@ def analyze(decoded_dir):
     classes = [c for c in (_parse_class(p, decoded_dir) for p in _class_files(decoded_dir)) if c]
     ctx = _Context(classes)
     ctx.target_sdk = apk._sdk_info(decoded_dir).get('target_sdk')
+    ctx.password_ids = _password_fields(decoded_dir)
     ctx.find_input_readers(decoded_dir)
     for _ in range(PASSES):
         ctx.findings = {}
