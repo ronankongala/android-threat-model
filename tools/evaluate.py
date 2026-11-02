@@ -12,17 +12,23 @@ benchmarks/ghera/<category>/<benchmark>/<variant>/app/build/outputs/apk/api27/de
 because every APK has the same file name and the reports would overwrite each other.
 
 Writes data/evaluation-results.csv with the columns
-  benchmark, category, benign_findings, secure_findings, true_positive, false_positive
+  benchmark, category, benign_findings, secure_findings, true_positive, false_positive,
+  strict_true_positive
 where
   true_positive  = 1 if benign_findings > 0 and any Benign finding's CWE matches any
-                   of the benchmark's ground-truth CWEs, either directly or through
-                   SECONDARY_CWE (an alternative CWE that names a closely related
-                   weakness and is counted as the ground-truth CWE it maps to), else 0
+                   of the benchmark's ground-truth CWEs (cwe_ids), either directly,
+                   through SECONDARY_CWE (an alternative CWE that names a closely
+                   related weakness and is counted as the ground-truth CWE it maps
+                   to), or because it is listed in the benchmark's secondary_cwe_ids
+                   column (P1-3: CWEs reviewed against the threat model and README
+                   as describing this benchmark's own weakness), else 0
   false_positive = 1 if secure_findings > 0, else 0
+  strict_true_positive = like true_positive, but only cwe_ids count
 A count is left blank when the APK is missing or the tool fails; the scores then
 treat it as 0 findings, and the reason is printed.
 
-Usage: python tools/evaluate.py [--no-dynamic | --dynamic] [--auto-readme]
+Usage: python tools/evaluate.py [--no-dynamic | --dynamic] [--auto-readme] [--out CSV]
+       python tools/evaluate.py --rescore [--dynamic] [--out CSV]
 
 --no-dynamic (the default) scores the static layers only: manifest rules, smali
 code patterns and taint analysis. --dynamic also passes --dynamic to ate.py, so
@@ -35,6 +41,15 @@ and turns them into Benign findings (readme_findings). The README steps exercise
 the Benign app only, so these findings can add true positives but never false
 positives; numbers from a run with --auto-readme are therefore not directly
 comparable with runs without it.
+
+--out CSV writes the per-benchmark results to CSV instead of
+data/evaluation-results.csv. A --rescore run writes a CSV only when --out is given.
+
+--rescore runs nothing: it rescans the reports a previous run left in
+data/eval-tmp/<benchmark>/<Benign|Secure>/app-api27-debug-report.json and scores
+them against the current ground truth. Without --dynamic, findings whose issue
+starts with "dynamic-" are dropped, so the reports of a dynamic run are rescored
+as the static layers only.
 """
 import argparse
 import csv
@@ -51,6 +66,7 @@ TMP = os.path.join(ROOT, 'data', 'eval-tmp')
 sys.path.insert(0, os.path.join(ROOT, 'tools'))
 ATE = os.path.join(ROOT, 'src', 'ate.py')
 APK_REL = os.path.join('app', 'build', 'outputs', 'apk', 'api27', 'debug', 'app-api27-debug.apk')
+REPORT = 'app-api27-debug-report.json'
 COLUMNS = ['benchmark', 'category', 'benign_findings', 'secure_findings', 'true_positive', 'false_positive',
            'strict_true_positive']
 
@@ -65,6 +81,8 @@ COLUMNS = ['benchmark', 'category', 'benign_findings', 'secure_findings', 'true_
 #   CWE-346 (origin validation error)    -> CWE-927
 #   CWE-441 (unintended proxy / confused deputy) -> CWE-926
 # The mapping is applied one step only (CWE-360 counts as CWE-925, not CWE-926).
+# The secondary_cwe_ids column of data/ground-truth.csv lists, per benchmark,
+# these keys for its cwe_ids plus the CWEs added by the P1-3 review.
 SECONDARY_CWE = {
     'CWE-829': 'CWE-749',
     'CWE-925': 'CWE-926',
@@ -75,18 +93,22 @@ SECONDARY_CWE = {
 }
 
 
-def matching_cwes(finding_cwes, gt_cwes):
+def matching_cwes(finding_cwes, gt_cwes, secondary_cwes=()):
     """Return (strict, expanded) sorted lists of matches.
 
     strict: finding CWEs that are ground-truth CWEs.
     expanded: strict plus 'found->gt' entries for finding CWEs that map to a
-    ground-truth CWE through SECONDARY_CWE.
+    ground-truth CWE through SECONDARY_CWE, plus 'found(secondary)' entries for
+    the other finding CWEs listed in secondary_cwes (the benchmark's
+    secondary_cwe_ids column).
     """
     strict = sorted(set(finding_cwes) & gt_cwes)
     expanded = list(strict)
     for c in sorted(set(finding_cwes) - gt_cwes):
         if SECONDARY_CWE.get(c) in gt_cwes:
             expanded.append('%s->%s' % (c, SECONDARY_CWE[c]))
+        elif c in secondary_cwes:
+            expanded.append('%s(secondary)' % c)
     return strict, expanded
 
 
@@ -96,12 +118,105 @@ def read_csv(path):
         return list(csv.DictReader(f))
 
 
-def load_ground_truth():
+def parse_cwes(value):
+    """Set of CWE ids from a semicolon separated ground-truth cell."""
+    return {c.strip() for c in (value or '').split(';') if c.strip()}
+
+
+def load_ground_truth(path=GROUND_TRUTH):
+    """{folder: {'category', 'cwes' (cwe_ids), 'secondary' (secondary_cwe_ids)}}."""
     gt = {}
-    for row in read_csv(GROUND_TRUTH):
-        cwes = {c.strip() for c in row['cwe_ids'].split(';') if c.strip()}
-        gt[row['folder']] = {'category': row['category'], 'cwes': cwes}
+    for row in read_csv(path):
+        gt[row['folder']] = {'category': row['category'], 'cwes': parse_cwes(row['cwe_ids']),
+                             'secondary': parse_cwes(row.get('secondary_cwe_ids'))}
     return gt
+
+
+def benchmark_list():
+    """Benchmarks with a successful api27 build, in build-results.csv order."""
+    benchmarks = []
+    for row in read_csv(BUILD_RESULTS):
+        if row['result'] == 'success' and 'api27' in row['flavor'] and row['benchmark'] not in benchmarks:
+            benchmarks.append(row['benchmark'])
+    return benchmarks
+
+
+def score_row(bench, gt_entry, benign, secure):
+    """Score one benchmark; return (CSV row dict, expanded matching CWEs).
+
+    benign and secure are findings lists, or None when the APK was missing or
+    the tool failed (the count is then left blank and scored as 0 findings).
+    """
+    benign_n = len(benign) if benign is not None else 0
+    secure_n = len(secure) if secure is not None else 0
+    strict, matched = matching_cwes({f['cwe'] for f in benign or []}, gt_entry['cwes'],
+                                    gt_entry.get('secondary', ()))
+    row = {
+        'benchmark': bench,
+        'category': gt_entry['category'],
+        'benign_findings': '' if benign is None else benign_n,
+        'secure_findings': '' if secure is None else secure_n,
+        'true_positive': 1 if benign_n > 0 and matched else 0,
+        'false_positive': 1 if secure_n > 0 else 0,
+        'strict_true_positive': 1 if benign_n > 0 and strict else 0,
+    }
+    return row, matched
+
+
+def load_findings(path):
+    """Findings list from a JSON file, or None when the file does not exist."""
+    if not os.path.exists(path):
+        return None
+    with open(path, encoding='utf-8') as f:
+        return json.load(f)
+
+
+def is_dynamic(finding):
+    return str(finding.get('issue', '')).startswith('dynamic-')
+
+
+def rescore(benchmarks, gt, dynamic=False, tmp=TMP):
+    """Score the reports a previous run left in `tmp`, without running anything."""
+    rows = []
+    for bench in benchmarks:
+        if bench not in gt:
+            print('skip %s: not in ground-truth.csv' % bench)
+            continue
+        result = {}
+        for variant in ('Benign', 'Secure'):
+            findings = load_findings(os.path.join(tmp, bench, variant, REPORT))
+            if findings is not None and not dynamic:
+                findings = [f for f in findings if not is_dynamic(f)]
+            result[variant] = findings
+        row, matched = score_row(bench, gt[bench], result['Benign'], result['Secure'])
+        print('%-58s benign=%-3s secure=%-3s tp=%d strict_tp=%d fp=%d %s'
+              % (bench, row['benign_findings'], row['secure_findings'], row['true_positive'],
+                 row['strict_true_positive'], row['false_positive'], ', '.join(matched)))
+        rows.append(row)
+    return rows
+
+
+def summary(rows):
+    """Summary lines: TP, FP, precision and recall, expanded and strict."""
+    tp = sum(r['true_positive'] for r in rows)
+    fp = sum(r['false_positive'] for r in rows)
+    lines = ['Evaluated %d benchmarks: %d true positives, %d false positives' % (len(rows), tp, fp)]
+    if rows:
+        precision = '%.2f' % (tp / (tp + fp)) if tp + fp else 'n/a'
+        lines.append('Precision %s, recall %.2f' % (precision, tp / len(rows)))
+        stp = sum(r['strict_true_positive'] for r in rows)
+        sprec = '%.2f' % (stp / (stp + fp)) if stp + fp else 'n/a'
+        lines.append('Strict CWE match only (cwe_ids, no secondary CWEs): %d true positives, '
+                     'precision %s, recall %.2f' % (stp, sprec, stp / len(rows)))
+    return lines
+
+
+def write_rows(rows, path):
+    with open(path, 'w', encoding='utf-8', newline='') as f:
+        w = csv.DictWriter(f, fieldnames=COLUMNS)
+        w.writeheader()
+        w.writerows(rows)
+    print('Wrote %s' % os.path.relpath(path, ROOT))
 
 
 def run_tool(apk, out_dir, dynamic=False):
@@ -113,7 +228,7 @@ def run_tool(apk, out_dir, dynamic=False):
     r = subprocess.run(cmd, capture_output=True, text=True)
     if r.returncode != 0:
         return None, 'ate.py exit %d: %s' % (r.returncode, (r.stderr or r.stdout).strip())
-    report = os.path.join(out_dir, 'app-api27-debug-report.json')
+    report = os.path.join(out_dir, REPORT)
     with open(report, encoding='utf-8') as f:
         findings = json.load(f)
     return findings, r.stdout.strip()
@@ -188,15 +303,25 @@ def main(argv=None):
     p.set_defaults(dynamic=False)
     p.add_argument('--auto-readme', action='store_true',
                    help='also replay each README exploit on the emulator (tools/readme_runner.py)')
+    p.add_argument('--rescore', action='store_true',
+                   help='run nothing; rescore the reports already in data/eval-tmp')
+    p.add_argument('--out', help='CSV to write (default data/evaluation-results.csv; '
+                                 'with --rescore, no CSV unless given)')
     args = p.parse_args(argv)
-    print('Mode: %s' % ('static and dynamic' if args.dynamic else 'static only (--no-dynamic)'))
     gt = load_ground_truth()
-    benchmarks = []
-    for row in read_csv(BUILD_RESULTS):
-        if row['result'] == 'success' and 'api27' in row['flavor'] and row['benchmark'] not in benchmarks:
-            benchmarks.append(row['benchmark'])
-    print('Benchmarks with a successful api27 build: %d' % len(benchmarks))
+    benchmarks = benchmark_list()
 
+    if args.rescore:
+        print('Rescore of data/eval-tmp (%s)' % ('all findings' if args.dynamic
+                                                 else 'static layers only, dynamic-* findings dropped'))
+        rows = rescore(benchmarks, gt, args.dynamic)
+        print('\n' + '\n'.join(summary(rows)))
+        if args.out:
+            write_rows(rows, args.out)
+        return 0
+
+    print('Mode: %s' % ('static and dynamic' if args.dynamic else 'static only (--no-dynamic)'))
+    print('Benchmarks with a successful api27 build: %d' % len(benchmarks))
     rows = []
     for bench in benchmarks:
         if bench not in gt:
@@ -221,40 +346,14 @@ def main(argv=None):
                 print('          %s %s %s' % (f['cwe'], f['issue'], f['evidence']))
             if extra:
                 result['Benign'] = (result['Benign'] or []) + extra
-        benign, secure = result['Benign'], result['Secure']
-        benign_n = len(benign) if benign is not None else 0
-        secure_n = len(secure) if secure is not None else 0
-        strict, matched = matching_cwes({f['cwe'] for f in benign or []}, gt[bench]['cwes'])
-        tp = 1 if benign_n > 0 and matched else 0
-        strict_tp = 1 if benign_n > 0 and strict else 0
-        fp = 1 if secure_n > 0 else 0
+        row, matched = score_row(bench, gt[bench], result['Benign'], result['Secure'])
         print('   true_positive=%d (matching CWEs: %s) strict_true_positive=%d false_positive=%d'
-              % (tp, ', '.join(matched) or 'none', strict_tp, fp))
-        rows.append({
-            'benchmark': bench,
-            'category': category,
-            'benign_findings': '' if benign is None else benign_n,
-            'secure_findings': '' if secure is None else secure_n,
-            'true_positive': tp,
-            'false_positive': fp,
-            'strict_true_positive': strict_tp,
-        })
+              % (row['true_positive'], ', '.join(matched) or 'none', row['strict_true_positive'],
+                 row['false_positive']))
+        rows.append(row)
 
-    with open(OUT_CSV, 'w', encoding='utf-8', newline='') as f:
-        w = csv.DictWriter(f, fieldnames=COLUMNS)
-        w.writeheader()
-        w.writerows(rows)
-    tp = sum(r['true_positive'] for r in rows)
-    fp = sum(r['false_positive'] for r in rows)
-    print('\nEvaluated %d benchmarks: %d true positives, %d false positives' % (len(rows), tp, fp))
-    if rows:
-        precision = '%.2f' % (tp / (tp + fp)) if tp + fp else 'n/a'
-        print('Precision %s, recall %.2f' % (precision, tp / len(rows)))
-        stp = sum(r['strict_true_positive'] for r in rows)
-        sprec = '%.2f' % (stp / (stp + fp)) if stp + fp else 'n/a'
-        print('Strict CWE match only (no SECONDARY_CWE): %d true positives, precision %s, recall %.2f'
-              % (stp, sprec, stp / len(rows)))
-    print('Wrote %s' % os.path.relpath(OUT_CSV, ROOT))
+    write_rows(rows, args.out or OUT_CSV)
+    print('\n' + '\n'.join(summary(rows)))
     return 0
 
 
