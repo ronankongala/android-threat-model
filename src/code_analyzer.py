@@ -2,7 +2,8 @@
 
 analyze(decoded_dir) returns a list of findings, each a dict with:
   component       dotted class name (inner classes keep the $)
-  component_type  always 'class'
+  component_type  'class', or 'application' (component '(application)') for
+                  app wide findings such as certificate_pinning_missing
   file            smali path relative to decoded_dir, forward slashes
   line            1-based line number in that file
   pattern, issue  the pattern name (the two keys hold the same value)
@@ -65,6 +66,21 @@ Patterns:
                                itself, an app superclass or BroadcastReceiver (medium).
                                One finding per receiver; the priority match wins.
   unique_ids                   device identifiers (IMEI, serial, ANDROID_ID)
+  certificate_pinning_missing  application level (high). The network security
+                               config (android:networkSecurityConfig, else
+                               res/xml/network_security_config.xml) has no pin-set
+                               with a pin under any domain-config; or there is no
+                               config and usesCleartextTraffic is not "false".
+                               Gated on the app's own smali opening network or TLS
+                               connections (URL.openConnection, HttpURLConnection,
+                               HttpsURLConnection, SSLSocketFactory, SSLContext,
+                               okhttp3, new Socket), so apps with no network code
+                               are not flagged; classes of bundled network
+                               libraries (okhttp3, okio, retrofit2) do not count.
+                               Also skipped when the code pins by itself: okhttp3
+                               CertificatePinner, or a KeyStore filled with
+                               setCertificateEntry and passed to
+                               TrustManagerFactory.init.
 """
 import os
 import re
@@ -95,6 +111,7 @@ PATTERNS = {
     'no_validity_check': 'CWE-925',
     'ordered_broadcast_priority': 'CWE-927',
     'unique_ids': 'CWE-359',
+    'certificate_pinning_missing': 'CWE-295',
 }
 
 CONFIDENCE = ('high', 'medium', 'low')
@@ -832,6 +849,132 @@ def _ordered_broadcast_rules(ctx, classes, decoded_dir):
                 ctx.emit(cls, 'ordered_broadcast_priority', 'medium', *hit)
 
 
+# ---------------------------------------------------------------- app rules
+
+ANDROID_NS = '{http://schemas.android.com/apk/res/android}'
+APP_COMPONENT = '(application)'
+
+# Calls that show the app opens a network or TLS connection.
+NETWORK_CALLS = ('Ljava/net/URL;->openConnection', 'Ljava/net/HttpURLConnection;->',
+                 'Ljavax/net/ssl/HttpsURLConnection;->', 'Ljavax/net/ssl/SSLSocketFactory;->',
+                 'Ljavax/net/ssl/SSLContext;->', 'Lokhttp3/', 'Ljava/net/Socket;-><init>')
+# Bundled network libraries: their own classes do not count as app network code.
+NETWORK_LIBRARIES = ('Lokhttp3/', 'Lokio/', 'Lretrofit2/')
+
+
+def _invokes(method):
+    """(line, text, method reference) for each invoke in method."""
+    for no, text in _code(method['body']):
+        if text.startswith('invoke-'):
+            m = INVOKE_RE.match(text)
+            if m:
+                yield no, text, m.group(3)
+
+
+def _emit_app(ctx, rel, no, pattern, conf, evidence):
+    """Record an application level finding (not tied to one class)."""
+    key = (rel, no, pattern)
+    cur = ctx.findings.get(key)
+    if cur and CONFIDENCE.index(cur['confidence']) <= CONFIDENCE.index(conf):
+        return
+    ctx.findings[key] = {
+        'component': APP_COMPONENT,
+        'component_type': 'application',
+        'file': rel,
+        'line': no,
+        'pattern': pattern,
+        'issue': pattern,
+        'cwe': PATTERNS[pattern],
+        'confidence': conf,
+        'evidence': evidence,
+    }
+
+
+def _line_of(path, needle):
+    """1-based number of the first line of path containing needle (1 if none)."""
+    try:
+        with open(path, encoding='utf-8', errors='replace') as f:
+            for no, raw in enumerate(f, 1):
+                if needle in raw:
+                    return no
+    except OSError:
+        pass
+    return 1
+
+
+def _network_call(classes):
+    """(class, line, text) of the first network or TLS call in app code, or None."""
+    for cls in classes:
+        if cls['name'].startswith(NETWORK_LIBRARIES):
+            continue
+        for m in cls['methods']:
+            for no, text, ref in _invokes(m):
+                if ref.startswith(NETWORK_CALLS):
+                    return cls, no, text
+    return None
+
+
+def _pins_in_code(classes):
+    """True when app code pins certificates itself: okhttp3 CertificatePinner,
+    or a KeyStore filled with setCertificateEntry handed to
+    TrustManagerFactory.init (the idiom of the Android training docs)."""
+    refs = set()
+    for cls in classes:
+        if cls['name'].startswith(NETWORK_LIBRARIES):
+            continue
+        for m in cls['methods']:
+            for _, _, ref in _invokes(m):
+                refs.add(ref.split('(')[0])
+    if any(r.startswith('Lokhttp3/CertificatePinner') for r in refs):
+        return True
+    return 'Ljava/security/KeyStore;->setCertificateEntry' in refs and \
+        'Ljavax/net/ssl/TrustManagerFactory;->init' in refs
+
+
+def _pinning_rules(ctx, classes, decoded_dir):
+    """certificate_pinning_missing: one application level finding when the app
+    makes network connections but neither its network security config nor its
+    code pins certificates. Limits: only the config file and two common code
+    pinning idioms are recognised; pins set up through reflection, native code
+    or other libraries are missed (the app is then flagged). A config with a
+    pin-set for one domain counts as pinned even if other hosts are not."""
+    hit = _network_call(classes)
+    if hit is None or _pins_in_code(classes):
+        return
+    manifest_path = os.path.join(decoded_dir, 'AndroidManifest.xml')
+    try:
+        app = ET.parse(manifest_path).getroot().find('application')
+    except (OSError, ET.ParseError):
+        return
+    if app is None:
+        return
+    ref = app.get(ANDROID_NS + 'networkSecurityConfig') or ''
+    name = ref[len('@xml/'):] if ref.startswith('@xml/') else 'network_security_config'
+    rel = 'res/xml/%s.xml' % name
+    path = os.path.join(decoded_dir, 'res', 'xml', name + '.xml')
+    call = 'network call %s' % hit[2]
+    if os.path.isfile(path):
+        try:
+            root = ET.parse(path).getroot()
+        except ET.ParseError:
+            return
+        for dc in root.iter('domain-config'):
+            for pin_set in dc.findall('pin-set'):
+                if pin_set.find('pin') is not None:
+                    return
+        _emit_app(ctx, rel, _line_of(path, '<network-security-config'),
+                  'certificate_pinning_missing', 'high',
+                  '%s has no pin-set in any domain-config; %s' % (rel, call))
+        return
+    cleartext = app.get(ANDROID_NS + 'usesCleartextTraffic')
+    if cleartext == 'false':
+        return
+    _emit_app(ctx, 'AndroidManifest.xml', _line_of(manifest_path, '<application'),
+              'certificate_pinning_missing', 'high',
+              'no network security config, usesCleartextTraffic %s; %s'
+              % ('="%s"' % cleartext if cleartext is not None else 'unset', call))
+
+
 # ---------------------------------------------------------------- entry point
 
 def analyze(decoded_dir):
@@ -848,4 +991,5 @@ def analyze(decoded_dir):
     for cls in classes:
         _class_rules(ctx, cls)
     _ordered_broadcast_rules(ctx, classes, decoded_dir)
+    _pinning_rules(ctx, classes, decoded_dir)
     return sorted(ctx.findings.values(), key=lambda f: (f['file'], f['line'], f['pattern']))
