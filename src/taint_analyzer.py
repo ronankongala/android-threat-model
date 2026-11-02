@@ -16,8 +16,9 @@ each a dict with:
 graph is the (graph, reverse) pair or the graph dict from call_graph.build();
 it is built when not given. Its keys are the app methods that taint may enter.
 
-Analysis is intraprocedural and flow-insensitive to branches: each method body
-is read top to bottom and a set of tainted registers is kept.
+Each method body is read top to bottom (branches are not followed) and a set of
+tainted registers is kept; taint then follows calls into other app methods (see
+Interprocedural below).
 
 Sources (return value is tainted; see _source):
   Intent getStringExtra, getIntExtra, getByteArrayExtra, getAction, getData,
@@ -41,7 +42,11 @@ range is not reported.
 
 Interprocedural: when a tainted register is passed to an app method, the
 matching parameter register of the callee is tainted and the callee is
-analyzed in turn, up to MAX_DEPTH calls deep. Argument i of the invoke
+analyzed in turn, up to MAX_DEPTH calls deep, using the call graph built by
+call_graph.py to tell app methods from framework ones. When the callee returns
+a tainted register, the caller's move-result receives that taint. Confidence is
+high for a flow inside one method and drops one step for each call level it
+crosses. Argument i of the invoke
 register list maps to p<i> of the callee: p0 is 'this' for a non-static
 method, and a wide (J or D) argument fills two registers in both the invoke
 list and the parameter list, so positions line up. p<n> is v<locals + n>.
@@ -192,7 +197,7 @@ class _Context:
         self.app = app
         self.supers = {m['class']: m['super'] for m in methods.values()}
         self.locals = {}
-        self.visited = set()
+        self.visited = {}     # (signature, seeds) -> origin of a tainted return, or None
         self.findings = {}
 
     def resolve(self, sig):
@@ -237,9 +242,9 @@ def _operands(rest, nlocals):
 
 
 def _record(ctx, method, origin, label, no, line, depth):
-    src_label, _src_file, src_no, src_text = origin
+    src_label, _src_file, src_no, src_text, hops = origin
     key = (method['file'], no, src_no)
-    conf = CONFIDENCE[min(depth, 2)]
+    conf = CONFIDENCE[min(depth + hops, 2)]
     old = ctx.findings.get(key)
     if old and CONFIDENCE.index(old['confidence']) <= CONFIDENCE.index(conf):
         return
@@ -259,15 +264,17 @@ def _record(ctx, method, origin, label, no, line, depth):
 
 
 def _scan(ctx, method, seeds, depth):
+    """Scan one method; return the origin of a tainted return value, or None."""
     key = (method['signature'], frozenset(seeds.items()))
     if key in ctx.visited:
-        return
-    ctx.visited.add(key)
+        return ctx.visited[key]
+    ctx.visited[key] = None   # guards recursion
+    returned = None
 
     nl = ctx.nlocals(method)
     body = method['body']
     tries = _try_ranges(body)
-    taint = dict(seeds)      # register -> origin (label, file, line_no, text)
+    taint = dict(seeds)      # register -> origin (label, file, line_no, text, hops)
     cursors = set()
     pending = None           # what the next move-result receives
 
@@ -319,7 +326,7 @@ def _scan(ctx, method, seeds, depth):
 
             src = _source(cls, name, recv, cursors)
             if src:
-                pending = (src, method['file'], no, line)
+                pending = (src, method['file'], no, line, 0)
                 continue
             if cls == 'Landroid/content/ContentResolver;' and name == 'query':
                 pending = 'cursor'
@@ -342,19 +349,26 @@ def _scan(ctx, method, seeds, depth):
                 elif cls == INTENT and ret == INTENT and recv in taint:
                     pending = taint[recv]
 
-                target = ctx.resolve(sig)
-                if target and depth < MAX_DEPTH:
-                    callee = ctx.methods[target]
-                    base = ctx.nlocals(callee)
-                    callee_seeds = {base + i: taint[r]
-                                    for i, r in enumerate(regs) if r in taint}
-                    _scan(ctx, callee, callee_seeds, depth + 1)
+            target = ctx.resolve(sig)
+            if target and depth < MAX_DEPTH:
+                # Also scanned without tainted arguments, so that an app
+                # method returning a source value (a getter) taints the caller.
+                callee = ctx.methods[target]
+                base = ctx.nlocals(callee)
+                callee_seeds = {base + i: taint[r]
+                                for i, r in enumerate(regs) if r in taint}
+                back = _scan(ctx, callee, callee_seeds, depth + 1)
+                if back and not pending:
+                    # one more call level between the source and the caller
+                    pending = back[:4] + (back[4] + 1,)
             continue
 
         ops = _operands(rest, nl)
         if not ops:
             continue
-        if op.startswith('move'):
+        if op in ('return', 'return-object', 'return-wide'):
+            returned = returned or taint.get(ops[0])
+        elif op.startswith('move'):
             if len(ops) == 2:
                 dst, src = ops
                 clear(dst)
@@ -372,6 +386,9 @@ def _scan(ctx, method, seeds, depth):
                 taint[dst] = origin
         elif op.startswith(_CLEARS):
             clear(ops[0])
+
+    ctx.visited[key] = returned
+    return returned
 
 
 def analyze(decoded_dir, graph=None, skip_libs=True):
