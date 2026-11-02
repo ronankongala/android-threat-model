@@ -22,11 +22,19 @@ where
 A count is left blank when the APK is missing or the tool fails; the scores then
 treat it as 0 findings, and the reason is printed.
 
-Usage: python tools/evaluate.py [--no-dynamic | --dynamic]
+Usage: python tools/evaluate.py [--no-dynamic | --dynamic] [--auto-readme]
 
 --no-dynamic (the default) scores the static layers only: manifest rules, smali
 code patterns and taint analysis. --dynamic also passes --dynamic to ate.py, so
 each APK is exercised on the running emulator.
+
+--auto-readme (Fix E) also replays each benchmark's README exploit steps on the
+running emulator with tools/readme_runner.py (installs, launches, taps and adb
+commands), saves the observations to data/eval-tmp/<benchmark>/readme-observations.json
+and turns them into Benign findings (readme_findings). The README steps exercise
+the Benign app only, so these findings can add true positives but never false
+positives; numbers from a run with --auto-readme are therefore not directly
+comparable with runs without it.
 """
 import argparse
 import csv
@@ -40,6 +48,7 @@ BUILD_RESULTS = os.path.join(ROOT, 'data', 'build-results.csv')
 GROUND_TRUTH = os.path.join(ROOT, 'data', 'ground-truth.csv')
 OUT_CSV = os.path.join(ROOT, 'data', 'evaluation-results.csv')
 TMP = os.path.join(ROOT, 'data', 'eval-tmp')
+sys.path.insert(0, os.path.join(ROOT, 'tools'))
 ATE = os.path.join(ROOT, 'src', 'ate.py')
 APK_REL = os.path.join('app', 'build', 'outputs', 'apk', 'api27', 'debug', 'app-api27-debug.apk')
 COLUMNS = ['benchmark', 'category', 'benign_findings', 'secure_findings', 'true_positive', 'false_positive',
@@ -110,12 +119,75 @@ def run_tool(apk, out_dir, dynamic=False):
     return findings, r.stdout.strip()
 
 
+def readme_findings(observations, apps):
+    """Findings from tools/readme_runner.py observations (--auto-readme).
+
+    apps is readme_runner.bench_apps(): {app name: {'package', ...}}. Reported:
+      readme-benign-crash (CWE-248): a crash line names the Benign package
+      readme-foreground-hijack (CWE-1021): a Malicious activity is on top right
+          after a step that launched Benign
+      readme-foreground-crossover (CWE-926): a Benign activity is on top after a
+          step that only launched or tapped in Malicious
+    Permission denials and SecurityExceptions are not findings: they usually mean
+    the exploit was blocked.
+    """
+    benign = (apps.get('Benign') or {}).get('package')
+    malicious = (apps.get('Malicious') or {}).get('package')
+    found = {}
+
+    def add(issue, cwe, obs, detail):
+        found.setdefault(issue, {
+            'component': benign or '(application)', 'component_type': 'application',
+            'issue': issue, 'cwe': cwe, 'confidence': 'medium',
+            'evidence': 'README step %s (%s): %s' % (obs.get('step'), obs.get('text', '')[:120], detail),
+        })
+
+    for obs in observations:
+        acts = [a for a in obs.get('actions', []) if a.get('status') == 'ok']
+        targets = {a.get('target') for a in acts if a.get('type') in ('launch', 'tap')}
+        top = obs.get('foreground_activity') or ''
+        top_pkg = top.split('/')[0]
+        for line in (obs.get('signals') or {}).get('crashes', []):
+            if benign and benign in line:
+                add('readme-benign-crash', 'CWE-248', obs, line.strip())
+                break
+        if malicious and top_pkg == malicious and any(
+                a.get('type') == 'launch' and a.get('target') == 'Benign' for a in acts):
+            add('readme-foreground-hijack', 'CWE-1021', obs, 'foreground ' + top)
+        if benign and top_pkg == benign and targets == {'Malicious'}:
+            add('readme-foreground-crossover', 'CWE-926', obs, 'foreground ' + top)
+    return list(found.values())
+
+
+def run_readme(bench, base):
+    """Replay the benchmark README (Fix E); return (findings, message)."""
+    import readme_runner
+    readme = os.path.join(base, 'README.md')
+    if not os.path.exists(readme):
+        return [], 'README not found'
+    adb = readme_runner.resolve_adb()
+    if adb:
+        # Ghera apps share package names; start each benchmark from a clean device.
+        for pkg in ('edu.ksu.cs.benign', 'edu.ksu.cs.malicious'):
+            subprocess.run([adb, 'uninstall', pkg], capture_output=True, text=True)
+    observations = readme_runner.run_readme(readme)
+    out_dir = os.path.join(TMP, bench)
+    os.makedirs(out_dir, exist_ok=True)
+    with open(os.path.join(out_dir, 'readme-observations.json'), 'w', encoding='utf-8') as f:
+        json.dump(observations, f, indent=2)
+    findings = readme_findings(observations, readme_runner.bench_apps(base))
+    ran = sum(1 for o in observations if o.get('automatable'))
+    return findings, '%d README steps, %d automated, %d findings' % (len(observations), ran, len(findings))
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(description='Score src/ate.py against the Ghera ground truth.')
     g = p.add_mutually_exclusive_group()
     g.add_argument('--no-dynamic', dest='dynamic', action='store_false', help='static layers only (default)')
     g.add_argument('--dynamic', dest='dynamic', action='store_true', help='also run dynamic analysis')
     p.set_defaults(dynamic=False)
+    p.add_argument('--auto-readme', action='store_true',
+                   help='also replay each README exploit on the emulator (tools/readme_runner.py)')
     args = p.parse_args(argv)
     print('Mode: %s' % ('static and dynamic' if args.dynamic else 'static only (--no-dynamic)'))
     gt = load_ground_truth()
@@ -142,6 +214,13 @@ def main(argv=None):
             for f in findings or []:
                 print('          %s %s %s %s (%s)' % (f['cwe'], f['issue'], f['component_type'],
                                                     f['component'], f['confidence']))
+        if args.auto_readme:
+            extra, msg = run_readme(bench, base)
+            print('   README %s' % msg)
+            for f in extra:
+                print('          %s %s %s' % (f['cwe'], f['issue'], f['evidence']))
+            if extra:
+                result['Benign'] = (result['Benign'] or []) + extra
         benign, secure = result['Benign'], result['Secure']
         benign_n = len(benign) if benign is not None else 0
         secure_n = len(secure) if secure is not None else 0
