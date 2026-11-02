@@ -50,6 +50,8 @@ Usage:
       predictions to data/ml-oof-predictions.csv (benchmark, variant, label,
       prob, pred), then fit on all data and save data/ml-model.pkl (a joblib
       dict with the pipeline and the feature names).
+  python src/ml_layer.py combined [--eval CSV] [--oof CSV]
+      APK-level "rules OR ML" scoring (see combined()).
 
 API:
   features(apk_dict, decoded_dir=None) -> {feature: value}
@@ -69,6 +71,7 @@ sys.path.insert(0, os.path.join(ROOT, 'src'))
 DATA = os.path.join(ROOT, 'data')
 BUILD_RESULTS = os.path.join(DATA, 'build-results.csv')
 GROUND_TRUTH = os.path.join(DATA, 'ground-truth.csv')
+EVAL_RESULTS = os.path.join(DATA, 'evaluation-results.csv')
 FEATURES_CSV = os.path.join(DATA, 'ml-features.csv')
 OOF_CSV = os.path.join(DATA, 'ml-oof-predictions.csv')
 MODEL = os.path.join(DATA, 'ml-model.pkl')
@@ -333,13 +336,64 @@ def predict(apk_dict, decoded_dir=None, model_path=None, bundle=None):
     return int(prob >= 0.5), prob
 
 
+def finding(prob):
+    """APK-level finding for a vulnerable prediction. It carries no CWE."""
+    return {'component': '(application)', 'component_type': 'application',
+            'issue': 'ml-vulnerable-app', 'cwe': 'ML',
+            'confidence': 'medium' if prob >= 0.75 else 'low',
+            'evidence': 'logistic regression on app-level features: P(vulnerable) = %.2f' % prob}
+
+
+# ---------------------------------------------------------------- combined scoring
+
+def combined(eval_csv=EVAL_RESULTS, oof_csv=OOF_CSV):
+    """APK-level "rules OR ML" scores over the benchmarks in eval_csv.
+
+    ML findings carry no CWE, so they cannot meet the CWE-matching rule of
+    tools/evaluate.py. Per benchmark:
+      TP = rules true_positive, or the ML out-of-fold prediction for the Benign APK is 1
+      FP = rules false_positive, or the ML out-of-fold prediction for the Secure APK is 1
+    Only out-of-fold predictions are used (each from a model that did not see
+    that benchmark), never the model fit on all data. A benchmark without an
+    ML prediction keeps its rule-only scores. Precision = TP / (TP + FP),
+    recall = TP / benchmarks, as in tools/evaluate.py.
+    Returns {'rules': {...}, 'ml': {...}, 'combined': {...}}."""
+    oof = {(r['benchmark'], r['variant']): int(r['pred']) for r in read_csv(oof_csv)}
+    rows = read_csv(eval_csv)
+    tally = {k: {'tp': 0, 'fp': 0} for k in ('rules', 'ml', 'combined')}
+    for r in rows:
+        b = r['benchmark']
+        rtp, rfp = int(r['true_positive'] or 0), int(r['false_positive'] or 0)
+        mtp, mfp = oof.get((b, 'Benign'), 0), oof.get((b, 'Secure'), 0)
+        for k, tp, fp in (('rules', rtp, rfp), ('ml', mtp, mfp), ('combined', rtp or mtp, rfp or mfp)):
+            tally[k]['tp'] += tp
+            tally[k]['fp'] += fp
+    n = len(rows)
+    for t in tally.values():
+        t['n'] = n
+        t['precision'] = t['tp'] / (t['tp'] + t['fp']) if t['tp'] + t['fp'] else 0.0
+        t['recall'] = t['tp'] / n if n else 0.0
+    return tally
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(prog='ml_layer', description=__doc__.split('\n')[0])
     sub = p.add_subparsers(dest='cmd', required=True)
     t = sub.add_parser('train', help='extract features, cross-validate, fit and save the model')
     t.add_argument('--refresh', action='store_true', help='ignore the feature cache')
+    c = sub.add_parser('combined', help='rule-only vs rules OR ML (out-of-fold) scores')
+    c.add_argument('--eval', default=EVAL_RESULTS, help='evaluation results CSV (tools/evaluate.py)')
+    c.add_argument('--oof', default=OOF_CSV, help='out-of-fold predictions CSV')
     args = p.parse_args(argv)
-    train(args.refresh)
+    if args.cmd == 'train':
+        train(args.refresh)
+    else:
+        res = combined(args.eval, args.oof)
+        print('APK-level scoring over %d benchmarks (ML = out-of-fold predictions only)' % res['rules']['n'])
+        for k, label in (('rules', 'rule-only'), ('ml', 'ML only'), ('combined', 'rules OR ML')):
+            t = res[k]
+            print('  %-12s TP %2d  FP %2d  precision %.2f  recall %.2f'
+                  % (label, t['tp'], t['fp'], t['precision'], t['recall']))
     return 0
 
 

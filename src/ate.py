@@ -2,7 +2,7 @@
 
 Usage: python src/ate.py --apk app.apk [--out DIR] [--dynamic]
                         [--dynamic-two-app MALICIOUS_APK] [--policy POLICY.txt]
-                        [--no-ai]
+                        [--ml] [--no-ai]
 
 Decodes the APK (apk.py), extracts manifest, smali code and taint
 findings (surface.py, code_analyzer.py, taint_analyzer.py), writes
@@ -25,6 +25,15 @@ manifest permissions and the advertising and analytics SDK packages in the APK
 (privacy_checker.py). Contradictions are listed in a "Privacy Policy Analysis"
 section of the Markdown report and under the "privacy" key of a separate
 <name>-privacy.json file.
+
+With --ml, app-level features (exported components, permissions, network,
+WebView, SQLite, crypto, file storage and SMS APIs) are computed from the
+decoded APK and scored by the logistic regression in data/ml-model.pkl
+(ml_layer.py; train it with `python src/ml_layer.py train`). When it predicts
+the app vulnerable (probability >= 0.5), one APK-level finding is added:
+component "(application)", issue "ml-vulnerable-app", CWE "ML" (the
+classifier names no weakness), confidence medium at probability >= 0.75 and
+low otherwise, with the probability in the evidence.
 """
 import argparse
 import os
@@ -52,6 +61,8 @@ def parse_args(argv=None):
                         'running emulator and report what it does to the analyzed app')
     p.add_argument('--policy', metavar='POLICY_TXT',
                    help='privacy policy text file to compare with the manifest and SDK packages')
+    p.add_argument('--ml', action='store_true',
+                   help='also score the APK with the ML classifier in data/ml-model.pkl')
     p.add_argument('--no-ai', action='store_true', help='reserved; has no effect yet')
     return p.parse_args(argv)
 
@@ -121,6 +132,15 @@ def main(argv=None):
             print('error: cannot read policy file: %s' % e, file=sys.stderr)
             return 1
     privacy = None
+    ml_bundle = None
+    if args.ml:
+        import ml_layer
+        try:
+            ml_bundle = ml_layer.load_model()
+        except (OSError, ValueError) as e:
+            print('error: cannot load the ML model (%s); run python src/ml_layer.py train' % e,
+                  file=sys.stderr)
+            return 1
     work = tempfile.mkdtemp(prefix='ate-')
     try:
         try:
@@ -132,6 +152,11 @@ def main(argv=None):
         if policy_text is not None:
             # Needs the decoded smali folders, so it runs before they are removed.
             privacy = privacy_checker.check(policy_text, manifest)
+        if ml_bundle is not None:
+            # Also reads the smali folders, so it runs before they are removed.
+            pred, prob = ml_layer.predict(manifest, bundle=ml_bundle)
+            if pred:
+                findings = findings + [ml_layer.finding(prob)]
     finally:
         shutil.rmtree(work, ignore_errors=True)
     dynamic = run_dynamic(args.apk, manifest) if args.dynamic else None
