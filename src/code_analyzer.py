@@ -147,6 +147,27 @@ Patterns:
                                @JavascriptInterface methods count, unless
                                minSdkVersion is below 17, where every public
                                method is exposed to JavaScript
+  webview_file_url_access      (high) setAllowFileAccessFromFileURLs or
+                               setAllowUniversalAccessFromFileURLs(true) after
+                               setJavaScriptEnabled(true) in the same method (CWE-830);
+                               without JavaScript enabled first it stays
+                               webview_file_access
+Rules from the miss analysis (A4-2, docs/notes/miss-analysis.md):
+  null_deref_intent_extra      (medium) Intent.getStringExtra result used as a call
+                               receiver with no if-eqz/if-nez on it and outside a try
+                               range catching NullPointerException or a supertype,
+                               in an exported component or its inner classes
+  keystore_entry_unprotected   (medium) KeyStore.setEntry with a constant null
+                               ProtectionParameter
+  server_socket_no_peer_check  (medium) new ServerSocket(port[, backlog]), accept and
+                               Socket get*Stream in one method with no
+                               getInetAddress / getRemoteSocketAddress / getPort
+  external_storage_io          (medium) File stream opened on a path under external
+                               storage (getExternalFilesDir, Environment
+                               getExternalStorageDirectory and similar)
+  webview_ssl_proceed          onReceivedSslError calling SslErrorHandler.proceed
+                               (high with no branch before it, else medium)
+  webview_override_allows_all  (low) branch-free shouldOverrideUrlLoading returning false
 """
 import os
 import re
@@ -183,6 +204,13 @@ PATTERNS = {
     'certificate_pinning_missing': 'CWE-295',
     'fragment_injection': 'CWE-470',
     'webview_js_interface': 'CWE-749',
+    'webview_file_url_access': 'CWE-830',
+    'null_deref_intent_extra': 'CWE-476',
+    'keystore_entry_unprotected': 'CWE-922',
+    'server_socket_no_peer_check': 'CWE-940',
+    'external_storage_io': 'CWE-922',
+    'webview_ssl_proceed': 'CWE-295',
+    'webview_override_allows_all': 'CWE-829',
 }
 
 CONFIDENCE = ('high', 'medium', 'low')
@@ -637,10 +665,16 @@ class _Method:
             return
         if name == 'setJavaScriptEnabled':
             self.report('js_enabled', 'medium', no, text)
+            self.js_on = True
         elif name == 'setAllowFileAccess':
             self.report('webview_file_access', 'medium', no, text)
         elif name in ('setAllowFileAccessFromFileURLs', 'setAllowUniversalAccessFromFileURLs'):
-            self.report('webview_file_access', 'high', no, text)
+            # A file:// page with JavaScript (enabled earlier in this method)
+            # can read other files or any origin: CWE-830.
+            if getattr(self, 'js_on', False):
+                self.report('webview_file_url_access', 'high', no, text)
+            else:
+                self.report('webview_file_access', 'high', no, text)
 
     def js_interface(self, no, text, name, desc, args):
         """Record addJavascriptInterface calls with the class of the object
@@ -1536,6 +1570,318 @@ def _password_fields(decoded_dir):
     return out
 
 
+# ------------------------------------------------- rules from the miss analysis
+# A4-2 (docs/notes/miss-analysis.md). Each rule reads one method at a time with
+# its own small register model; branches are not followed.
+
+CATCH_RE = re.compile(r'^\.catch(all)?\s+(?:(\S+;)\s+)?\{(\S+)\s*\.\.\s*(\S+)\}')
+NPE_CATCHES = ('Ljava/lang/NullPointerException;', 'Ljava/lang/RuntimeException;',
+               'Ljava/lang/Exception;', 'Ljava/lang/Throwable;')
+NULL_GUARDS = ('isEmpty', 'equals', 'requireNonNull', 'isNull', 'nonNull', 'hasExtra')
+
+
+def _indexed_code(body):
+    """(index in body, line, text) for the instructions of a method body (as
+    _code, but keeping the position so try ranges can be matched)."""
+    end = None
+    for idx, (no, text) in enumerate(body):
+        if end:
+            if text == end:
+                end = None
+            continue
+        if text.startswith(BLOCK_STARTS):
+            end = '.end ' + text.split()[0][1:]
+            continue
+        if text.startswith(('.', ':')):
+            continue
+        yield idx, no, text
+
+
+def _catch_ranges(body):
+    """[(start index, end index, exception type or None for .catchall)]."""
+    labels, catches = {}, []
+    for idx, (_, text) in enumerate(body):
+        if text.startswith(':'):
+            labels[text] = idx
+        elif text.startswith('.catch'):
+            m = CATCH_RE.match(text)
+            if m:
+                catches.append((m.group(3), m.group(4), None if m.group(1) else m.group(2)))
+    return [(labels[a], labels[b], t) for a, b, t in catches if a in labels and b in labels]
+
+
+def _operand_regs(text):
+    return [o.strip() for o in text.split(None, 1)[-1].split(',')] if ' ' in text else []
+
+
+def _writes(text):
+    """Register written by a plain (non-invoke) instruction, or None."""
+    op = text.split()[0]
+    if op.startswith(('invoke-', 'move-exception')) or op.startswith(NO_DEST):
+        return None
+    ops = _operand_regs(text)
+    return ops[0] if ops else None
+
+
+def _exported_classes(decoded_dir):
+    """Descriptors of the exported components in the decoded manifest."""
+    try:
+        manifest = apk.parse_manifest(os.path.join(decoded_dir, 'AndroidManifest.xml'),
+                                      apk._sdk_info(decoded_dir))
+    except (OSError, ET.ParseError):
+        return set()
+    return {'L%s;' % c['name'].replace('.', '/') for c in manifest['components']
+            if c['exported'] and c['name'] and c['type'] != 'activity-alias'}
+
+
+def _null_derefs(method):
+    """(line, text) of calls on the result of Intent.getStringExtra with no
+    null test (if-eqz / if-nez) of that register before them and outside any
+    try range that catches NullPointerException or a supertype (or catchall).
+    Passing the value to an isEmpty / equals / requireNonNull style call counts
+    as a check. Each extra value is reported at its first dereference only."""
+    body = method['body']
+    ranges = _catch_ranges(body)
+    tracked, pending, hits = set(), False, []
+    for idx, no, text in _indexed_code(body):
+        op = text.split()[0]
+        if op.startswith('move-result'):
+            dest = _operand_regs(text)[0]
+            (tracked.add if pending else tracked.discard)(dest)
+            pending = False
+            continue
+        pending = False
+        if op.startswith('invoke-'):
+            inv = INVOKE_RE.match(text)
+            ref = METHOD_REF_RE.match(inv.group(3)) if inv else None
+            if not ref:
+                continue
+            regs = _regs(inv.group(2))
+            owner, name = ref.group(1), ref.group(2)
+            if owner == 'Landroid/content/Intent;' and name == 'getStringExtra':
+                pending = True
+                continue
+            if any(g in name for g in NULL_GUARDS):
+                tracked -= set(regs)
+                continue
+            if not op.startswith('invoke-static') and regs and regs[0] in tracked:
+                tracked.discard(regs[0])
+                if not any(a <= idx <= b and (t is None or t in NPE_CATCHES) for a, b, t in ranges):
+                    hits.append((no, text))
+            continue
+        ops = _operand_regs(text)
+        if op in ('if-eqz', 'if-nez') and ops:
+            tracked.discard(ops[0])
+        elif op.startswith('move') and len(ops) > 1:
+            (tracked.add if ops[1] in tracked else tracked.discard)(ops[0])
+        else:
+            dest = _writes(text)
+            if dest:
+                tracked.discard(dest)
+    return hits
+
+
+def _null_deref_rules(ctx, classes, decoded_dir):
+    """null_deref_intent_extra (CWE-476): a string extra of the incoming Intent
+    dereferenced without a null check, in an exported component or one of its
+    inner classes, so any app can crash it by sending the Intent without the
+    extra. Limits: checks made in another method (or through getExtras() !=
+    null on the bundle) and a try range around the caller are not seen."""
+    exported = _exported_classes(decoded_dir)
+    if not exported:
+        return
+    for cls in classes:
+        if _outer(cls['name']) not in exported:
+            continue
+        for m in cls['methods']:
+            for no, text in _null_derefs(m):
+                ctx.emit(cls, 'null_deref_intent_extra', 'medium', no, text)
+
+
+KEYSTORE_SET_ENTRY = ('Ljava/security/KeyStore;->setEntry(Ljava/lang/String;'
+                      'Ljava/security/KeyStore$Entry;Ljava/security/KeyStore$ProtectionParameter;)V')
+
+
+def _keystore_rules(ctx, classes):
+    """keystore_entry_unprotected (CWE-922): KeyStore.setEntry whose
+    ProtectionParameter register holds the constant null, so the entry is
+    stored without a password. KeyStore.store(out, null) is not used as a
+    signal (the Secure Ghera app does it too)."""
+    for cls in classes:
+        for m in cls['methods']:
+            nulls = set()
+            for no, text in _code(m['body']):
+                op = text.split()[0]
+                if op.startswith('invoke-'):
+                    inv = INVOKE_RE.match(text)
+                    regs = _regs(inv.group(2)) if inv else []
+                    if inv and inv.group(3) == KEYSTORE_SET_ENTRY and len(regs) == 4 \
+                            and regs[3] in nulls:
+                        ctx.emit(cls, 'keystore_entry_unprotected', 'medium', no, text)
+                    continue
+                ops = _operand_regs(text)
+                dest = _writes(text)
+                if not dest:
+                    continue
+                if op in ('const/4', 'const/16', 'const') and _int(ops[-1]) == 0:
+                    nulls.add(dest)
+                elif op.startswith('move') and not op.startswith('move-result') \
+                        and len(ops) > 1 and ops[1] in nulls:
+                    nulls.add(dest)
+                else:
+                    nulls.discard(dest)
+
+
+SERVER_SOCKET_INITS = ('Ljava/net/ServerSocket;-><init>(I)V', 'Ljava/net/ServerSocket;-><init>(II)V')
+PEER_CHECKS = ('Ljava/net/Socket;->getInetAddress', 'Ljava/net/Socket;->getRemoteSocketAddress',
+               'Ljava/net/Socket;->getPort')
+
+
+def _server_socket_rules(ctx, classes):
+    """server_socket_no_peer_check (CWE-940): a method that opens a
+    ServerSocket on all interfaces (port only, or port and backlog), accepts a
+    connection and reads or writes its streams without asking who the peer is
+    (Socket.getInetAddress, getRemoteSocketAddress or getPort). Limits: the
+    accept and the stream use must be in the same method, and whether a peer
+    check is sound (Ghera's Secure app compares a reverse DNS name) is not
+    judged."""
+    for cls in classes:
+        for m in cls['methods']:
+            calls = list(_invokes(m))
+            init = next(((no, text) for no, text, ref in calls if ref in SERVER_SOCKET_INITS), None)
+            if init is None:
+                continue
+            refs = [ref for _, _, ref in calls]
+            if 'Ljava/net/ServerSocket;->accept()Ljava/net/Socket;' not in refs:
+                continue
+            if not any(r.startswith(('Ljava/net/Socket;->getOutputStream',
+                                     'Ljava/net/Socket;->getInputStream')) for r in refs):
+                continue
+            if any(r.startswith(PEER_CHECKS) for r in refs):
+                continue
+            ctx.emit(cls, 'server_socket_no_peer_check', 'medium', *init)
+
+
+EXTERNAL_DIRS = ('getExternalFilesDir', 'getExternalFilesDirs', 'getExternalCacheDir',
+                 'getExternalCacheDirs', 'getExternalMediaDirs', 'getExternalStorageDirectory',
+                 'getExternalStoragePublicDirectory')
+FILE_PATH_CALLS = ('getAbsolutePath', 'getPath', 'getCanonicalPath', 'toString',
+                   'getAbsoluteFile', 'getCanonicalFile')
+FILE_STREAMS = ('Ljava/io/FileInputStream;', 'Ljava/io/FileReader;', 'Ljava/io/FileOutputStream;',
+                'Ljava/io/FileWriter;', 'Ljava/io/RandomAccessFile;')
+
+
+def _external_storage_rules(ctx, classes):
+    """external_storage_io (CWE-922): a file under shared external storage
+    (getExternalFilesDir, getExternalCacheDir, Environment
+    getExternalStorageDirectory / getExternalStoragePublicDirectory and the
+    array forms) opened with FileInputStream / FileReader (other apps can plant
+    the data) or FileOutputStream / FileWriter (other apps can read it). On API
+    27 any app with the storage permission can read and write these folders.
+    The path is followed in one method through File(File, String),
+    File(String), getAbsolutePath and similar, StringBuilder and String
+    concatenation. Whether the data is sensitive is not judged."""
+    for cls in classes:
+        for m in cls['methods']:
+            ext, pending = set(), False
+            for no, text in _code(m['body']):
+                op = text.split()[0]
+                if op.startswith('move-result'):
+                    dest = _operand_regs(text)[0]
+                    (ext.add if pending else ext.discard)(dest)
+                    pending = False
+                    continue
+                pending = False
+                if op.startswith('invoke-'):
+                    inv = INVOKE_RE.match(text)
+                    ref = METHOD_REF_RE.match(inv.group(3)) if inv else None
+                    if not ref:
+                        continue
+                    owner, name = ref.group(1), ref.group(2)
+                    regs = _regs(inv.group(2))
+                    static = op.startswith('invoke-static')
+                    recv = regs[0] if regs and not static else None
+                    args = regs if static else regs[1:]
+                    from_ext = any(a in ext for a in args)
+                    if name in EXTERNAL_DIRS:
+                        pending = True
+                    elif name == '<init>' and owner in FILE_STREAMS:
+                        if args and args[0] in ext:
+                            ctx.emit(cls, 'external_storage_io', 'medium', no, text)
+                    elif name == '<init>' and owner in ('Ljava/io/File;', 'Ljava/lang/StringBuilder;'):
+                        if recv:
+                            (ext.add if args and args[0] in ext else ext.discard)(recv)
+                    elif owner == 'Ljava/io/File;' and name in FILE_PATH_CALLS:
+                        pending = recv in ext
+                    elif owner == 'Ljava/lang/StringBuilder;' and name == 'append':
+                        if from_ext:
+                            ext.add(recv)
+                        pending = recv in ext
+                    elif owner == 'Ljava/lang/StringBuilder;' and name == 'toString':
+                        pending = recv in ext
+                    elif owner == 'Ljava/lang/String;' and name in ('concat', 'valueOf'):
+                        pending = from_ext or recv in ext
+                    continue
+                ops = _operand_regs(text)
+                dest = _writes(text)
+                if not dest:
+                    continue
+                if (op.startswith('aget') or op.startswith('move')) and len(ops) > 1 \
+                        and ops[1] in ext:
+                    ext.add(dest)
+                else:
+                    ext.discard(dest)
+
+
+SSL_ERROR_DESC = 'Landroid/webkit/WebView;Landroid/webkit/SslErrorHandler;Landroid/net/http/SslError;'
+OVERRIDE_DESCS = ('Landroid/webkit/WebView;Ljava/lang/String;',
+                  'Landroid/webkit/WebView;Landroid/webkit/WebResourceRequest;')
+BRANCHES = ('if-', 'packed-switch', 'sparse-switch')
+
+
+def _always_false(code):
+    """True when a boolean method has no branch, one return, and returns a
+    register last set by const/4 vN, 0x0."""
+    if not code or any(t.startswith(BRANCHES) for t in code):
+        return False
+    if sum(1 for t in code if t.startswith('return')) != 1:
+        return False
+    last = code[-1].split()
+    if last[0] != 'return' or len(last) < 2:
+        return False
+    for text in reversed(code[:-1]):
+        if _writes(text) == last[1]:
+            return text.startswith('const/4') and _operand_regs(text)[-1] == '0x0'
+    return False
+
+
+def _webview_client_rules(ctx, classes):
+    """webview_ssl_proceed (CWE-295): onReceivedSslError(WebView,
+    SslErrorHandler, SslError) that calls SslErrorHandler.proceed(), high when
+    no branch comes before the call (every certificate error is accepted),
+    medium otherwise (the condition is not evaluated).
+    webview_override_allows_all (CWE-829, low): shouldOverrideUrlLoading
+    (either overload) that is branch-free and returns false, so the WebView
+    loads whatever URL a page navigates to. Returning false is also what a
+    client that does not override the method does, so this is a weak signal:
+    it flags an override that checks nothing."""
+    for cls in classes:
+        for m in cls['methods']:
+            if m['name'] == 'onReceivedSslError' and m['desc'] == SSL_ERROR_DESC:
+                branched = False
+                for no, text in _code(m['body']):
+                    if text.startswith(BRANCHES):
+                        branched = True
+                    elif text.startswith('invoke-') and \
+                            'Landroid/webkit/SslErrorHandler;->proceed()V' in text:
+                        ctx.emit(cls, 'webview_ssl_proceed', 'medium' if branched else 'high',
+                                 no, text)
+                        break
+            elif m['name'] == 'shouldOverrideUrlLoading' and m['desc'] in OVERRIDE_DESCS \
+                    and m['ret'] == 'Z' and _always_false(_only(m)):
+                ctx.emit(cls, 'webview_override_allows_all', 'low', m['line'], m['decl'])
+
+
 # ---------------------------------------------------------------- entry point
 
 def analyze(decoded_dir):
@@ -1558,6 +1904,11 @@ def analyze(decoded_dir):
     _fragment_rules(ctx, classes, decoded_dir)
     _js_interface_rules(ctx, classes, decoded_dir)
     _sticky_receiver_rules(ctx, classes, decoded_dir)
+    _null_deref_rules(ctx, classes, decoded_dir)
+    _keystore_rules(ctx, classes)
+    _server_socket_rules(ctx, classes)
+    _external_storage_rules(ctx, classes)
+    _webview_client_rules(ctx, classes)
     return sorted(ctx.findings.values(), key=lambda f: (f['file'], f['line'], f['pattern']))
 
 

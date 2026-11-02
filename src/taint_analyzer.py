@@ -96,7 +96,11 @@ except ImportError:      # pragma: no cover
 #   sendBroadcast          input forwarded in an implicit broadcast that other
 #                          apps can receive (CWE-927)
 #   startActivity,         input forwarded to another component, which acts
-#   startService           with this app's privileges (CWE-926)
+#   startService           with this app's privileges (CWE-926). A
+#                          startActivity whose Intent is known to carry only an
+#                          action (no class, component or package) reports
+#                          CWE-927 instead: any app's activity with a matching
+#                          intent filter (and a higher priority) can receive it
 #   sendTextMessage        input sent off the device by SMS; CWE-200 (exposure
 #                          of information to an unauthorized actor) since the
 #                          message text or number carries data outside the app
@@ -362,6 +366,8 @@ def _val_invoke(cls, name, desc, recv, args, vals):
             it['action'] = get(args[0], 'str')
         elif name in ('setClass', 'setClassName') and args:
             it['cls'] = target(args[-1]) or it.get('cls')
+        elif name == 'setPackage' and args:
+            it['pkg'] = get(args[0], 'str') or '?'
         elif name == 'setComponent' and args:
             it['cls'] = get(args[0], 'comp') or it.get('cls')
         if desc.endswith(')' + INTENT):
@@ -464,7 +470,21 @@ def _icc_targets(ctx, intent, label):
     return sorted(set(out))
 
 
-def _record(ctx, method, origin, label, no, line, depth):
+def _implicit_activity(label, args, vals):
+    """True when a startActivity sink gets an Intent known to name only an
+    action: no explicit class, component or package (CWE-927, the Intent can
+    resolve to another app's activity with a matching intent filter)."""
+    if label != 'startActivity':
+        return False
+    for r in args:
+        v = vals.get(r)
+        if v and v[0] == 'intent':
+            it = v[1]
+            return bool(it.get('action')) and not it.get('cls') and not it.get('pkg')
+    return False
+
+
+def _record(ctx, method, origin, label, no, line, depth, cwe=None):
     src_label, _src_file, src_no, src_text, hops = origin[:5]
     key = (method['file'], no, src_no)
     conf = CONFIDENCE[min(depth + hops, 2)]
@@ -476,7 +496,7 @@ def _record(ctx, method, origin, label, no, line, depth):
         'component_type': 'class',
         'issue': 'taint-flow',
         'pattern': 'taint:%s->%s' % (src_label, label),
-        'cwe': SINKS[label],
+        'cwe': cwe or SINKS[label],
         'confidence': conf,
         'file': method['file'],
         'line': no,
@@ -618,7 +638,8 @@ def _scan(ctx, method, seeds, depth):
                 arg_hit = [taint[r] for r in args if r in taint]
                 in_try = any(a <= idx <= b for a, b in tries)
                 if arg_hit and not in_try:
-                    _record(ctx, method, arg_hit[0], label, no, line, depth)
+                    cwe = 'CWE-927' if _implicit_activity(label, args, vals) else None
+                    _record(ctx, method, arg_hit[0], label, no, line, depth, cwe)
                 if label in _ICC_TYPES:
                     _icc_edges(ctx, method, label, args, taint, vals, no, depth)
 

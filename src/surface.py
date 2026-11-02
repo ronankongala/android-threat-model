@@ -86,6 +86,11 @@ tools/evaluate.py --with-malicious, the benchmark's Malicious APK):
                           app whose non-empty affinity the second APK shares.
                           Skipped when both APKs have the same package name
 
+  default-task-affinity   (application, low) no android:taskAffinity on
+                          <application> or any activity, and a launcher
+                          activity: every activity keeps the package name as
+                          its affinity, which another app can claim (CWE-1021)
+
 The other six (dynamic-receiver-no-permission, missing-certificate-validation,
 sql-no-parameterization, js-enabled-webview, hardcoded-key, weak-cipher) are
 properties of code, not of the manifest. They are listed for their CWE IDs;
@@ -129,6 +134,7 @@ CWE = {
     # with a second, possibly malicious, APK.
     'sticky-broadcast-intercepted': 'CWE-927',
     'task-affinity-shared': 'CWE-1021',
+    'default-task-affinity': 'CWE-1021',
 }
 
 ISSUES = tuple(CWE)
@@ -346,6 +352,29 @@ def _task_affinity(comp, package):
     return None
 
 
+def _default_task_affinity(apk):
+    """(confidence, evidence) for default-task-affinity, or None.
+
+    Fires when <application> has no android:taskAffinity attribute (an empty
+    string is kept apart by apk.py and means no affinity), the app has a
+    launcher activity, and no activity sets its own taskAffinity. Every
+    activity then has the package name as its affinity, so another app that
+    declares the same affinity (with allowTaskReparenting, or from its own
+    launcher activity) can take over the app's task. Confidence low: this is
+    the default for most apps and only the precondition of the attack."""
+    app = apk.get('application') or {}
+    if not app or app.get('taskAffinity') is not None:
+        return None
+    activities = [c for c in apk.get('components', [])
+                  if c['type'] in ('activity', 'activity-alias')]
+    launchers = [c for c in activities if _is_launcher(c)]
+    if not launchers or any(c.get('task_affinity') is not None for c in activities):
+        return None
+    return 'low', ('<application> has no android:taskAffinity and no activity sets one; '
+                   'launcher %s uses the default affinity (the package name %s)'
+                   % (launchers[0]['name'], apk.get('package')))
+
+
 LOCAL_HOSTS = ('localhost', '127.0.0.1', '10.0.2.2')
 
 
@@ -555,4 +584,9 @@ def _manifest_findings(apk):
     conf = _cleartext(apk)
     if conf:
         findings.append(_finding(None, 'cleartext-http', conf))
+    hit = _default_task_affinity(apk)
+    if hit:
+        f = _finding(None, 'default-task-affinity', hit[0])
+        f['evidence'] = hit[1]
+        findings.append(f)
     return findings
