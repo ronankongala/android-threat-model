@@ -13,7 +13,7 @@ because every APK has the same file name and the reports would overwrite each ot
 
 Writes data/evaluation-results.csv with the columns
   benchmark, category, benign_findings, secure_findings, true_positive, false_positive,
-  strict_true_positive, two_app_benign, two_app_secure
+  strict_true_positive, two_app_benign, two_app_secure, readme_findings
 where
   true_positive  = 1 if benign_findings > 0 and any Benign finding's CWE matches any
                    of the benchmark's ground-truth CWEs (cwe_ids), either directly,
@@ -34,13 +34,18 @@ Usage: python tools/evaluate.py [--no-dynamic | --dynamic] [--auto-readme] [--ou
 code patterns and taint analysis. --dynamic also passes --dynamic to ate.py, so
 each APK is exercised on the running emulator.
 
---auto-readme (Fix E) also replays each benchmark's README exploit steps on the
-running emulator with tools/readme_runner.py (installs, launches, taps and adb
-commands), saves the observations to data/eval-tmp/<benchmark>/readme-observations.json
-and turns them into Benign findings (readme_findings). The README steps exercise
-the Benign app only, so these findings can add true positives but never false
-positives; numbers from a run with --auto-readme are therefore not directly
-comparable with runs without it.
+--auto-readme (Fix E, scored by P1-5) also replays each benchmark's README
+exploit steps on the running emulator with tools/readme_runner.py (installs,
+launches, taps and adb commands), saves the observations to
+data/eval-tmp/<benchmark>/readme-observations.json and turns them into Benign
+findings (readme_findings). Only the Benign scenario is scored: the README
+replays Benign (and Malicious), and observations from a step that acts on the
+Secure app, and from every later step, are ignored (Benign and Secure share a
+package name). A README finding is added to the Benign findings only when no
+Benign finding with the same issue and CWE is already present; the number
+added is the readme_findings column (blank without --auto-readme). These
+findings can add true positives but never false positives; numbers from a run
+with --auto-readme are therefore not directly comparable with runs without it.
 
 Two-app scoring (P1-4): with --dynamic and an attached device, every benchmark
 that has a built Malicious api27 APK is also run through
@@ -66,7 +71,8 @@ with --out so the full results file is not overwritten.
 data/eval-tmp/<benchmark>/<Benign|Secure>/app-api27-debug-report.json and scores
 them against the current ground truth. Without --dynamic, findings whose issue
 starts with "dynamic-" are dropped, so the reports of a dynamic run are rescored
-as the static layers only; with --dynamic, the saved two-app findings are added.
+as the static layers only; with --dynamic, the saved two-app findings are added;
+with --auto-readme, the saved README observations are turned into findings again.
 """
 import argparse
 import csv
@@ -86,7 +92,7 @@ APK_REL = os.path.join('app', 'build', 'outputs', 'apk', 'api27', 'debug', 'app-
 REPORT = 'app-api27-debug-report.json'
 SRC = os.path.join(ROOT, 'src')
 COLUMNS = ['benchmark', 'category', 'benign_findings', 'secure_findings', 'true_positive', 'false_positive',
-           'strict_true_positive', 'two_app_benign', 'two_app_secure']
+           'strict_true_positive', 'two_app_benign', 'two_app_secure', 'readme_findings']
 
 # Fix A: alternative CWEs that the rules report for a weakness the ground truth
 # records under a related CWE. A finding with the key CWE counts as the value CWE.
@@ -159,14 +165,29 @@ def benchmark_list():
     return benchmarks
 
 
-def score_row(bench, gt_entry, benign, secure, two_app=None):
+def merge_new(findings, extra):
+    """(findings plus the extra findings whose (issue, cwe) is not yet present,
+    the list of those added). Duplicates inside extra are added once."""
+    seen = {(f.get('issue'), f.get('cwe')) for f in findings or []}
+    added = []
+    for f in extra or []:
+        key = (f.get('issue'), f.get('cwe'))
+        if key not in seen:
+            seen.add(key)
+            added.append(f)
+    return (findings or []) + added, added
+
+
+def score_row(bench, gt_entry, benign, secure, two_app=None, readme=None):
     """Score one benchmark; return (CSV row dict, expanded matching CWEs).
 
     benign and secure are findings lists, or None when the APK was missing or
     the tool failed (the count is then left blank and scored as 0 findings).
     two_app is {'Benign': list or None, 'Secure': list or None} with the
     run_two_app findings (None: not run); they are added to the Benign and the
-    Secure findings respectively.
+    Secure findings respectively. readme is the list of README replay findings
+    (None: not run); they describe the Benign app and are added to the Benign
+    findings only, skipping any whose issue and CWE are already present.
     """
     two_app = two_app or {}
     counts = {}
@@ -178,6 +199,11 @@ def score_row(bench, gt_entry, benign, secure, two_app=None):
                 benign = (benign or []) + extra
             else:
                 secure = (secure or []) + extra
+    readme_added = None
+    if readme is not None:
+        merged, readme_added = merge_new(benign, readme)
+        if readme_added:
+            benign = merged
     benign_n = len(benign) if benign is not None else 0
     secure_n = len(secure) if secure is not None else 0
     strict, matched = matching_cwes({f['cwe'] for f in benign or []}, gt_entry['cwes'],
@@ -192,6 +218,7 @@ def score_row(bench, gt_entry, benign, secure, two_app=None):
         'strict_true_positive': 1 if benign_n > 0 and strict else 0,
         'two_app_benign': counts['Benign'],
         'two_app_secure': counts['Secure'],
+        'readme_findings': '' if readme_added is None else len(readme_added),
     }
     return row, matched
 
@@ -208,7 +235,7 @@ def is_dynamic(finding):
     return str(finding.get('issue', '')).startswith('dynamic-')
 
 
-def rescore(benchmarks, gt, dynamic=False, tmp=None):
+def rescore(benchmarks, gt, dynamic=False, tmp=None, auto_readme=False):
     """Score the reports a previous run left in `tmp` (default data/eval-tmp),
     without running anything."""
     tmp = tmp or TMP
@@ -227,11 +254,18 @@ def rescore(benchmarks, gt, dynamic=False, tmp=None):
         if dynamic:
             two_app = {v: load_findings(os.path.join(tmp, bench, 'two-app-%s.json' % v))
                        for v in ('Benign', 'Secure')}
-        row, matched = score_row(bench, gt[bench], result['Benign'], result['Secure'], two_app)
-        print('%-58s benign=%-3s secure=%-3s tp=%d strict_tp=%d fp=%d two_app=%s/%s %s'
+        readme = None
+        if auto_readme:
+            observations = load_findings(os.path.join(tmp, bench, 'readme-observations.json'))
+            if observations is not None:
+                import readme_runner
+                base = os.path.join(ROOT, 'benchmarks', 'ghera', gt[bench]['category'], bench)
+                readme = readme_findings(benign_only(observations), readme_runner.bench_apps(base))
+        row, matched = score_row(bench, gt[bench], result['Benign'], result['Secure'], two_app, readme)
+        print('%-58s benign=%-3s secure=%-3s tp=%d strict_tp=%d fp=%d two_app=%s/%s readme=%s %s'
               % (bench, row['benign_findings'], row['secure_findings'], row['true_positive'],
                  row['strict_true_positive'], row['false_positive'], row['two_app_benign'],
-                 row['two_app_secure'], ', '.join(matched)))
+                 row['two_app_secure'], row['readme_findings'], ', '.join(matched)))
         rows.append(row)
     return rows
 
@@ -321,6 +355,21 @@ def run_two_app(app_apk, malicious_apk, adb, save_to=None):
     return findings, '%d findings (%s with %s)' % (len(findings), man['package'], mal['package'])
 
 
+def benign_only(observations):
+    """The observations before the first step with an action on the Secure app.
+
+    Benign and Secure share a package name, so anything observed once the
+    Secure app was installed or started would describe Secure, not Benign.
+    """
+    kept = []
+    for obs in observations:
+        if any(a.get('target') == 'Secure' and not str(a.get('status', '')).startswith('skipped')
+               for a in obs.get('actions', [])):
+            break
+        kept.append(obs)
+    return kept
+
+
 def readme_findings(observations, apps):
     """Findings from tools/readme_runner.py observations (--auto-readme).
 
@@ -377,9 +426,13 @@ def run_readme(bench, base):
     os.makedirs(out_dir, exist_ok=True)
     with open(os.path.join(out_dir, 'readme-observations.json'), 'w', encoding='utf-8') as f:
         json.dump(observations, f, indent=2)
-    findings = readme_findings(observations, readme_runner.bench_apps(base))
+    scored = benign_only(observations)
+    findings = readme_findings(scored, readme_runner.bench_apps(base))
     ran = sum(1 for o in observations if o.get('automatable'))
-    return findings, '%d README steps, %d automated, %d findings' % (len(observations), ran, len(findings))
+    msg = '%d README steps, %d automated, %d findings' % (len(observations), ran, len(findings))
+    if len(scored) < len(observations):
+        msg += ' (steps from %s on act on Secure and are not scored)' % observations[len(scored)].get('step')
+    return findings, msg
 
 
 def main(argv=None):
@@ -405,7 +458,7 @@ def main(argv=None):
     if args.rescore:
         print('Rescore of data/eval-tmp (%s)' % ('all findings' if args.dynamic
                                                  else 'static layers only, dynamic-* findings dropped'))
-        rows = rescore(benchmarks, gt, args.dynamic)
+        rows = rescore(benchmarks, gt, args.dynamic, auto_readme=args.auto_readme)
         print('\n' + '\n'.join(summary(rows)))
         if args.out:
             write_rows(rows, args.out)
@@ -457,9 +510,10 @@ def main(argv=None):
             print('   README %s' % msg)
             for f in extra:
                 print('          %s %s %s' % (f['cwe'], f['issue'], f['evidence']))
-            if extra:
-                result['Benign'] = (result['Benign'] or []) + extra
-        row, matched = score_row(bench, gt[bench], result['Benign'], result['Secure'], two_app)
+            readme = extra
+        else:
+            readme = None
+        row, matched = score_row(bench, gt[bench], result['Benign'], result['Secure'], two_app, readme)
         print('   true_positive=%d (matching CWEs: %s) strict_true_positive=%d false_positive=%d'
               % (row['true_positive'], ', '.join(matched) or 'none', row['strict_true_positive'],
                  row['false_positive']))
