@@ -150,6 +150,7 @@ Titles are copied from `docs/threat-models/standards-reference.md`.
 | OWASP MASVS v2 | MASVS-PLATFORM-1 | The app uses IPC mechanisms securely. | Verified | Direct. The leak happens through the intent Benign starts (line 24). |
 | OWASP MASVS v2 | MASVS-PLATFORM-2 | The app uses WebViews securely. | Verified | Partial. The intent comes from WebView content through `shouldOverrideUrlLoading` (lines 34 to 42); the fix is in the `WebViewClient`, but the leak is an IPC issue. |
 | OWASP MASWE | MASWE-0032 | Insecure Intents | Verified | Direct. Benign acts on an untrusted intent from web content and sends sensitive data in it (lines 21 to 24); the page covers "sending sensitive data via implicit intents" and "acting on untrusted intents ... (e.g. calling `startActivity` ...) without validation". Controls shown on the page: MASVS-PLATFORM-1, MASVS-STORAGE-2. |
+| OWASP Mobile Top 10 2024 | M4 | Insufficient Input/Output Validation | Verified | Direct. `MyWebViewClient.java` lines 21 to 24 parse an intent from a URL supplied by web content and start it without validation; the page covers "Insufficient validation and sanitization of data from external sources, such as user inputs or network data". The fix adds the missing check (Secure lines 23 to 27). |
 
 OWASP MASTG test: No direct match among the IDs in the reference file. MASTG-TEST-0364 to MASTG-TEST-0366 are about exported components that expose functionality, not about intents built from web content.
 

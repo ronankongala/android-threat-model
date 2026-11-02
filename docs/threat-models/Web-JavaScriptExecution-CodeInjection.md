@@ -136,6 +136,7 @@ Titles are copied from `docs/threat-models/standards-reference.md`.
 | OWASP MASVS v2 | MASVS-PLATFORM-2 | The app uses WebViews securely. | Verified | Direct. The fix is a WebView setting (Secure `MainActivity.java` line 23). |
 | OWASP MASWE | MASWE-0035 | WebViews Loading Untrusted Content | Verified | Direct. `MainActivity.java` line 24 loads a page from an HTTP server with JavaScript enabled (line 23); the page covers WebViews that load "URLs, HTML, or JavaScript from untrusted sources". Controls shown on the page: MASVS-PLATFORM-2, MASVS-CODE-4. |
 | OWASP MASTG test | MASTG-TEST-0031 | Testing JavaScript Execution in WebViews | Verified | Partial. Deprecated; its banner says JavaScript enabled "is not considered a vulnerability by itself". Kept for reference only: it is the check that flags `setJavaScriptEnabled(true)` at line 23. |
+| OWASP Mobile Top 10 2024 | M8 | Security Misconfiguration | Verified | Partial. The fix is one WebView setting (`MainActivity.java` line 23, `setJavaScriptEnabled(true)` in Benign, `false` in Secure), and the page covers "the improper configuration of security settings". Partial because the page names no WebView setting, and the script reaches the app over `http://` (line 19), which M5 would cover; M5 is not used because Secure keeps `http://`. |
 
 MASVS-NETWORK-1 and MASWE-0026 were considered for the cleartext URL; they are not in the table because the benchmark and its fix are about script execution, and the Secure app keeps `http://`.
 

@@ -138,6 +138,7 @@ Titles are copied from `docs/threat-models/standards-reference.md`.
 | OWASP MASVS v2 | MASVS-NETWORK-1 | The app secures all network traffic according to the current best practices. | Verified | Direct. The weakness is the TLS session; the fix cancels on error (Secure line 17). |
 | OWASP MASVS v2 | MASVS-PLATFORM-2 | The app uses WebViews securely. | Verified | Partial. The faulty decision is made in a `WebViewClient` callback (lines 14 to 17); the control is about WebViews in general. |
 | OWASP MASWE | MASWE-0027 | Insecure Certificate Validation | Verified | Direct. The page covers apps "accepting invalid, expired, self-signed, or untrusted certificates without appropriate verification"; Benign accepts all of them at line 17. Controls shown on the page: MASVS-NETWORK-1. |
+| OWASP Mobile Top 10 2024 | M5 | Insecure Communication | Verified | Direct. `MyWebViewClient.java` line 17 calls `handler.proceed()` for every certificate error; among the flaws the page covers is "Accepting bad ssl certificates", with self-signed, revoked, expired and wrong host certificates as its examples. |
 
 OWASP MASTG test: No direct match among the IDs in the reference file; none of them covers TLS validation.
 

@@ -143,6 +143,7 @@ Titles are copied from `docs/threat-models/standards-reference.md`.
 | OWASP MASWE | MASWE-0034 | WebViews Allow Access to Local Resources with Untrusted Content | Verified | Direct. `MainActivity.java` lines 24 to 26 enable file access and file access from file URLs while the page runs remote script; the page names `setAllowFileAccess` and `setAllowFileAccessFromFileURLs`. Controls shown on the page: MASVS-PLATFORM-2, MASVS-STORAGE-2, MASVS-CODE-4. |
 | OWASP MASTG test | MASTG-TEST-0252 | References to Local File Access in WebViews | Verified | Direct. The static test looks for these `WebSettings` calls; `MainActivity.java` lines 24 and 26 are the references. |
 | OWASP MASTG test | MASTG-TEST-0253 | Runtime Use of Local File Access APIs in WebViews | Verified | Partial. The dynamic counterpart; it would observe the same settings at run time. No run has been made. |
+| OWASP Mobile Top 10 2024 | M8 | Security Misconfiguration | Verified | Direct. `MainActivity.java` lines 24 to 26 enable file access and file access from file URLs; the page covers "the improper configuration of security settings", and the fix changes that one setting (Secure `MainActivity.java` line 26). |
 
 MASWE-0035 (WebViews Loading Untrusted Content) was considered; MASWE-0034 is more specific to the file access the README describes.
 

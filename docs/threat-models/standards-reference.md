@@ -191,3 +191,43 @@ Table 1 gives only requirement names, so every row is Partial: the mapping reads
 | Secure by Default Configuration | Web: `JavaScriptExecution-CodeInjection-Lean`, `WebViewAllowFileAccess-UnauthorizedFileAccess-Lean`. | Partial | Each fix is a single WebView setting. |
 
 Not mapped from Table 1: Anti-Exploitation Capabilities, Random Bit Generation, Software Identification and Versions, Specification of Management Functions, Supported Configuration Mechanism, Use of Supported Services and Application Programming Interfaces. No benchmark's weakness matches these names without the Protection Profile text (`BlockCipher-NonRandomIV` uses a fixed IV, not a weak random bit generator).
+
+## OWASP Mobile Top 10 2024
+
+Source: the OWASP Mobile Top 10 list page, https://owasp.github.io/www-project-mobile-top-10/2023-risks/, whose page title is "Top 10 Mobile Risks - OWASP Mobile Top 10 2024 - Final Release". The URL path says `2023-risks`, but the page is the 2024 final release. The list page and each risk page were downloaded on 2026-11-02 and each URL below returned HTTP 200. The "Official title" column is the text after the ID on the list page, copied character for character. In standards tables, the Standard column reads "OWASP Mobile Top 10 2024" and the Title column holds the official title from this table.
+
+| ID | Official title | URL | Date checked | Status |
+|---|---|---|---|---|
+| M1 | Improper Credential Usage | https://owasp.github.io/www-project-mobile-top-10/2023-risks/m1-improper-credential-usage.html | 2026-11-02 | Verified |
+| M2 | Inadequate Supply Chain Security | https://owasp.github.io/www-project-mobile-top-10/2023-risks/m2-inadequate-supply-chain-security.html | 2026-11-02 | Verified |
+| M3 | Insecure Authentication/Authorization | https://owasp.github.io/www-project-mobile-top-10/2023-risks/m3-insecure-authentication-authorization.html | 2026-11-02 | Verified |
+| M4 | Insufficient Input/Output Validation | https://owasp.github.io/www-project-mobile-top-10/2023-risks/m4-insufficient-input-output-validation.html | 2026-11-02 | Verified |
+| M5 | Insecure Communication | https://owasp.github.io/www-project-mobile-top-10/2023-risks/m5-insecure-communication.html | 2026-11-02 | Verified |
+| M6 | Inadequate Privacy Controls | https://owasp.github.io/www-project-mobile-top-10/2023-risks/m6-inadequate-privacy-controls.html | 2026-11-02 | Verified |
+| M7 | Insufficient Binary Protections | https://owasp.github.io/www-project-mobile-top-10/2023-risks/m7-insufficient-binary-protection.html | 2026-11-02 | Verified |
+| M8 | Security Misconfiguration | https://owasp.github.io/www-project-mobile-top-10/2023-risks/m8-security-misconfiguration.html | 2026-11-02 | Verified |
+| M9 | Insecure Data Storage | https://owasp.github.io/www-project-mobile-top-10/2023-risks/m9-insecure-data-storage.html | 2026-11-02 | Verified |
+| M10 | Insufficient Cryptography | https://owasp.github.io/www-project-mobile-top-10/2023-risks/m10-insufficient-cryptography.html | 2026-11-02 | Verified |
+
+Title note: for M7 the list page reads "Insufficient Binary Protections", while the risk page's own `<title>` reads "M7: Insufficient Binary Protection". The list page wording is used.
+
+Scope quotes from the risk pages used by the threat models:
+- M4: "Insufficient validation and sanitization of data from external sources, such as user inputs or network data," (first sentence of the page).
+- M5: "This risk covers all aspects of getting data from point A to point B, but doing it insecurely." The page lists "Accepting bad ssl certificates (self-signed, revoked, expired, wrong host…)" among the flaws and says "Consider certificate pinning." under prevention.
+- M6: the page names "fine-grained location" as an example of PII to reduce and asks "Can users consent to optional PII usage".
+- M8: "Security misconfiguration in mobile apps refers to the improper configuration of security settings," (first sentence of the page).
+
+Mapping used for the Web threat models and the Networking rows of `other-categories-mapping.md`:
+
+| Benchmark | Item | Fit | Reason |
+|---|---|---|---|
+| `HttpConnection-MITM-Lean` | M5 | Direct | Cleartext HTTP. |
+| `JavaScriptExecution-CodeInjection-Lean` | M8 | Partial | The fix is one WebView setting; the page names no WebView setting. |
+| `UnsafeIntentURLImpl-InformationExposure-Lean` | M4 | Direct | Intent parsed from a web page URL is used without validation. |
+| `WebView-NoUserPermission-InformationExposure-Lean` | M6 | Partial | Location reaches web content without user consent; the page's attack vectors are storage and transmission media, not a WebView bridge. |
+| `WebViewAllowFileAccess-UnauthorizedFileAccess-Lean` | M8 | Direct | The fix is one WebView security setting. |
+| `WebViewIgnoreSSLWarning-MITM-Lean` | M5 | Direct | Bad certificates accepted. |
+| `WebViewInterceptRequest-MITM-Lean` | M4 | Direct | Resource requests from network content are not validated. |
+| `WebViewOverrideUrl-MITM-Lean` | M4 | Direct | Navigation URLs from network content are not validated. |
+| Networking: `CheckValidity-InformationExposure-Lean`, `IncorrectHostNameVerification-MITM-Lean`, `InsecureSSLSocket-MITM-Lean`, `InsecureSSLSocketFactory-MITM-Lean`, `InvalidCertificateAuthority-MITM-Lean`, `UnEncryptedSocketComm-MITM-Lean`, `UnpinnedCertificates-MITM-Lean` | M5 | Direct | Certificate, host name, pinning or cleartext flaws in the connection. |
+| Networking: `OpenSocket-InformationLeak-Lean` | M5 | Partial | The peer is another app on the device, not a network attacker. |

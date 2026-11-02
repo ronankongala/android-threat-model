@@ -141,6 +141,7 @@ Titles are copied from `docs/threat-models/standards-reference.md`.
 | CWE | CWE-319 | Cleartext Transmission of Sensitive Information | Verified | Partial. `HttpIntentService.java` lines 31 to 35 fetch the content over `http://` with no encryption. Partial because the benchmark content is not sensitive; the README's concern is spoofing and tampering, which the CWE does not name. Usage ALLOWED. |
 | OWASP MASVS v2 | MASVS-NETWORK-1 | The app secures all network traffic according to the current best practices. | Verified | Direct. The fix moves the connection to `https://` (Secure `HttpIntentService.java` line 33). |
 | OWASP MASWE | MASWE-0026 | Network Traffic Not Encrypted | Verified | Direct. `HttpIntentService.java` line 31 builds an `http://` URL; the page says cleartext remains a weakness "even when no sensitive data is being transmitted", because attackers "may disrupt app functionality or deceive" users. Controls shown on the page: MASVS-NETWORK-1. |
+| OWASP Mobile Top 10 2024 | M5 | Insecure Communication | Verified | Direct. `HttpIntentService.java` lines 31 to 35 fetch the content over `http://`, which is the case the page scopes as "getting data from point A to point B, but doing it insecurely"; the fix moves to `https://` (Secure `HttpIntentService.java` line 33). |
 
 OWASP MASTG test: No direct match among the IDs in the reference file; none of them covers network traffic.
 
