@@ -4,7 +4,7 @@ File: `data/ground-truth.csv`. One row per Ghera benchmark (57 rows) at tag `Jan
 
 ## Sources
 
-Every value comes from one of these, and from nothing else:
+Every value except `secondary_cwe_ids` (derived from the evaluator, see Columns) comes from one of these, and from nothing else:
 - the files under `docs/threat-models/` (`benchmark-index.md`, the threat models `ICC-*.md` and `Web-*.md`, and `other-categories-mapping.md`);
 - the benchmark `README.md`;
 - the benchmark Testing code (`Testing/**/androidTest/**/*.java`).
@@ -23,6 +23,7 @@ A cell is blank when these sources have nothing for it. A blank cell means "not 
 | `expected_benign_result` | text | README, Testing code, or threat model Evidence | What the README or the Benign test expects when the exploit runs against Benign, with a short source reference. |
 | `expected_secure_result` | text | README, Testing code, or threat model Evidence | What the README or the Secure test expects when the exploit runs against Secure, with a short source reference. |
 | `cwe_ids` | list | threat model or mapping | CWE IDs from the standards table, in table order. |
+| `secondary_cwe_ids` | list | `tools/evaluate.py` `SECONDARY_CWE` | Alternative CWEs that the evaluator counts as a match for one of the row's `cwe_ids` (Fix A). Derived from the evaluator mapping, not from the sources above; blank when no listed CWE has an alternative. |
 | `masvs_ids` | list | threat model or mapping | OWASP MASVS v2 control IDs from the standards table. |
 | `maswe_ids` | list | threat model or mapping | OWASP MASWE IDs from the standards table. |
 | `mastg_ids` | list | threat model or mapping | OWASP MASTG test IDs from the standards table. |
