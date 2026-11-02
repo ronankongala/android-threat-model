@@ -13,7 +13,7 @@ because every APK has the same file name and the reports would overwrite each ot
 
 Writes data/evaluation-results.csv with the columns
   benchmark, category, benign_findings, secure_findings, true_positive, false_positive,
-  strict_true_positive
+  strict_true_positive, two_app_benign, two_app_secure
 where
   true_positive  = 1 if benign_findings > 0 and any Benign finding's CWE matches any
                    of the benchmark's ground-truth CWEs (cwe_ids), either directly,
@@ -42,14 +42,31 @@ the Benign app only, so these findings can add true positives but never false
 positives; numbers from a run with --auto-readme are therefore not directly
 comparable with runs without it.
 
+Two-app scoring (P1-4): with --dynamic and an attached device, every benchmark
+that has a built Malicious api27 APK is also run through
+dynamic_analyzer.run_two_app twice: Benign plus Malicious, whose findings are
+added to the Benign findings, and Secure plus Malicious, whose findings are
+added to the Secure findings. Running the same scenario against the Secure app
+keeps precision honest: a two-app finding that also appears with the fixed app
+makes that benchmark a false positive, just like a single-APK finding would.
+Two-app findings count toward true_positive like any other Benign finding
+(cwe_ids, SECONDARY_CWE and secondary_cwe_ids). Package names, launcher
+activities and task affinities come from the decoded manifests (as in
+src/ate.py run_dynamic_two_app). The findings are saved to
+data/eval-tmp/<benchmark>/two-app-<Benign|Secure>.json and counted in the extra
+columns two_app_benign and two_app_secure (blank when the two-app run did not
+happen). Without a device the two-app step is skipped with a warning.
+
 --out CSV writes the per-benchmark results to CSV instead of
 data/evaluation-results.csv. A --rescore run writes a CSV only when --out is given.
+--only BENCH (repeatable) restricts the run to the named benchmarks; combine it
+with --out so the full results file is not overwritten.
 
 --rescore runs nothing: it rescans the reports a previous run left in
 data/eval-tmp/<benchmark>/<Benign|Secure>/app-api27-debug-report.json and scores
 them against the current ground truth. Without --dynamic, findings whose issue
 starts with "dynamic-" are dropped, so the reports of a dynamic run are rescored
-as the static layers only.
+as the static layers only; with --dynamic, the saved two-app findings are added.
 """
 import argparse
 import csv
@@ -67,8 +84,9 @@ sys.path.insert(0, os.path.join(ROOT, 'tools'))
 ATE = os.path.join(ROOT, 'src', 'ate.py')
 APK_REL = os.path.join('app', 'build', 'outputs', 'apk', 'api27', 'debug', 'app-api27-debug.apk')
 REPORT = 'app-api27-debug-report.json'
+SRC = os.path.join(ROOT, 'src')
 COLUMNS = ['benchmark', 'category', 'benign_findings', 'secure_findings', 'true_positive', 'false_positive',
-           'strict_true_positive']
+           'strict_true_positive', 'two_app_benign', 'two_app_secure']
 
 # Fix A: alternative CWEs that the rules report for a weakness the ground truth
 # records under a related CWE. A finding with the key CWE counts as the value CWE.
@@ -123,10 +141,10 @@ def parse_cwes(value):
     return {c.strip() for c in (value or '').split(';') if c.strip()}
 
 
-def load_ground_truth(path=GROUND_TRUTH):
+def load_ground_truth(path=None):
     """{folder: {'category', 'cwes' (cwe_ids), 'secondary' (secondary_cwe_ids)}}."""
     gt = {}
-    for row in read_csv(path):
+    for row in read_csv(path or GROUND_TRUTH):
         gt[row['folder']] = {'category': row['category'], 'cwes': parse_cwes(row['cwe_ids']),
                              'secondary': parse_cwes(row.get('secondary_cwe_ids'))}
     return gt
@@ -141,12 +159,25 @@ def benchmark_list():
     return benchmarks
 
 
-def score_row(bench, gt_entry, benign, secure):
+def score_row(bench, gt_entry, benign, secure, two_app=None):
     """Score one benchmark; return (CSV row dict, expanded matching CWEs).
 
     benign and secure are findings lists, or None when the APK was missing or
     the tool failed (the count is then left blank and scored as 0 findings).
+    two_app is {'Benign': list or None, 'Secure': list or None} with the
+    run_two_app findings (None: not run); they are added to the Benign and the
+    Secure findings respectively.
     """
+    two_app = two_app or {}
+    counts = {}
+    for variant in ('Benign', 'Secure'):
+        extra = two_app.get(variant)
+        counts[variant] = '' if extra is None else len(extra)
+        if extra:
+            if variant == 'Benign':
+                benign = (benign or []) + extra
+            else:
+                secure = (secure or []) + extra
     benign_n = len(benign) if benign is not None else 0
     secure_n = len(secure) if secure is not None else 0
     strict, matched = matching_cwes({f['cwe'] for f in benign or []}, gt_entry['cwes'],
@@ -159,6 +190,8 @@ def score_row(bench, gt_entry, benign, secure):
         'true_positive': 1 if benign_n > 0 and matched else 0,
         'false_positive': 1 if secure_n > 0 else 0,
         'strict_true_positive': 1 if benign_n > 0 and strict else 0,
+        'two_app_benign': counts['Benign'],
+        'two_app_secure': counts['Secure'],
     }
     return row, matched
 
@@ -175,8 +208,10 @@ def is_dynamic(finding):
     return str(finding.get('issue', '')).startswith('dynamic-')
 
 
-def rescore(benchmarks, gt, dynamic=False, tmp=TMP):
-    """Score the reports a previous run left in `tmp`, without running anything."""
+def rescore(benchmarks, gt, dynamic=False, tmp=None):
+    """Score the reports a previous run left in `tmp` (default data/eval-tmp),
+    without running anything."""
+    tmp = tmp or TMP
     rows = []
     for bench in benchmarks:
         if bench not in gt:
@@ -188,10 +223,15 @@ def rescore(benchmarks, gt, dynamic=False, tmp=TMP):
             if findings is not None and not dynamic:
                 findings = [f for f in findings if not is_dynamic(f)]
             result[variant] = findings
-        row, matched = score_row(bench, gt[bench], result['Benign'], result['Secure'])
-        print('%-58s benign=%-3s secure=%-3s tp=%d strict_tp=%d fp=%d %s'
+        two_app = None
+        if dynamic:
+            two_app = {v: load_findings(os.path.join(tmp, bench, 'two-app-%s.json' % v))
+                       for v in ('Benign', 'Secure')}
+        row, matched = score_row(bench, gt[bench], result['Benign'], result['Secure'], two_app)
+        print('%-58s benign=%-3s secure=%-3s tp=%d strict_tp=%d fp=%d two_app=%s/%s %s'
               % (bench, row['benign_findings'], row['secure_findings'], row['true_positive'],
-                 row['strict_true_positive'], row['false_positive'], ', '.join(matched)))
+                 row['strict_true_positive'], row['false_positive'], row['two_app_benign'],
+                 row['two_app_secure'], ', '.join(matched)))
         rows.append(row)
     return rows
 
@@ -232,6 +272,53 @@ def run_tool(apk, out_dir, dynamic=False):
     with open(report, encoding='utf-8') as f:
         findings = json.load(f)
     return findings, r.stdout.strip()
+
+
+def _src_modules():
+    """(apk, ate, dynamic_analyzer) from src/, imported on first use."""
+    if SRC not in sys.path:
+        sys.path.insert(0, SRC)
+    import apk
+    import ate
+    import dynamic_analyzer
+    return apk, ate, dynamic_analyzer
+
+
+def two_app_device():
+    """adb path when a device is attached for the two-app runs, else None."""
+    _, _, dynamic_analyzer = _src_modules()
+    adb = dynamic_analyzer.find_adb()
+    if adb and dynamic_analyzer.device_available(adb):
+        return adb
+    return None
+
+
+def run_two_app(app_apk, malicious_apk, adb, save_to=None):
+    """dynamic_analyzer.run_two_app with app_apk (Benign or Secure) as the benign
+    app and malicious_apk as the malicious one; return (findings or None, message).
+
+    Packages, launcher activities and the benign task affinities come from the
+    decoded manifests, as in src/ate.py run_dynamic_two_app. With save_to, the
+    findings are written there as JSON (used by --rescore --dynamic).
+    """
+    apk, ate, dynamic_analyzer = _src_modules()
+    for path in (app_apk, malicious_apk):
+        if not os.path.exists(path):
+            return None, 'APK not found: %s' % os.path.relpath(path, ROOT)
+    try:
+        man = apk.decode(app_apk)
+        mal = apk.decode(malicious_apk)
+    except apk.ApkError as e:
+        return None, 'cannot decode APK: %s' % e
+    findings = dynamic_analyzer.run_two_app(
+        app_apk, malicious_apk, man['package'], mal['package'], adb=adb,
+        benign_activity=ate.main_activity(man), malicious_activity=ate.main_activity(mal),
+        benign_affinities=ate.task_affinities(man))
+    if save_to:
+        os.makedirs(os.path.dirname(save_to), exist_ok=True)
+        with open(save_to, 'w', encoding='utf-8') as f:
+            json.dump(findings, f, indent=2)
+    return findings, '%d findings (%s with %s)' % (len(findings), man['package'], mal['package'])
 
 
 def readme_findings(observations, apps):
@@ -307,9 +394,13 @@ def main(argv=None):
                    help='run nothing; rescore the reports already in data/eval-tmp')
     p.add_argument('--out', help='CSV to write (default data/evaluation-results.csv; '
                                  'with --rescore, no CSV unless given)')
+    p.add_argument('--only', action='append', metavar='BENCH',
+                   help='evaluate only this benchmark (repeatable); use with --out')
     args = p.parse_args(argv)
     gt = load_ground_truth()
     benchmarks = benchmark_list()
+    if args.only:
+        benchmarks = [b for b in benchmarks if b in args.only]
 
     if args.rescore:
         print('Rescore of data/eval-tmp (%s)' % ('all findings' if args.dynamic
@@ -322,6 +413,11 @@ def main(argv=None):
 
     print('Mode: %s' % ('static and dynamic' if args.dynamic else 'static only (--no-dynamic)'))
     print('Benchmarks with a successful api27 build: %d' % len(benchmarks))
+    adb = None
+    if args.dynamic:
+        adb = two_app_device()
+        if not adb:
+            print('warning: no emulator or device found by adb; two-app scoring skipped')
     rows = []
     for bench in benchmarks:
         if bench not in gt:
@@ -339,6 +435,23 @@ def main(argv=None):
             for f in findings or []:
                 print('          %s %s %s %s (%s)' % (f['cwe'], f['issue'], f['component_type'],
                                                     f['component'], f['confidence']))
+        two_app = None
+        malicious = os.path.join(base, 'Malicious', APK_REL)
+        if adb and os.path.exists(malicious):
+            two_app = {}
+            for variant in ('Benign', 'Secure'):
+                found, msg = run_two_app(os.path.join(base, variant, APK_REL), malicious, adb,
+                                         os.path.join(TMP, bench, 'two-app-%s.json' % variant))
+                two_app[variant] = found
+                print('   2-app %-6s+Malicious %s' % (variant, msg))
+                for f in found or []:
+                    print('          %s %s %s %s (%s)' % (f['cwe'], f['issue'], f['component_type'],
+                                                        f['component'], f['confidence']))
+        for variant in ('Benign', 'Secure'):
+            # drop two-app findings of an earlier run so --rescore cannot pick them up
+            stale = os.path.join(TMP, bench, 'two-app-%s.json' % variant)
+            if (two_app is None or two_app.get(variant) is None) and os.path.exists(stale):
+                os.remove(stale)
         if args.auto_readme:
             extra, msg = run_readme(bench, base)
             print('   README %s' % msg)
@@ -346,7 +459,7 @@ def main(argv=None):
                 print('          %s %s %s' % (f['cwe'], f['issue'], f['evidence']))
             if extra:
                 result['Benign'] = (result['Benign'] or []) + extra
-        row, matched = score_row(bench, gt[bench], result['Benign'], result['Secure'])
+        row, matched = score_row(bench, gt[bench], result['Benign'], result['Secure'], two_app)
         print('   true_positive=%d (matching CWEs: %s) strict_true_positive=%d false_positive=%d'
               % (row['true_positive'], ', '.join(matched) or 'none', row['strict_true_positive'],
                  row['false_positive']))
