@@ -59,6 +59,11 @@ Patterns:
                                setResult, setResultData, setResultExtras or
                                abortBroadcast, declared in AndroidManifest.xml with an
                                intent filter of android:priority greater than 0
+                               (medium); or, whatever the priority (including none),
+                               any receiver subclass (direct, or through app classes)
+                               whose onReceive invoke-virtual's one of those methods on
+                               itself, an app superclass or BroadcastReceiver (medium).
+                               One finding per receiver; the priority match wins.
   unique_ids                   device identifiers (IMEI, serial, ANDROID_ID)
 """
 import os
@@ -778,21 +783,53 @@ def _is_receiver(cls, by_name):
     return False
 
 
+def _receiver_chain(cls, by_name):
+    """Descriptors of cls and its app superclasses up to BroadcastReceiver."""
+    chain = {cls['name'], RECEIVER}
+    sup = cls['super']
+    while sup and sup not in chain:
+        chain.add(sup)
+        sup = by_name[sup]['super'] if sup in by_name else None
+    return chain
+
+
+def _result_call(method, owners=None):
+    """(line, text) of the first call in method to one of RESULT_CALLS, or None.
+    With owners, only an invoke-virtual on one of those class descriptors counts."""
+    for no, text in _code(method['body']):
+        inv = INVOKE_RE.match(text)
+        ref = METHOD_REF_RE.match(inv.group(3)) if inv else None
+        if not ref or ref.group(2) not in RESULT_CALLS:
+            continue
+        if owners is None or (inv.group(1).startswith('invoke-virtual')
+                              and ref.group(1) in owners):
+            return no, text
+    return None
+
+
 def _ordered_broadcast_rules(ctx, classes, decoded_dir):
+    """Two triggers, one finding per receiver class:
+    1. declared with intent filter priority > 0 and onReceive calls a result
+       method on any object (the original rule);
+    2. any priority, or none: onReceive invoke-virtual's a result method on the
+       receiver itself, an app superclass or BroadcastReceiver. A receiver that
+       changes or aborts the result takes part in an ordered broadcast chain, so a
+       higher priority receiver can inject data into it (CWE-927).
+    Both report at medium, so when both match the same receiver only the first
+    is kept."""
     priorities = _receiver_priorities(decoded_dir)
     by_name = {c['name']: c for c in classes}
     for cls in classes:
-        if priorities.get(cls['name'], 0) <= 0 or not _is_receiver(cls, by_name):
+        if not _is_receiver(cls, by_name):
             continue
+        owners = _receiver_chain(cls, by_name)
         for m in cls['methods']:
             if m['name'] != 'onReceive' or m['desc'] != 'Landroid/content/Context;Landroid/content/Intent;':
                 continue
-            for no, text in _code(m['body']):
-                inv = INVOKE_RE.match(text)
-                ref = METHOD_REF_RE.match(inv.group(3)) if inv else None
-                if ref and ref.group(2) in RESULT_CALLS:
-                    ctx.emit(cls, 'ordered_broadcast_priority', 'medium', no, text)
-                    break
+            hit = _result_call(m) if priorities.get(cls['name'], 0) > 0 else None
+            hit = hit or _result_call(m, owners)
+            if hit:
+                ctx.emit(cls, 'ordered_broadcast_priority', 'medium', *hit)
 
 
 # ---------------------------------------------------------------- entry point
