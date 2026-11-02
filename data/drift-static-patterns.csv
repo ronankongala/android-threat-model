@@ -1,0 +1,54 @@
+benchmark,static_findings_count,patterns
+BlockCipher-ECB-InformationExposure-Lean,7,ecb_mode x2; exported-no-permission x1; hardcoded_key x2; implicit-intent x1; taint-flow x1
+BlockCipher-NonRandomIV-InformationExposure-Lean,3,constant_iv x1; exported-no-permission x1; hardcoded_key x1
+ConstantKey-ForgeryAttack-Lean,4,exported-no-permission x1; hardcoded_key x2; implicit-intent x1
+ExposedCredentials-InformationExposure-Lean,0,
+PBE-ConstantSalt-InformationExposure-Lean,2,exported-no-permission x1; hardcoded_key_pbe x1
+EmptyPendingIntent-PrivEscalation-Lean,1,pending_intent_empty x1
+FragmentInjection-PrivEscalation-Lean,1,fragment_injection x1
+HighPriority-ActivityHijack-Lean,1,taint-flow x1
+ImplicitPendingIntent-IntentHijack-Lean,1,pending_intent_empty x1
+InadequatePathPermission-InformationExposure-Lean,5,exported-no-permission x2; implicit-intent x1; path-not-sanitized x1; provider-path-permission-only x1
+IncorrectHandlingImplicitIntent-UnauthorizedAccess-Lean,2,exported-no-permission x1; implicit-intent x1
+NoValidityCheckOnBroadcastMsg-UnintendedInvocation-Lean,3,exported-no-permission x1; implicit-intent x1; no_validity_check x1
+OrderedBroadcast-DataInjection-Lean,2,exported-no-permission x1; ordered_broadcast_priority x1
+StickyBroadcast-DataInjection-Lean,1,sticky_broadcast x1
+TaskAffinity-ActivityHijack-Lean,2,taint-flow x1; task-affinity-hijack x1
+TaskAffinityAndReparenting-PhishingAndDoSAttack-Lean,0,
+TaskAffinity-LauncherActivity-PhishingAttack-Lean,0,
+TaskAffinity-PhishingAttack-Lean,2,taint-flow x1; task-affinity-hijack x1
+UnhandledException-DOS-Lean,0,
+UnprotectedBroadcastRecv-PrivEscalation-Lean,3,exported-no-permission x1; taint-flow x2
+WeakChecksOnDynamicInvocation-DataInjection-Lean,2,exported-no-permission x1; taint-flow x1
+CheckValidity-InformationExposure-Lean,4,certificate_pinning_missing x1; cleartext-http x1; empty_trustmanager x1; hostname_not_verified x1
+IncorrectHostNameVerification-MITM-Lean,4,certificate_pinning_missing x1; cleartext-http x1; empty_trustmanager x1; hostname_not_verified x1
+InsecureSSLSocketFactory-MITM-Lean,4,certificate_pinning_missing x1; cleartext-http x1; hostname_not_verified x1; insecure_ssl_socket_factory x1
+InsecureSSLSocket-MITM-Lean,3,cleartext-http x1; empty_trustmanager x1; insecure_ssl_socket_factory x1
+InvalidCertificateAuthority-MITM-Lean,4,certificate_pinning_missing x1; cleartext-http x1; empty_trustmanager x1; hostname_not_verified x1
+OpenSocket-InformationLeak-Lean,1,cleartext-http x1
+UnEncryptedSocketComm-MITM-Lean,2,certificate_pinning_missing x1; cleartext-http x1
+UnpinnedCertificates-MITM-Lean,2,certificate_pinning_missing x1; cleartext-http x1
+MergeManifest-UnintendedBehavior-Lean,1,exported-no-permission x1
+UnnecesaryPerms-PrivEscalation-Lean,1,exported-no-permission x1
+WeakPermission-UnauthorizedAccess-Lean,0,
+ExternalStorage-DataInjection-Lean,0,
+ExternalStorage-InformationLeak-Lean,0,
+InternalStorage-DirectoryTraversal-Lean,1,directory_traversal x1
+InternalToExternalStorage-InformationLeak-Lean,2,directory_traversal x1; exported-no-permission x1
+SQLite-execSQL-Lean,4,exported-no-permission x1; implicit-intent x1; sql_injection_raw x2
+SQLlite-RawQuery-SQLInjection-Lean,2,exported-no-permission x1; sql_injection_raw x1
+SQLlite-SQLInjection-Lean,2,exported-no-permission x1; sql_injection_no_args x1
+CheckCallingOrSelfPermission-PrivilegeEscalation-Lean,1,exported-no-permission x1
+CheckPermission-PrivilegeEscalation-Lean,1,exported-no-permission x1
+ClipboardUse-InformationExposure-Lean,1,clipboard_sensitive x1
+EnforceCallingOrSelfPermission-PrivilegeEscalation-Lean,1,exported-no-permission x1
+EnforcePermission-PrivilegeEscalation-Lean,1,exported-no-permission x1
+UniqueIDs-IdentityLeak-Lean,1,unique_ids x1
+HttpConnection-MITM-Lean,2,certificate_pinning_missing x1; cleartext-http x1
+JavaScriptExecution-CodeInjection-Lean,2,cleartext-http x1; js_enabled x1
+UnsafeIntentURLImpl-InformationExposure-Lean,4,cleartext-http x1; exported-no-permission x1; implicit-intent x1; js_enabled x1
+WebViewAllowFileAccess-UnauthorizedFileAccess-Lean,3,cleartext-http x1; js_enabled x1; webview_file_access x1
+WebViewIgnoreSSLWarning-MITM-Lean,2,cleartext-http x1; js_enabled x1
+WebViewInterceptRequest-MITM-Lean,3,cleartext-http x1; js_enabled x1; webview_file_access x1
+WebView-NoUserPermission-InformationExposure-Lean,2,cleartext-http x1; js_enabled x1
+WebViewOverrideUrl-MITM-Lean,2,cleartext-http x1; js_enabled x1
