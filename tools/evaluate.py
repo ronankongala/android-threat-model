@@ -25,7 +25,8 @@ where
                    as describing this benchmark's own weakness), else 0
   false_positive = 1 if some Secure finding has a CWE that is exactly one of the
                    benchmark's cwe_ids (no SECONDARY_CWE, no secondary_cwe_ids) AND
-                   is on the benchmark's vulnerable component (A1-1), else 0
+                   is on the benchmark's vulnerable component (A1-1) and does not
+                   have confidence low, else 0
   strict_true_positive = like true_positive, but only cwe_ids count
   false_positive_any = the legacy definition: 1 if secure_findings > 0, else 0
                    (kept so the old precision stays visible next to the new one)
@@ -212,10 +213,16 @@ def component_matches(component, vulnerable):
     return False
 
 
+# Findings at these confidence levels never make a Secure APK a false positive.
+FP_IGNORED_CONFIDENCE = ('low',)
+
+
 def is_false_positive(secure, gt_entry):
     """A1-1: some Secure finding has an exact cwe_ids CWE and is on the
-    vulnerable component."""
-    return any(f.get('cwe') in gt_entry['cwes']
+    vulnerable component. Confidence threshold: a finding with confidence low
+    does not count (a finding without a confidence key does)."""
+    return any(f.get('confidence') not in FP_IGNORED_CONFIDENCE
+               and f.get('cwe') in gt_entry['cwes']
                and component_matches(f.get('component'), gt_entry.get('components'))
                for f in secure or [])
 

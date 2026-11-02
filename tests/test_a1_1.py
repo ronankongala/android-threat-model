@@ -196,3 +196,22 @@ def test_rescore_writes_both_columns(tmp_path):
     evaluate.write_rows(rows, str(out))
     row, = list(csv.DictReader(open(out, encoding='utf-8')))
     assert (row['false_positive'], row['false_positive_any']) == ('0', '1')
+
+
+# Confidence threshold
+
+def test_low_confidence_finding_is_not_fp():
+    f = dict(finding(B + 'MyReceiver', 'CWE-926'), confidence='low')
+    assert not evaluate.is_false_positive([f], entry(['CWE-926'], [B + 'MyReceiver']))
+
+
+def test_medium_and_high_confidence_findings_are_fp():
+    for conf in ('medium', 'high'):
+        f = dict(finding(B + 'MyReceiver', 'CWE-926'), confidence=conf)
+        assert evaluate.is_false_positive([f], entry(['CWE-926'], [B + 'MyReceiver']))
+
+
+def test_low_finding_does_not_hide_a_medium_one():
+    low = dict(finding(B + 'MyReceiver', 'CWE-926'), confidence='low')
+    med = dict(finding(B + 'MyReceiver$1', 'CWE-926'), confidence='medium')
+    assert evaluate.is_false_positive([low, med], entry(['CWE-926'], [B + 'MyReceiver']))

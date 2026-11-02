@@ -47,7 +47,7 @@ Static evaluation (`python tools/evaluate.py --no-dynamic`, 2026-11-02) on the 5
 | Web | 8 | 8 | 0 | 1.00 | 1.00 |
 | **Overall** | **53** | **52** | **18** | **0.74** | **0.98** |
 
-Final scores: precision 0.74 and recall 0.98, up from precision 0.53 and recall 0.77. A Secure APK counts as a false positive only when one of its findings has the benchmark's own CWE on the vulnerable component. Under the legacy rule (any finding on the Secure APK is a false positive) precision is 0.51. With a strict CWE match (no reviewed secondary CWEs) recall is 0.96. Details and limits: [docs/notes/evaluation-report.md](docs/notes/evaluation-report.md).
+Final scores: precision 0.74 and recall 0.98, up from precision 0.53 and recall 0.77. A Secure APK counts as a false positive only when one of its findings has the benchmark's own CWE on the vulnerable component at medium or high confidence. Under the legacy rule (any finding on the Secure APK is a false positive) precision is 0.51. With a strict CWE match (no reviewed secondary CWEs) recall is 0.96. Details and limits: [docs/notes/evaluation-report.md](docs/notes/evaluation-report.md).
 
 ## Screenshots
 
