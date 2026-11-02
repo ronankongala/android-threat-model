@@ -24,3 +24,6 @@ __pycache__/
 
 # Evaluation scratch output (tools/evaluate.py)
 data/eval-tmp/
+
+# Real-world APKs from F-Droid (E1)
+data/real-world-apks/
