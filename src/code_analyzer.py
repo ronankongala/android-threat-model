@@ -703,6 +703,7 @@ class _Method:
             o = self.obj(args[0] if args else None, 'intent')
             if o is not None and o.get('action'):
                 self.ctx.sticky_actions.add(o['action'])
+                self.ctx.sticky_sends.add((o['action'], self.cls['name'], self.cls['file'], no, text))
         elif name in ('sendBroadcast', 'sendOrderedBroadcast', 'sendBroadcastAsUser') \
                 and 'LocalBroadcastManager' not in owner and args:
             types = _types(desc)
@@ -773,6 +774,8 @@ class _Method:
         elif v and v[0] == 'param':
             t = self.param_types.get(v[1])
         f = self.obj(args[1], 'filter')
+        if f is not None and f.get('actions'):
+            self.ctx.registered_actions.update(f['actions'])
         types = _types(desc)
         perm = len(types) > 2 and types[2] == 'Ljava/lang/String;' and len(args) > 2 \
             and args[2] is not None and not _is_null(args[2])
@@ -878,6 +881,8 @@ class _Context:
         self.target_sdk = None       # targetSdkVersion from apktool.yml, if known
         self.password_ids = {}       # resource id -> password field description
         self.ui_fields = {}          # instance field -> ('view', id) or ('pw', field)
+        self.sticky_sends = set()    # (action, class, file, line, text) of sticky sends
+        self.registered_actions = set()  # IntentFilter actions passed to registerReceiver
 
     def field_write(self, ref, value, in_clinit):
         const = value if value and value[0] in ('str', 'lit') and in_clinit else None
@@ -1554,3 +1559,39 @@ def analyze(decoded_dir):
     _js_interface_rules(ctx, classes, decoded_dir)
     _sticky_receiver_rules(ctx, classes, decoded_dir)
     return sorted(ctx.findings.values(), key=lambda f: (f['file'], f['line'], f['pattern']))
+
+
+def broadcast_actions(decoded_dir):
+    """Sticky broadcasts the app sends and broadcast actions it listens for,
+    for the two-APK check in surface.py (A3-1):
+      {'sticky': [{action, component, file, line, evidence}],
+       'receivers': {action: [where]}}
+    sticky lists sendSticky*Broadcast calls whose Intent action is a constant
+    string (new Intent("...") or setAction("...")). receivers maps each action
+    of a manifest <receiver> intent filter ('manifest <receiver> NAME') or of an
+    IntentFilter built from constant strings and passed to registerReceiver
+    ('registerReceiver') to where it was seen."""
+    classes = [c for c in (_parse_class(p, decoded_dir) for p in _class_files(decoded_dir)) if c]
+    ctx = _Context(classes)
+    for _ in range(PASSES):
+        ctx.findings = {}
+        for cls in classes:
+            for method in cls['methods']:
+                _Method(ctx, cls, method).run()
+        ctx.settle_fields()
+    receivers = {}
+    try:
+        manifest = apk.parse_manifest(os.path.join(decoded_dir, 'AndroidManifest.xml'))
+    except (OSError, ET.ParseError):
+        manifest = {'components': []}
+    for comp in manifest['components']:
+        if comp['type'] == 'receiver':
+            for f in comp['intent_filters']:
+                for a in f['actions']:
+                    if a:
+                        receivers.setdefault(a, []).append('manifest <receiver> %s' % comp['name'])
+    for a in sorted(ctx.registered_actions):
+        receivers.setdefault(a, []).append('registerReceiver')
+    sticky = [{'action': a, 'component': _dotted(c), 'file': f, 'line': no, 'evidence': text}
+              for a, c, f, no, text in sorted(ctx.sticky_sends)]
+    return {'sticky': sticky, 'receivers': receivers}

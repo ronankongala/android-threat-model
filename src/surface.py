@@ -61,6 +61,20 @@ kinds in CWE below, six can be seen in a manifest and have rules here:
                           1 dangerous, 2 signature, 3 signatureOrSystem) are
                           read as well
 
+Two-APK mode: find(apk, decoded_dir, second=manifest) also compares the
+analyzed APK with a second decoded APK (src/ate.py --second-apk; in
+tools/evaluate.py --with-malicious, the benchmark's Malicious APK):
+
+  sticky-broadcast-intercepted
+                          the app sends a sticky broadcast (sendSticky*Broadcast)
+                          whose Intent action is a constant string, and the
+                          second APK registers a receiver for that action (a
+                          manifest <receiver> intent filter, or registerReceiver
+                          with an IntentFilter built from that constant). The
+                          second app can read the sticky data and replace it
+                          with its own (interception and data injection).
+                          Reported on the sending class, confidence high
+
 The other six (dynamic-receiver-no-permission, missing-certificate-validation,
 sql-no-parameterization, js-enabled-webview, hardcoded-key, weak-cipher) are
 properties of code, not of the manifest. They are listed for their CWE IDs;
@@ -100,6 +114,9 @@ CWE = {
     # Children such as CWE-285 or CWE-732 are to be reviewed.
     'provider-path-permission-only': 'CWE-284',
     'weak-permission-protection': 'CWE-926',
+    # Two-APK mode (find(..., second=...)): rules that compare the analyzed APK
+    # with a second, possibly malicious, APK.
+    'sticky-broadcast-intercepted': 'CWE-927',
 }
 
 ISSUES = tuple(CWE)
@@ -390,14 +407,59 @@ def merge(*lists):
     return list(best.values())
 
 
-def find(apk, decoded_dir=None):
+def _sticky_intercepted(decoded_dir, second, code_findings):
+    """sticky-broadcast-intercepted findings: sticky broadcasts of this app
+    whose action the second APK receives. Needs both decoded folders; the
+    action scan runs only when the code rules found a sticky_broadcast."""
+    second_dir = (second or {}).get('decoded_dir')
+    if not decoded_dir or not second_dir or \
+            not any(f.get('pattern') == 'sticky_broadcast' for f in code_findings):
+        return []
+    sent = code_analyzer.broadcast_actions(decoded_dir)['sticky']
+    if not sent:
+        return []
+    received = code_analyzer.broadcast_actions(second_dir)['receivers']
+    findings = []
+    for s in sent:
+        where = received.get(s['action'])
+        if not where:
+            continue
+        findings.append({
+            'component': s['component'], 'component_type': 'class',
+            'issue': 'sticky-broadcast-intercepted', 'cwe': CWE['sticky-broadcast-intercepted'],
+            'confidence': 'high', 'file': s['file'], 'line': s['line'],
+            'pattern': 'sticky-broadcast-intercepted',
+            'evidence': '%s; action "%s" is received by the second APK %s (%s), which can '
+                        'read the sticky data and replace it' % (
+                            s['evidence'], s['action'], second.get('package') or '',
+                            ', '.join(sorted(set(where)))),
+        })
+    return findings
+
+
+def two_app_findings(apk, second, decoded_dir=None, code_findings=()):
+    """Findings of the two-APK rules for `apk` compared with the manifest dict
+    `second` (with its 'decoded_dir' for the code based rules)."""
+    decoded_dir = decoded_dir or apk.get('decoded_dir')
+    return _sticky_intercepted(decoded_dir, second, code_findings)
+
+
+def find(apk, decoded_dir=None, second=None):
     """Return the findings for the manifest dict `apk`, plus code findings when
-    `decoded_dir` (or apk['decoded_dir']) names the apktool output folder."""
+    `decoded_dir` (or apk['decoded_dir']) names the apktool output folder.
+
+    With `second` (the manifest dict of a second APK, decoded with a workdir so
+    it has 'decoded_dir'), the two-APK rules run too; their findings come first
+    so that they win a tie with a single-APK finding on the same component and
+    CWE."""
     decoded_dir = decoded_dir or apk.get('decoded_dir')
     findings = _manifest_findings(apk)
+    code = []
     if decoded_dir:
-        findings = merge(findings, code_analyzer.analyze(decoded_dir),
-                         taint_analyzer.analyze(decoded_dir))
+        code = code_analyzer.analyze(decoded_dir)
+        findings = merge(findings, code, taint_analyzer.analyze(decoded_dir))
+    if second:
+        findings = merge(two_app_findings(apk, second, decoded_dir, code), findings)
     return findings
 
 
