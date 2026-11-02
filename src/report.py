@@ -1,6 +1,6 @@
 """Write a findings list (from surface.find) as JSON and as a Markdown table.
 
-write(findings, name, out_dir, dynamic=None) creates
+write(findings, name, out_dir, dynamic=None, privacy=None, policy_name=None) creates
   <out_dir>/<name>-report.json   the findings list as JSON (static, then dynamic)
   <out_dir>/<name>-report.md     a table: Component, Type, Issue, CWE, Confidence, Evidence
 and returns the two paths. Evidence is the line of code that triggered a code
@@ -9,9 +9,16 @@ finding (blank for manifest findings).
 dynamic is the list of dynamic_analyzer findings, or None when dynamic analysis
 was not run. The Markdown report has a "Dynamic Analysis Findings" section with
 those findings, or a one-line note that the step was skipped.
+
+privacy is the list of privacy_checker findings, or None when no policy was
+given. When it is a list, the Markdown report gets a "Privacy Policy Analysis"
+section and <out_dir>/<name>-privacy.json holds the list (the main JSON file
+keeps its format: a flat list of code and dynamic findings).
 """
 import json
 import os
+
+import privacy_checker
 
 COLUMNS = (('Component', 'component'), ('Type', 'component_type'), ('Issue', 'issue'),
            ('CWE', 'cwe'), ('Confidence', 'confidence'), ('Evidence', 'evidence'))
@@ -40,14 +47,16 @@ def _table(findings):
     return lines
 
 
-def to_markdown(findings, name, dynamic=None):
+def to_markdown(findings, name, dynamic=None, privacy=None, policy_name=None):
     lines = ['# %s report' % name, ''] + _table(findings)
     lines += ['', '## Dynamic Analysis Findings', '']
     lines += [SKIPPED_NOTE] if dynamic is None else _table(dynamic)
+    if privacy is not None:
+        lines += [''] + privacy_checker.to_markdown(privacy, policy_name)
     return '\n'.join(lines) + '\n'
 
 
-def write(findings, name, out_dir='.', dynamic=None):
+def write(findings, name, out_dir='.', dynamic=None, privacy=None, policy_name=None):
     os.makedirs(out_dir, exist_ok=True)
     json_path = os.path.join(out_dir, '%s-report.json' % name)
     md_path = os.path.join(out_dir, '%s-report.md' % name)
@@ -55,5 +64,9 @@ def write(findings, name, out_dir='.', dynamic=None):
         json.dump(findings + (dynamic or []), f, indent=2)
         f.write('\n')
     with open(md_path, 'w', encoding='utf-8') as f:
-        f.write(to_markdown(findings, name, dynamic))
+        f.write(to_markdown(findings, name, dynamic, privacy, policy_name))
+    if privacy is not None:
+        with open(os.path.join(out_dir, '%s-privacy.json' % name), 'w', encoding='utf-8') as f:
+            json.dump({'policy': policy_name, 'privacy': privacy}, f, indent=2)
+            f.write('\n')
     return json_path, md_path

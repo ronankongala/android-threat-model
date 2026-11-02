@@ -78,3 +78,24 @@ def test_markdown_section():
     lines = pc.to_markdown(pc.check('We do not collect location.',
                                     apk(['android.permission.ACCESS_FINE_LOCATION'])))
     assert any(l.startswith('| high | location-not-collected') for l in lines)
+
+
+def test_report_privacy_section(tmp_path):
+    import json
+    import report
+    priv = pc.check('We do not collect location.', apk(['android.permission.ACCESS_FINE_LOCATION']))
+    _, md = report.write([], 'x', str(tmp_path), None, privacy=priv, policy_name='p.txt')
+    text = open(md, encoding='utf-8').read()
+    assert '## Privacy Policy Analysis' in text and 'location-not-collected' in text
+    data = json.load(open(tmp_path / 'x-privacy.json', encoding='utf-8'))
+    assert data['policy'] == 'p.txt' and len(data['privacy']) == 1
+    _, md = report.write([], 'y', str(tmp_path))
+    assert 'Privacy Policy' not in open(md, encoding='utf-8').read()
+    assert not (tmp_path / 'y-privacy.json').exists()
+
+
+def test_cli_policy_flag():
+    import ate
+    args = ate.parse_args(['--apk', 'a.apk', '--policy', 'p.txt'])
+    assert args.policy == 'p.txt'
+    assert ate.main(['--apk', 'a.apk', '--policy', 'missing-policy.txt']) == 1

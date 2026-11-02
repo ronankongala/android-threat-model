@@ -1,7 +1,8 @@
 """android-threat-engine command line entry point.
 
 Usage: python src/ate.py --apk app.apk [--out DIR] [--dynamic]
-                        [--dynamic-two-app MALICIOUS_APK] [--no-ai]
+                        [--dynamic-two-app MALICIOUS_APK] [--policy POLICY.txt]
+                        [--no-ai]
 
 Decodes the APK (apk.py), extracts manifest, smali code and taint
 findings (surface.py, code_analyzer.py, taint_analyzer.py), writes
@@ -18,6 +19,12 @@ malicious one, and task hijacks, foreign foreground activities, changes to the
 benign app's internal storage and Permission Denial lines are reported
 (dynamic_analyzer.run_two_app). The findings go to the same dynamic section of
 the report as the --dynamic findings.
+
+With --policy POLICY.txt, the privacy policy text is compared with the
+manifest permissions and the advertising and analytics SDK packages in the APK
+(privacy_checker.py). Contradictions are listed in a "Privacy Policy Analysis"
+section of the Markdown report and under the "privacy" key of a separate
+<name>-privacy.json file.
 """
 import argparse
 import os
@@ -29,6 +36,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import apk  # noqa: E402
 import dynamic_analyzer  # noqa: E402
+import privacy_checker  # noqa: E402
 import report  # noqa: E402
 import surface  # noqa: E402
 
@@ -42,6 +50,8 @@ def parse_args(argv=None):
     p.add_argument('--dynamic-two-app', metavar='MALICIOUS_APK',
                    help='also install MALICIOUS_APK next to the analyzed APK, start both on a '
                         'running emulator and report what it does to the analyzed app')
+    p.add_argument('--policy', metavar='POLICY_TXT',
+                   help='privacy policy text file to compare with the manifest and SDK packages')
     p.add_argument('--no-ai', action='store_true', help='reserved; has no effect yet')
     return p.parse_args(argv)
 
@@ -103,6 +113,14 @@ def run_dynamic_two_app(apk_path, manifest, malicious_apk):
 
 def main(argv=None):
     args = parse_args(argv)
+    policy_text = None
+    if args.policy:
+        try:
+            policy_text = privacy_checker.load_policy(args.policy)
+        except OSError as e:
+            print('error: cannot read policy file: %s' % e, file=sys.stderr)
+            return 1
+    privacy = None
     work = tempfile.mkdtemp(prefix='ate-')
     try:
         try:
@@ -111,16 +129,22 @@ def main(argv=None):
             print('error: %s' % e, file=sys.stderr)
             return 1
         findings = surface.find(manifest)
+        if policy_text is not None:
+            # Needs the decoded smali folders, so it runs before they are removed.
+            privacy = privacy_checker.check(policy_text, manifest)
     finally:
         shutil.rmtree(work, ignore_errors=True)
     dynamic = run_dynamic(args.apk, manifest) if args.dynamic else None
     if args.dynamic_two_app:
         dynamic = (dynamic or []) + run_dynamic_two_app(args.apk, manifest, args.dynamic_two_app)
     name = os.path.splitext(os.path.basename(args.apk))[0]
-    report.write(findings, name, args.out, dynamic)
+    report.write(findings, name, args.out, dynamic,
+                 privacy=privacy, policy_name=os.path.basename(args.policy) if args.policy else None)
     findings = findings + (dynamic or [])
     components = len({(f['component_type'], f['component']) for f in findings})
     print('%d findings in %d components' % (len(findings), components))
+    if privacy is not None:
+        print('%d privacy policy contradictions' % len(privacy))
     return 0
 
 
