@@ -65,3 +65,26 @@ A Secure APK counts as a false positive when it has any finding, of any kind. Ma
 ## Comparison with Rekha
 
 The Rekha evaluation (Ranganath and Mitra; preprint 2018, Empirical Software Engineering 2019) ran a different set of tools, on an earlier version of Ghera, with its own definition of a detection. The numbers here use a different tool, a CWE-based match and a 53-benchmark sample, so any comparison with Rekha is directional only.
+
+## Dynamic evaluation results
+
+Run of `python tools/evaluate.py --dynamic` on 2026-11-01, on the `ghera27` emulator (`emulator-5554`), over the same 53 benchmarks. Each Benign and Secure APK was passed to `src/ate.py --dynamic`, so the static layers ran first and then the APK was installed and exercised on the emulator (Layer 4). Per-benchmark results: `data/evaluation-results-dynamic.csv`. The definitions above are unchanged. As before, the Secure APK of `MergeManifest-UnintendedBehavior-Lean` was not built and is scored with 0 Secure findings. Every other APK ran without errors, and no run skipped the dynamic step.
+
+| Category | Benchmarks evaluated | TP | FP | Precision | Recall |
+|----------|---------------------:|---:|---:|----------:|-------:|
+| Crypto | 5 | 4 | 4 | 0.50 | 0.80 |
+| ICC | 16 | 9 | 11 | 0.45 | 0.56 |
+| Networking | 8 | 6 | 7 | 0.46 | 0.75 |
+| NonAPI | 1 | 1 | 0 | 1.00 | 1.00 |
+| Permission | 2 | 1 | 1 | 0.50 | 0.50 |
+| Storage | 7 | 5 | 4 | 0.56 | 0.71 |
+| System | 6 | 5 | 0 | 1.00 | 0.83 |
+| Web | 8 | 5 | 8 | 0.38 | 0.62 |
+| **Overall** | **53** | **36** | **35** | **0.51** | **0.68** |
+
+The scores are the same as the static run in every category: precision 0.51 and recall 0.68.
+
+The dynamic layer did report findings: 56 in all, across 11 benchmarks (47 `dynamic-receiver-accepts-external`, 7 `dynamic-task-hijack`, 1 `dynamic-file-deleted`, 1 `dynamic-permission-denial-observed`). None of them changes a score:
+- Seven of the 11 benchmarks were already true positives, and every Secure APK that gained dynamic findings already had static findings, so it was already a false positive. The one exception is `UniqueIDs-IdentityLeak-Lean`, whose Secure APK still has no findings in either run.
+- In the four missed benchmarks that gained dynamic findings, the CWEs do not match the ground truth. `OrderedBroadcast-DataInjection-Lean` gets CWE-926 and CWE-1021, while its ground truth lists CWE-927, CWE-925, CWE-348 and CWE-532. `WebViewAllowFileAccess-UnauthorizedFileAccess-Lean`, `WebViewIgnoreSSLWarning-MITM-Lean` and `WebViewOverrideUrl-MITM-Lean` each get only CWE-926, for receivers registered at run time, while their ground truth lists CWE-830, CWE-295 and CWE-829.
+- `UnhandledException-DOS-Lean`, the benchmark that the `dynamic-receiver-crash` check targets, gets no dynamic finding, so it remains a miss.
