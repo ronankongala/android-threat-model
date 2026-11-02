@@ -31,8 +31,13 @@ Patterns:
   hardcoded_key_pbe            PBEKeySpec with a constant salt (low when only the
                                password is constant)
   empty_trustmanager           X509TrustManager whose check*Trusted is empty (high),
-                               or a checkServerTrusted with code but no throw and
-                               no call to a method named *check* or *verify* (medium)
+                               or a checkServerTrusted with code that cannot throw
+                               (medium): no throw, and no call to a method named
+                               *check* or *verify* outside a try range whose
+                               CertificateException handler returns without
+                               rethrowing (P-3, linear scan). An empty
+                               checkClientTrusted is low when checkServerTrusted
+                               of the same class can throw (clients never call it)
   hostname_not_verified        HostnameVerifier.verify that returns true: only
                                const/4 vN, 0x1 and return (high), or any branch-free
                                body that returns a const/4 0x1 register (medium);
@@ -989,21 +994,6 @@ def _only(method):
 CHECK_WORDS = ('check', 'verify')
 
 
-def _validates(code):
-    """True when a check*Trusted body throws, or calls a method whose name
-    contains 'check' or 'verify' (for example a delegate trust manager)."""
-    for text in code:
-        op = text.split()[0]
-        if op == 'throw':
-            return True
-        if op.startswith('invoke-'):
-            m = INVOKE_RE.match(text)
-            ref = METHOD_REF_RE.match(m.group(3)) if m else None
-            if ref and any(w in ref.group(2).lower() for w in CHECK_WORDS):
-                return True
-    return False
-
-
 def _always_true(code):
     """True when a boolean method has no branch and returns a register last set
     by const/4 vN, 0x1."""
@@ -1020,15 +1010,83 @@ def _always_true(code):
     return False
 
 
+# Exception types whose handler would also catch a CertificateException.
+CERT_CATCHES = ('Ljava/security/cert/CertificateException;',
+                'Ljava/security/GeneralSecurityException;',
+                'Ljava/lang/Exception;', 'Ljava/lang/Throwable;')
+CATCH_HANDLER_RE = re.compile(r'^\.catch(?:all)?\s+(?:(\S+;)\s+)?\{(\S+)\s*\.\.\s*(\S+)\}\s+(\S+)')
+
+
+def _handler_rethrows(body, label):
+    """Linear scan from a catch handler label: True when a throw comes before
+    the first return or goto (the caught exception, or a new one, propagates)."""
+    started = False
+    for _, text in body:
+        if not started:
+            started = text == label
+            continue
+        if text.startswith(('.', ':')):
+            continue
+        op = text.split()[0]
+        if op == 'throw':
+            return True
+        if op.startswith(('return', 'goto')):
+            return False
+    return False
+
+
+def _check_propagates(method):
+    """P-3: True when a check*Trusted method can end by throwing, so it is not
+    an empty check. Linear scan of the body (no control flow graph):
+      - a throw instruction anywhere, or
+      - a call to a method whose name contains 'check' or 'verify' (for
+        example X509Certificate.checkValidity or a delegate trust manager)
+        that is not inside a try range whose handler catches
+        CertificateException (or a supertype) and then returns without
+        throwing. A handler that throws again lets the exception propagate."""
+    body = method['body']
+    labels = {text: idx for idx, (_, text) in enumerate(body) if text.startswith(':')}
+    swallowing = []
+    for _, text in body:
+        m = CATCH_HANDLER_RE.match(text)
+        if not m or m.group(2) not in labels or m.group(3) not in labels:
+            continue
+        if (m.group(1) is None or m.group(1) in CERT_CATCHES) \
+                and not _handler_rethrows(body, m.group(4)):
+            swallowing.append((labels[m.group(2)], labels[m.group(3)]))
+    for idx, _, text in _indexed_code(body):
+        op = text.split()[0]
+        if op == 'throw':
+            return True
+        if op.startswith('invoke-'):
+            inv = INVOKE_RE.match(text)
+            ref = METHOD_REF_RE.match(inv.group(3)) if inv else None
+            if ref and any(w in ref.group(2).lower() for w in CHECK_WORDS) \
+                    and not any(a <= idx <= b for a, b in swallowing):
+                return True
+    return False
+
+
 def _class_rules(ctx, cls):
     if 'Ljavax/net/ssl/X509TrustManager;' in cls['implements']:
+        # P-3: an HTTPS client never calls checkClientTrusted, so an empty one
+        # is only a trust bypass when checkServerTrusted of the same class does
+        # not throw either; otherwise it is reported low.
+        server = [m for m in cls['methods'] if m['name'] == 'checkServerTrusted'
+                  and _only(m) != ['return-void']]
+        server_checks = bool(server) and all(_check_propagates(m) for m in server)
         for m in cls['methods']:
             if m['name'] not in ('checkServerTrusted', 'checkClientTrusted'):
                 continue
             code = _only(m)
             if code == ['return-void']:
-                ctx.emit(cls, 'empty_trustmanager', 'high', m['line'], m['decl'])
-            elif m['name'] == 'checkServerTrusted' and code and not _validates(code):
+                if m['name'] == 'checkClientTrusted' and server_checks:
+                    ctx.emit(cls, 'empty_trustmanager', 'low', m['line'],
+                             '%s [checkClientTrusted is empty, but checkServerTrusted '
+                             'throws on a bad chain]' % m['decl'])
+                else:
+                    ctx.emit(cls, 'empty_trustmanager', 'high', m['line'], m['decl'])
+            elif m['name'] == 'checkServerTrusted' and code and not _check_propagates(m):
                 # Has instructions, but none of them throws or calls a check.
                 ctx.emit(cls, 'empty_trustmanager', 'medium', m['line'], m['decl'])
     if 'Ljavax/net/ssl/HostnameVerifier;' in cls['implements']:
