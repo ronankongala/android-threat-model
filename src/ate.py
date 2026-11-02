@@ -44,14 +44,16 @@ def main_activity(manifest):
 
 
 def run_dynamic(apk_path, manifest):
-    """Dynamic findings, or [] with a warning when no device is attached."""
+    """Dynamic findings from dynamic_analyzer.run_all (the run() checks plus the
+    per-broadcast crash, foreground task and deleted file sweep), or [] with a
+    warning when no device is attached."""
     adb = dynamic_analyzer.find_adb()
     if not adb or not dynamic_analyzer.device_available(adb):
         print('warning: no emulator or device found by adb; dynamic analysis skipped '
               '(start the ghera27 emulator and check "adb devices")', file=sys.stderr)
         return []
-    return dynamic_analyzer.run(apk_path, manifest['package'], main_activity(manifest),
-                                adb=adb, manifest=manifest)
+    return dynamic_analyzer.run_all(apk_path, manifest['package'], main_activity(manifest),
+                                    adb=adb, manifest=manifest)
 
 
 def main(argv=None):

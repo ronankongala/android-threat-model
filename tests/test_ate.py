@@ -217,3 +217,56 @@ def test_dynamic_receiver_accepts_external(decode_dir):
     accepted = [f for f in found if f['issue'] == 'dynamic-receiver-accepts-external']
     assert accepted, 'no dynamic-receiver-accepts-external finding: %r' % found
     assert accepted[0]['cwe'] in ('CWE-925', 'CWE-926')
+
+
+DUMPSYS_ACTIVITIES = '''ACTIVITY MANAGER ACTIVITIES (dumpsys activity activities)
+Display #0 (activities from top to bottom):
+  Stack #1:
+    Task id #12
+      * TaskRecord{a1b2c3 #12 A=com.other.app U=0 StackId=1 sz=1}
+        affinity=com.other.app
+        * Hist #0: ActivityRecord{d4e5f6 u0 com.other.app/.Home t12}
+    Task id #11
+      * TaskRecord{b2c3d4 #11 A=edu.ksu.cs.benign U=0 StackId=1 sz=2}
+        affinity=edu.ksu.cs.benign
+        * Hist #1: ActivityRecord{e5f6a7 u0 com.evil.app/.Phish t11}
+        * Hist #0: ActivityRecord{f6a7b8 u0 edu.ksu.cs.benign/.MainActivity t11}
+    mResumedActivity: ActivityRecord{e5f6a7 u0 com.evil.app/.Phish t11}
+  mFocusedActivity: ActivityRecord{e5f6a7 u0 com.evil.app/.Phish t11}
+'''
+
+
+def test_parse_foreground_task():
+    fg = dynamic_analyzer.parse_foreground_task(DUMPSYS_ACTIVITIES)
+    assert fg['id'] == 11
+    assert fg['activities'] == ['com.evil.app/.Phish', 'edu.ksu.cs.benign/.MainActivity']
+    # without a resumed or focused line the first task is used
+    no_focus = '\n'.join(l for l in DUMPSYS_ACTIVITIES.splitlines() if 'Activity:' not in l)
+    assert dynamic_analyzer.parse_foreground_task(no_focus)['id'] == 12
+    assert dynamic_analyzer.parse_foreground_task('') == {'id': None, 'activities': []}
+
+
+LOGCAT_CRASH = '''11-01 10:00:00.100  1234  1234 D Benign  : onReceive
+11-01 10:00:00.200  1234  1234 E AndroidRuntime: FATAL EXCEPTION: main
+11-01 10:00:00.201  1234  1234 E AndroidRuntime: Process: edu.ksu.cs.benign, PID: 1234
+11-01 10:00:00.202  1234  1234 E AndroidRuntime: java.lang.RuntimeException: Unable to start receiver
+11-01 10:00:00.300  5678  5678 E AndroidRuntime: FATAL EXCEPTION: main
+11-01 10:00:00.301  5678  5678 E AndroidRuntime: Process: com.other.app, PID: 5678
+11-01 10:00:00.400  4321  4321 D AndroidRuntime: Calling main entry com.android.commands.am.Am
+'''
+
+
+def test_crash_lines():
+    lines = dynamic_analyzer.parse_logcat(LOGCAT_CRASH)
+    # pid unknown beforehand: found through the Process line
+    crash = dynamic_analyzer.crash_lines(lines, 'edu.ksu.cs.benign')
+    assert len(crash) == 3 and all(' 1234 ' in l for l in crash)
+    assert dynamic_analyzer.crash_lines(lines, 'edu.ksu.cs.benign', {1234}) == crash
+    assert dynamic_analyzer.crash_lines(lines, 'com.absent.app') == []
+    assert dynamic_analyzer.crash_lines(lines[:1] + lines[-1:], 'edu.ksu.cs.benign', {1234}) == []
+
+
+def test_new_dynamic_issues_have_cwes():
+    assert dynamic_analyzer.ISSUES['dynamic-receiver-crash'] == 'CWE-248'
+    assert dynamic_analyzer.ISSUES['dynamic-foreground-foreign-activity'] == 'CWE-1021'
+    assert dynamic_analyzer.ISSUES['dynamic-file-deleted'] == 'CWE-922'

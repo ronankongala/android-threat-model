@@ -10,6 +10,16 @@ components (dumpsys package), send an explicit broadcast from the shell to every
 exported receiver, diff the app's files/ folder around each broadcast, and
 finally uninstall the package, also when a step fails.
 
+run_all(apk_dir, package, main_activity=None, adb=None, wait=3, manifest=None)
+does everything run() does and also sweeps every broadcast for side effects.
+apk_dir is an APK file or a folder (the first *.apk of a sorted walk is used).
+Around each broadcast it records the app's pid, crash lines in logcat (FATAL
+EXCEPTION or AndroidRuntime lines of the app process or naming the package),
+new activities, new logcat lines, the foreground task (from mResumedActivity,
+mFocusedActivity or topResumedActivity in dumpsys activity activities, else the
+first task) and the files/ listing, and reports crashes, foreign activities that
+appeared in the foreground task and deleted files.
+
 Receivers registered at run time (Context.registerReceiver) are not in the
 manifest and cannot be reached by an explicit broadcast. They are read from
 dumpsys activity broadcasts for the app's process and probed with a broadcast
@@ -30,7 +40,17 @@ Issues (ISSUES maps each to its CWE):
                                        names the package (no CWE: the platform
                                        blocked the call)
 
-Without adb or a device run() logs a warning and returns []. Device and adb
+Issues reported only by run_all:
+  dynamic-receiver-crash               the app crashed after a broadcast: a
+                                       FATAL EXCEPTION in logcat, or its process
+                                       died or was restarted (CWE-248)
+  dynamic-foreground-foreign-activity  an activity of another package appeared
+                                       in the foreground task after a broadcast
+                                       (CWE-1021)
+  dynamic-file-deleted                 a file in files/ disappeared after a
+                                       broadcast (CWE-922)
+
+Without adb or a device run() and run_all() log a warning and return []. Device and adb
 failures are logged, never raised. adb honours ANDROID_SERIAL when more than one
 device is attached.
 
@@ -53,6 +73,9 @@ ISSUES = {
     'dynamic-file-created': 'CWE-922',
     'dynamic-task-hijack': 'CWE-1021',
     'dynamic-permission-denial-observed': 'n/a',
+    'dynamic-receiver-crash': 'CWE-248',
+    'dynamic-foreground-foreign-activity': 'CWE-1021',
+    'dynamic-file-deleted': 'CWE-922',
 }
 CWE_RECEIVER_NO_PERMISSION = 'CWE-926'
 DEFAULT_ADB = r'C:\Android\Sdk\platform-tools\adb.exe'
@@ -67,7 +90,11 @@ HIST_RE = re.compile(r'\* Hist #\d+: ActivityRecord\{[0-9a-f]+ u\d+ ([\w.$]+)/([
 RUN_RE = re.compile(r'Run #\d+: ActivityRecord\{[0-9a-f]+ u\d+ ([\w.$]+)/([\w.$]+) t(\d+)')
 ACT_AFFINITY_RE = re.compile(r'^\s*taskAffinity=(\S+)')
 RESOLVER_RE = re.compile(r'^\s+[0-9a-f]+ ([\w.$]+)/([\w.$]+)(?: filter [0-9a-f]+)?\s*$')
-BROADCAST_RESULT_RE = re.compile(r'Broadcast completed: result=(-?\d+)')
+FOREGROUND_RE = re.compile(
+    r'(?:mResumedActivity|mFocusedActivity|topResumedActivity|ResumedActivity)[:=]\s*'
+    r'ActivityRecord\{[0-9a-f]+ u\d+ ([\w.$]+)/([\w.$]+) t(\d+)')
+CRASH_PROCESS_RE = re.compile(r'Process: ([\w.:]+), PID: (\d+)')
+BROADCAST_RESULT_RE =re.compile(r'Broadcast completed: result=(-?\d+)')
 
 RESOLVER_TABLES = {
     'Activity Resolver Table:': 'activity',
@@ -258,6 +285,46 @@ def parse_registered_receivers(text, pid):
     return [r for r in receivers if r['actions']]
 
 
+def parse_foreground_task(text):
+    """Foreground task of 'dumpsys activity activities'.
+
+    Returns {'id', 'activities'} where activities are the components in that
+    task. The task id comes from the mResumedActivity, mFocusedActivity or
+    topResumedActivity line; without one the first task is used. Returns
+    {'id': None, 'activities': []} when no task is listed.
+    """
+    stack = parse_activities(text)
+    tid = None
+    for raw in text.splitlines():
+        m = FOREGROUND_RE.search(raw)
+        if m:
+            tid = int(m.group(3))
+            break
+    if tid is None and stack['tasks']:
+        tid = stack['tasks'][0]['id']
+    task = {t['id']: t for t in stack['tasks']}.get(tid)
+    return {'id': tid, 'activities': [a['component'] for a in task['activities']] if task else []}
+
+
+def crash_lines(lines, package, pids=()):
+    """Logcat lines (from parse_logcat) that show `package` crashing.
+
+    A crash is a FATAL EXCEPTION or AndroidRuntime error line written by one of
+    `pids`, or by the pid named in an AndroidRuntime "Process: <package>, PID: n"
+    line. Returns the raw lines, or [] when there is no FATAL EXCEPTION.
+    """
+    pids = {p for p in pids if p}
+    for l in lines:
+        m = CRASH_PROCESS_RE.search(l['message'])
+        if l['tag'] == 'AndroidRuntime' and m and m.group(1).split(':')[0] == package:
+            pids.add(int(m.group(2)))
+    found = [l for l in lines if l['pid'] in pids and l['level'] in 'EF'
+             and (l['tag'] == 'AndroidRuntime' or 'FATAL EXCEPTION' in l['message'])]
+    if not any('FATAL EXCEPTION' in l['message'] for l in found):
+        return []
+    return [l['line'] for l in found]
+
+
 # device helpers
 
 def _pid(adb, package):
@@ -361,17 +428,23 @@ def _task_hijack(stack, package):
 def _probe(adb, package, args, deny_markers):
     """Send one broadcast from the shell and collect what happened."""
     before_files = _list_files(adb, package)
-    before_stack = parse_activities(_shell(adb, 'dumpsys', 'activity', 'activities'))
+    before_text = _shell(adb, 'dumpsys', 'activity', 'activities')
+    before_stack = parse_activities(before_text)
     pid = _pid(adb, package)
     _adb(adb, ['logcat', '-c'])
     out = _shell(adb, 'am', 'broadcast', *args)
     time.sleep(1)
     lines = parse_logcat(_logcat(adb, 400))
-    pids = {p for p in (pid, _pid(adb, package)) if p}
-    after_stack = parse_activities(_shell(adb, 'dumpsys', 'activity', 'activities'))
+    pid_after = _pid(adb, package)
+    pids = {p for p in (pid, pid_after) if p}
+    after_text = _shell(adb, 'dumpsys', 'activity', 'activities')
+    after_stack = parse_activities(after_text)
     after_files = _list_files(adb, package)
     m = BROADCAST_RESULT_RE.search(out)
     old = {a['component'] for a in before_stack['activities']}
+    old_placed = {(a['component'], a['task_id']) for a in before_stack['activities']}
+    fg_after = parse_foreground_task(after_text)
+    crashes = crash_lines(lines, package, pids)
     return {
         'output': out.strip(),
         'completed': m is not None,
@@ -385,6 +458,15 @@ def _probe(adb, package, args, deny_markers):
         'stack': after_stack,
         'new_files': sorted(after_files - before_files) if None not in (before_files, after_files) else [],
         'removed_files': sorted(before_files - after_files) if None not in (before_files, after_files) else [],
+        'pid_before': pid,
+        'pid_after': pid_after,
+        'crash_lines': crashes,
+        'crashed': bool(crashes) or (pid is not None and pid_after != pid),
+        'foreground_before': parse_foreground_task(before_text),
+        'foreground_after': fg_after,
+        'foreign_foreground': [c for c in fg_after['activities']
+                               if c.split('/', 1)[0] != package
+                               and (c, fg_after['id']) not in old_placed],
     }
 
 
@@ -407,12 +489,69 @@ def _receiver_finding(name, ctype, permission, probe):
     return _finding(name, ctype, 'dynamic-receiver-accepts-external', confidence, evidence, cwe)
 
 
+def _sweep_findings(name, ctype, p, seen_deleted):
+    """run_all findings for one broadcast: crash, foreign activity in the
+    foreground task, deleted files."""
+    findings = []
+    if p['crashed']:
+        if p['crash_lines']:
+            evidence = 'crash after the broadcast: ' + ' | '.join(p['crash_lines'][:3])
+            confidence = 'high'
+        else:
+            evidence = 'app process %s before the broadcast, %s after' % (
+                p['pid_before'], p['pid_after'] or 'gone')
+            confidence = 'medium'
+        findings.append(_finding(name, ctype, 'dynamic-receiver-crash', confidence, evidence))
+    for comp in p['foreign_foreground']:
+        findings.append(_finding(
+            name, ctype, 'dynamic-foreground-foreign-activity', 'high',
+            '%s appeared in the foreground task #%s after the broadcast' % (
+                comp, p['foreground_after']['id'])))
+    for fn in p['removed_files']:
+        if fn not in seen_deleted:
+            seen_deleted.add(fn)
+            findings.append(_finding(name, ctype, 'dynamic-file-deleted', 'high',
+                                     'files/%s disappeared after the broadcast' % fn))
+    return findings
+
+
+def _find_apk(apk_dir):
+    """`apk_dir` when it is not a folder, else the first *.apk of a sorted walk."""
+    if not os.path.isdir(apk_dir):
+        return apk_dir
+    for root, dirs, files in os.walk(apk_dir):
+        dirs.sort()
+        for fn in sorted(files):
+            if fn.lower().endswith('.apk'):
+                return os.path.join(root, fn)
+    return None
+
+
 def run(apk_path, package, main_activity=None, adb=None, wait=3, manifest=None):
     """Install `apk_path`, exercise it, uninstall it and return the findings.
 
     `manifest` is the dict apk.decode() returns; it tells which receivers are
     exported and protected, since dumpsys on API 27 does not print the flag.
     """
+    return _run(apk_path, package, main_activity, adb, wait, manifest, sweep=False)
+
+
+def run_all(apk_dir, package, main_activity=None, adb=None, wait=3, manifest=None):
+    """run() plus a per-broadcast sweep for crashes, foreign activities in the
+    foreground task and deleted files.
+
+    `apk_dir` is an APK file or a folder; for a folder the first *.apk found by
+    a sorted walk is installed. Never raises; the package is always uninstalled.
+    """
+    apk_path = _find_apk(apk_dir)
+    if not apk_path:
+        log.warning('no .apk found under %s; skipping dynamic analysis', apk_dir)
+        return []
+    return _run(apk_path, package, main_activity, adb, wait, manifest, sweep=True)
+
+
+def _run(apk_path, package, main_activity=None, adb=None, wait=3, manifest=None, sweep=False):
+    """Shared body of run() and run_all(); `sweep` adds the run_all findings."""
     adb = adb or find_adb()
     if not adb:
         log.warning('adb not found; skipping dynamic analysis')
@@ -447,6 +586,7 @@ def run(apk_path, package, main_activity=None, adb=None, wait=3, manifest=None):
         pkg_info = parse_package(_shell(adb, 'dumpsys', 'package', package), package)
         start_files = _list_files(adb, package)
         seen_files = set(start_files or ())
+        seen_deleted = set()
 
         probes = []
         for rec in _exported_receivers(manifest, pkg_info):
@@ -475,12 +615,20 @@ def run(apk_path, package, main_activity=None, adb=None, wait=3, manifest=None):
                     findings.append(_finding(name, ctype, 'dynamic-file-created', 'high',
                                              'files/%s appeared after the broadcast' % fn))
             findings += [f for f in _task_hijack(p['stack'], package) if f not in findings]
+            if sweep:
+                log.info('broadcast to %s: crashed=%s, new activities=%s, new app log lines=%d',
+                         name, p['crashed'], p['new_activities'], len(p['app_lines']))
+                findings += _sweep_findings(name, ctype, p, seen_deleted)
 
         end_files = _list_files(adb, package)
         if start_files is not None and end_files is not None:
             for fn in sorted(end_files - start_files - seen_files):
                 findings.append(_finding('(application)', 'application', 'dynamic-file-created',
                                          'medium', 'files/%s appeared during the run' % fn))
+            if sweep:
+                for fn in sorted(start_files - end_files - seen_deleted):
+                    findings.append(_finding('(application)', 'application', 'dynamic-file-deleted',
+                                             'medium', 'files/%s disappeared during the run' % fn))
         elif start_files is None:
             log.warning('run-as cannot read files/ of %s (not debuggable?); no file diff', package)
 
