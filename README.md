@@ -33,21 +33,21 @@ android-threat-engine is an Android app security research project built on the [
 
 ## Results
 
-Static evaluation (`python tools/evaluate.py --no-dynamic`, 2026-11-02) on the 53 benchmarks with an `api27` build, across all eight categories, using manifest rules, code patterns (Layer 2) and taint analysis (Layer 3), after the Phase 1 and Phase 2 detection improvements:
+Static evaluation (`python tools/evaluate.py --no-dynamic`, 2026-11-02) on the 53 benchmarks with an `api27` build, across all eight categories, using manifest rules, code patterns (Layer 2) and taint analysis (Layer 3), after the precision round (P-1 to P-9):
 
 | Category | Benchmarks | TP | FP | Precision | Recall |
 |----------|-----------:|---:|---:|----------:|-------:|
 | Crypto | 5 | 5 | 5 | 0.50 | 1.00 |
-| ICC | 16 | 15 | 5 | 0.75 | 0.94 |
-| Networking | 8 | 8 | 2 | 0.80 | 1.00 |
+| ICC | 16 | 15 | 3 | 0.83 | 0.94 |
+| Networking | 8 | 8 | 1 | 0.89 | 1.00 |
 | NonAPI | 1 | 1 | 0 | 1.00 | 1.00 |
 | Permission | 2 | 2 | 1 | 0.67 | 1.00 |
 | Storage | 7 | 7 | 4 | 0.64 | 1.00 |
-| System | 6 | 6 | 1 | 0.86 | 1.00 |
+| System | 6 | 6 | 0 | 1.00 | 1.00 |
 | Web | 8 | 8 | 0 | 1.00 | 1.00 |
-| **Overall** | **53** | **52** | **18** | **0.74** | **0.98** |
+| **Overall** | **53** | **52** | **14** | **0.79** | **0.98** |
 
-Final scores: precision 0.74 and recall 0.98, up from precision 0.53 and recall 0.77. A Secure APK counts as a false positive only when one of its findings has the benchmark's own CWE on the vulnerable component at medium or high confidence. Under the legacy rule (any finding on the Secure APK is a false positive) precision is 0.51. With a strict CWE match (no reviewed secondary CWEs) recall is 0.96. Details and limits: [docs/notes/evaluation-report.md](docs/notes/evaluation-report.md).
+Final scores: precision 0.79 and recall 0.98, up from precision 0.53 and recall 0.77 two rounds earlier. A Secure APK counts as a false positive only when one of its findings has the benchmark's own CWE on the vulnerable component at medium or high confidence. Under the legacy rule (any finding on the Secure APK is a false positive) precision is 0.51. With a strict CWE match (no reviewed secondary CWEs) recall is 0.96. Most remaining false positives are findings that are true of the Secure app, whose fix is elsewhere ([docs/notes/false-positive-analysis.md](docs/notes/false-positive-analysis.md)). The differential mode (`--diff-mode`, only findings that differ between the Benign and Secure APK) scores precision 0.93 and recall 0.79; it needs the fixed app, so it is not comparable with the numbers above. Details and limits: [docs/notes/evaluation-report.md](docs/notes/evaluation-report.md).
 
 ## Screenshots
 

@@ -1,5 +1,59 @@
 # Evaluation report
 
+## Latest run: precision round (P-1 to P-9)
+
+Run of `python tools/evaluate.py --no-dynamic` on 2026-11-02 after the precision work P-1 to P-9, split into three shards with `--only` that ran side by side; `python tools/evaluate.py --rescore` then wrote `data/evaluation-results.csv` from the reports in `data/eval-tmp/`. Same 53 benchmarks and static layers as below. A Secure APK is a false positive under the A1-1 definition: one of its findings has an exact `cwe_ids` CWE of the benchmark, on the vulnerable component, at medium or high confidence (see `tools/evaluate.py`). The sections after this one describe earlier rounds and keep their own numbers.
+
+### Standard mode
+
+| Category | Benchmarks | TP | FP | Precision | Recall |
+|----------|-----------:|---:|---:|----------:|-------:|
+| Crypto | 5 | 5 | 5 | 0.50 | 1.00 |
+| ICC | 16 | 15 | 3 | 0.83 | 0.94 |
+| Networking | 8 | 8 | 1 | 0.89 | 1.00 |
+| NonAPI | 1 | 1 | 0 | 1.00 | 1.00 |
+| Permission | 2 | 2 | 1 | 0.67 | 1.00 |
+| Storage | 7 | 7 | 4 | 0.64 | 1.00 |
+| System | 6 | 6 | 0 | 1.00 | 1.00 |
+| Web | 8 | 8 | 0 | 1.00 | 1.00 |
+| **Overall** | **53** | **52** | **14** | **0.79** | **0.98** |
+
+Strict CWE match (no secondary CWEs): 51 true positives, precision 0.78, recall 0.96. Legacy definition (any Secure finding is a false positive): precision 0.51.
+
+| Run | TP | FP | Precision | Recall |
+|-----|---:|---:|----------:|-------:|
+| Before P-1 (commit 2ae19e3) | 52 | 18 | 0.74 | 0.98 |
+| After P-1 to P-9, standard mode | 52 | 14 | 0.79 | 0.98 |
+| After P-1 to P-9, `--rescore --calibrate` (P-9, leave-one-out) | 45 | 14 | 0.76 | 0.85 |
+| After P-1 to P-9, `--diff-mode` (P-8) | 42 | 3 | 0.93 | 0.79 |
+| After P-1 to P-9, `--diff-mode --calibrate` | 39 | 3 | 0.93 | 0.74 |
+
+The target of this round (precision above 0.85 with recall at 0.96 or above) is not met in standard mode. `docs/notes/false-positive-analysis.md` explains why: 13 of the 14 remaining false positives are findings that are true of the Secure APK, whose fix lies elsewhere (9 components that both apps export with no permission, a trust-all TrustManager the Secure app keeps, a keystore written to external storage, an implicit broadcast, a file name from an intent extra written to external storage, and an implicit service PendingIntent). Suppressing them would hide real weaknesses.
+
+### What changed
+
+| Item | Change | Effect on this set |
+|------|--------|--------------------|
+| P-1 | `docs/notes/false-positive-analysis.md`: root cause of each of the 18 false positives | none (analysis) |
+| P-2 | `exported-no-permission`: a provider with only one of readPermission and writePermission drops to low; any permission, `exported="false"` and no-filter components were already skipped | none: no false positive component has a permission |
+| P-3 | `empty_trustmanager`: linear scan for a throw or an unswallowed check call; an empty `checkClientTrusted` is low when `checkServerTrusted` of the class can throw | CheckValidity-InformationExposure-Lean no longer a false positive |
+| P-4 | `pending_intent_mutable` skipped when targetSdkVersion is below 31 (apktool.yml, else the decoded manifest) | ImplicitPendingIntent-IntentHijack-Lean no longer a false positive; EmptyPendingIntent-PrivEscalation-Lean stays one through a true `pending_intent_implicit` |
+| P-5 | `external_storage_io`: low when the path is only literals with no sensitive word; medium for intent extra or user input, unknown parts or sensitive words | UniqueIDs-IdentityLeak-Lean no longer a false positive |
+| P-6 | taint flows validated before the sink (matches, contains, startsWith, endsWith, equals, a validating callee, or a throw) are reported low | none: no taint-flow false positive |
+| P-7 | `implicit_broadcast` skipped for any permission argument other than a constant null; manifest `implicit-intent` skips components with a permission; `ordered_broadcast_priority` without a priority needs a `getResult*` read | OrderedBroadcast-DataInjection-Lean no longer a false positive |
+| P-8 | `--diff-mode`: scores Benign minus Secure and Secure minus Benign findings, matched on issue, CWE and class name without package | separate numbers, above |
+| P-9 | `data/rule-precision.json` (per-rule true and false positive counts); `src/ate.py --calibrate` and `tools/evaluate.py --rescore --calibrate` | separate numbers, above; off by default |
+
+### Differential mode (P-8)
+
+`python tools/evaluate.py --rescore --diff-mode` (per benchmark: `data/evaluation-results-diff.csv`) keeps only findings that differ between the two APKs. Precision rises to 0.93 because findings shared by both apps no longer count, but recall drops to 0.79: in 10 benchmarks the matching finding is still present in the Secure app (for example `cleartext-http` in the Web benchmarks, `exported-no-permission` in UnnecesaryPerms and the SQL benchmarks, `empty_trustmanager` and `hostname_not_verified` in CheckValidity), so the difference no longer contains it. The 3 remaining false positives are findings the Secure app adds: `pending_intent_implicit` (EmptyPendingIntent), `implicit_broadcast` (StickyBroadcast) and `external_storage_io` (ExposedCredentials). Diff mode needs the fixed APK, so it measures whether the tool sees what a fix changed. It is not the precision of the tool on a single unknown APK, and it is not comparable with the standard mode.
+
+### Confidence calibration (P-9)
+
+Per-rule precision over the 53 benchmarks (`data/rule-precision.json`): most rules have no false positive; `exported-no-permission` is 18 TP / 9 FP (0.67), `external_storage_io` 4 / 2 (0.67), `empty_trustmanager` 4 / 1 (0.80), `sql_injection_raw` 2 / 2 (0.50), `implicit_broadcast` and `pending_intent_implicit` 0 / 1. Calibrated confidence is base confidence (high 0.9, medium 0.6, low 0.3) times rule precision, and only findings above 0.3 are kept. Scored with leave-one-out precision (each benchmark calibrated by the other 52, so no benchmark calibrates itself), it lowers both scores: every low finding is dropped, including true positives such as `default-task-affinity` (TaskAffinity benchmarks) and the low `external_storage_io` of ExternalStorage-DataInjection-Lean, while `exported-no-permission` (0.67) stays above the threshold and keeps its 9 false positives. Calibration is therefore opt-in (`--calibrate`) and the standard numbers above do not use it. In-sample scoring (precision computed with the benchmark itself) would also be biased upward and is not reported.
+
+## Previous round (P1 and P2)
+
 Run of the analysis tool (`src/ate.py`) against the Ghera ground truth (`data/ground-truth.csv`), produced by `python tools/evaluate.py --no-dynamic` on 2026-11-02 after the Phase 1 and Phase 2 detection improvements (P1-1 to P1-5, P2-1 to P2-5; listed below). The earlier fixes (Fix 1 to Fix 7, Fix A to Fix E) are included. The run was split into two halves with `--only` that ran side by side; `python tools/evaluate.py --rescore` then wrote `data/evaluation-results.csv` from the saved reports in `data/eval-tmp/`.
 
 ## Scope
