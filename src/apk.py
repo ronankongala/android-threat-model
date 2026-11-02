@@ -16,6 +16,8 @@ Each component dict has:
   intent_filters  [{actions, categories, data, priority}]
   permission      android:permission, or the application permission when the
                   component has none (None when neither is set)
+  For activities also: task_affinity and launch_mode (android:taskAffinity and
+  android:launchMode, None when absent).
   For providers also: read_permission, write_permission, grant_uri_permissions,
   path_permissions [{path, pathPrefix, pathPattern, permission, readPermission,
   writePermission}] and authorities.
@@ -167,7 +169,7 @@ def parse_manifest(manifest_path, sdk=None):
     components = []
     if app is not None:
         for attr in ('permission', 'usesCleartextTraffic', 'networkSecurityConfig',
-                     'debuggable', 'allowBackup'):
+                     'debuggable', 'allowBackup', 'taskAffinity'):
             application[attr] = _a(app, attr)
         app_perm = application['permission']
         for tag in COMPONENT_TAGS:
@@ -186,6 +188,9 @@ def parse_manifest(manifest_path, sdk=None):
                     'intent_filters': filters,
                     'permission': _a(c, 'permission') or app_perm,
                 }
+                if tag in ('activity', 'activity-alias'):
+                    comp['task_affinity'] = _a(c, 'taskAffinity')
+                    comp['launch_mode'] = _a(c, 'launchMode')
                 if tag == 'provider':
                     comp['authorities'] = _a(c, 'authorities')
                     comp['read_permission'] = _a(c, 'readPermission')

@@ -3,8 +3,8 @@
 find(apk) returns a list of findings, each a dict with:
   component, component_type, issue, cwe, confidence (high, medium or low)
 
-The rules in this file read only the manifest dict. Of the ten issue
-kinds in CWE below, four can be seen in a manifest and have rules here:
+The rules in this file read only the manifest dict. Of the eleven issue
+kinds in CWE below, five can be seen in a manifest and have rules here:
 
   exported-no-permission  exported component with no permission
   implicit-intent         component exported only because it has an intent filter
@@ -14,6 +14,10 @@ kinds in CWE below, four can be seen in a manifest and have rules here:
   path-not-sanitized      exported content provider protected only by path
                           permissions, or granting URI permissions, so access
                           depends on the path the caller supplies
+  task-affinity-hijack    activity whose android:taskAffinity names another
+                          package (not the app package or a name under it), so
+                          it joins a task another app can own; the evidence
+                          also names a singleTask or singleInstance launchMode
 
 The other six (dynamic-receiver-no-permission, missing-certificate-validation,
 sql-no-parameterization, js-enabled-webview, hardcoded-key, weak-cipher) are
@@ -44,6 +48,7 @@ CWE = {
     'js-enabled-webview': 'CWE-749',
     'hardcoded-key': 'CWE-321',
     'weak-cipher': 'CWE-327',
+    'task-affinity-hijack': 'CWE-1021',
 }
 
 ISSUES = tuple(CWE)
@@ -114,6 +119,28 @@ def _path_not_sanitized(comp):
     return None
 
 
+LAUNCH_MODES_NEW_TASK = ('singleTask', 'singleInstance', '2', '3')
+
+
+def _foreign_affinity(affinity, package):
+    if not affinity or not package:
+        return False   # an empty affinity means the activity belongs to no task
+    return affinity != package and not affinity.startswith(package + '.')
+
+
+def _task_affinity(comp, package):
+    """Evidence text when an activity's taskAffinity points at another package."""
+    if comp['type'] not in ('activity', 'activity-alias'):
+        return None
+    affinity = comp.get('task_affinity')
+    if not _foreign_affinity(affinity, package):
+        return None
+    evidence = 'android:taskAffinity="%s"' % affinity
+    if comp.get('launch_mode') in LAUNCH_MODES_NEW_TASK:
+        evidence += ' with android:launchMode="%s"' % comp['launch_mode']
+    return evidence
+
+
 def _cleartext(apk):
     if 'android.permission.INTERNET' not in apk.get('permissions', []):
         return None
@@ -167,6 +194,11 @@ def _manifest_findings(apk):
             conf = rule(comp)
             if conf:
                 findings.append(_finding(comp, issue, conf))
+        evidence = _task_affinity(comp, apk.get('package'))
+        if evidence:
+            f = _finding(comp, 'task-affinity-hijack', 'high')
+            f['evidence'] = evidence
+            findings.append(f)
     conf = _cleartext(apk)
     if conf:
         findings.append(_finding(None, 'cleartext-http', conf))
