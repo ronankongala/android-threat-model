@@ -48,6 +48,18 @@ Patterns:
   clipboard_sensitive          text from an input field put on the clipboard
   dynamic_code_load            DexClassLoader / PathClassLoader created
   sticky_broadcast             sendStickyBroadcast / sendStickyOrderedBroadcast
+  sticky_broadcast_receiver    (medium) onReceive of an app receiver registered for
+                               the action of a sticky broadcast the app sends
+                               (action from new Intent("...") or setAction("...")),
+                               in a manifest intent filter or through
+                               registerReceiver with an IntentFilter built from that
+                               string, that acts without checking the data: no
+                               isInitialStickyBroadcast, getAction compared with
+                               equals, checkCallingPermission (or similar) call, and
+                               no null check or comparison of an extra. Receivers
+                               with a manifest permission or registered with a
+                               broadcast permission are skipped. Any app can
+                               replace a sticky broadcast, so its data is untrusted
   implicit_broadcast           sendBroadcast with an Intent that names no target
   pending_intent_empty         PendingIntent wrapping an empty Intent, or one built
                                with new Intent() and no action in the constructor
@@ -130,6 +142,7 @@ PATTERNS = {
     'clipboard_sensitive': 'CWE-200',
     'dynamic_code_load': 'CWE-494',
     'sticky_broadcast': 'CWE-927',
+    'sticky_broadcast_receiver': 'CWE-927',
     'implicit_broadcast': 'CWE-927',
     'pending_intent_empty': 'CWE-927',
     'pending_intent_implicit': 'CWE-927',
@@ -374,6 +387,8 @@ class _Method:
                 self.regs[dest] = self.new_obj('intent')
             elif t in ('Ljava/lang/StringBuilder;', 'Ljava/lang/StringBuffer;'):
                 self.regs[dest] = self.new_obj('sb')
+            elif t == 'Landroid/content/IntentFilter;':
+                self.regs[dest] = self.new_obj('filter')
             else:
                 self.regs[dest] = ('new', t)
         elif op.startswith('sget'):
@@ -413,6 +428,7 @@ class _Method:
         self.sql(no, text, owner, name, types, args)
         self.files(no, text, owner, name, types, args)
         self.icc(no, text, owner, name, desc, args, recv)
+        self.receivers(owner, name, desc, args, recv)
         self.misc(no, text, owner, name, args)
         self.summaries(owner + '->' + name + '(' + desc + ')' + ret, vals)
         self.flow(owner, name, desc, ret, args, recv, vals)
@@ -431,6 +447,8 @@ class _Method:
                     o['flags'].add('unknown')
                 elif desc.startswith('Ljava/lang/String;'):
                     o['flags'].add('action')
+                    if args and args[0] and args[0][0] == 'str':
+                        o['action'] = args[0][1]
             o = self.obj(recv, 'sb')
             if o is not None and args:
                 o['flags'].add('appended')
@@ -465,6 +483,8 @@ class _Method:
                 o['flags'].add('explicit')
             elif name == 'setAction':
                 o['flags'].add('action')
+                if args and args[0] and args[0][0] == 'str':
+                    o['action'] = args[0][1]
             elif name in ('setData', 'setDataAndType'):
                 o['flags'].add('action')
             self.last = recv
@@ -603,6 +623,9 @@ class _Method:
         if name in ('sendStickyBroadcast', 'sendStickyOrderedBroadcast',
                     'sendStickyBroadcastAsUser', 'sendStickyOrderedBroadcastAsUser'):
             self.report('sticky_broadcast', 'high', no, text)
+            o = self.obj(args[0] if args else None, 'intent')
+            if o is not None and o.get('action'):
+                self.ctx.sticky_actions.add(o['action'])
         elif name in ('sendBroadcast', 'sendOrderedBroadcast', 'sendBroadcastAsUser') \
                 and 'LocalBroadcastManager' not in owner and args:
             types = _types(desc)
@@ -635,6 +658,31 @@ class _Method:
         elif self.action_read and owner == 'Ljava/lang/String;' and name in (
                 'equals', 'equalsIgnoreCase', 'contentEquals', 'hashCode', 'startsWith'):
             self.action_checked = True
+
+    def receivers(self, owner, name, desc, args, recv):
+        """IntentFilter actions and registerReceiver calls (for
+        sticky_broadcast_receiver)."""
+        f = self.obj(recv, 'filter')
+        if f is not None and name in ('<init>', 'addAction') and args \
+                and desc.startswith('Ljava/lang/String;') and args[0] and args[0][0] == 'str':
+            f.setdefault('actions', set()).add(args[0][1])
+            return
+        if name != 'registerReceiver' or len(args) < 2 \
+                or not desc.startswith('Landroid/content/BroadcastReceiver;Landroid/content/IntentFilter;'):
+            return
+        v, t = args[0], None
+        if v and v[0] == 'new':
+            t = v[1]
+        elif v and v[0] == 'this':
+            t = self.cls['name']
+        elif v and v[0] == 'param':
+            t = self.param_types.get(v[1])
+        f = self.obj(args[1], 'filter')
+        types = _types(desc)
+        perm = len(types) > 2 and types[2] == 'Ljava/lang/String;' and len(args) > 2 \
+            and args[2] is not None and not _is_null(args[2])
+        if t and f is not None and f.get('actions'):
+            self.ctx.dyn_receivers.add((t, tuple(sorted(f['actions'])), perm))
 
     @property
     def is_on_receive(self):
@@ -690,6 +738,8 @@ class _Context:
         self.findings = {}
         self.input_readers = set()
         self.js_interfaces = set()   # (file, line, text, interface class or None)
+        self.sticky_actions = set()  # actions of sticky broadcasts sent by the app
+        self.dyn_receivers = set()   # (receiver class, actions, permission given)
 
     def field_write(self, ref, value, in_clinit):
         const = value if value and value[0] in ('str', 'lit') and in_clinit else None
@@ -1199,6 +1249,87 @@ def _js_interface_rules(ctx, classes, decoded_dir):
             cls = by_name.get(cls['super'])
 
 
+STICKY_CHECKS = ('isInitialStickyBroadcast', 'checkCallingPermission',
+                 'checkCallingOrSelfPermission', 'enforceCallingPermission',
+                 'enforceCallingOrSelfPermission')
+COMPARES = ('equals', 'equalsIgnoreCase', 'contentEquals', 'matches', 'compareTo',
+            'isEmpty', 'startsWith', 'endsWith', 'contains')
+
+
+def _checks_broadcast(method):
+    """True when onReceive checks the broadcast before acting: a STICKY_CHECKS
+    call, getAction compared with a COMPARES call, or an extra (get*Extra,
+    getExtras, Bundle get*) that is null checked (if-eqz / if-nez) or passed to a
+    COMPARES call (including TextUtils.isEmpty). Branch order is not modelled:
+    a check anywhere in the method counts."""
+    extras, pending = set(), None
+    for no, text in _code(method['body']):
+        op = text.split()[0]
+        ops = [o.strip() for o in text.split(None, 1)[-1].split(',')]
+        if op.startswith('move-result'):
+            if pending == 'extra':
+                extras.add(ops[0])
+            elif pending == 'action':
+                extras.add(ops[0])
+            pending = None
+            continue
+        pending = None
+        if op.startswith('invoke-'):
+            inv = INVOKE_RE.match(text)
+            ref = METHOD_REF_RE.match(inv.group(3)) if inv else None
+            if not ref:
+                continue
+            owner, name = ref.group(1), ref.group(2)
+            regs = _regs(inv.group(2))
+            if name in STICKY_CHECKS:
+                return True
+            if name in COMPARES and (set(regs) & extras):
+                return True
+            if owner == 'Landroid/content/Intent;' and name == 'getAction':
+                pending = 'action'
+            elif (owner == 'Landroid/content/Intent;' and (name.endswith('Extra') or name == 'getExtras')) \
+                    or (owner == 'Landroid/os/Bundle;' and name.startswith('get')):
+                pending = 'extra'
+        elif op in ('if-eqz', 'if-nez') and ops[0] in extras:
+            return True
+        elif op.startswith('move') and len(ops) > 1 and ops[1] in extras:
+            extras.add(ops[0])
+    return False
+
+
+def _sticky_receiver_rules(ctx, classes, decoded_dir):
+    """sticky_broadcast_receiver (CWE-927): receivers in this app that consume
+    a sticky broadcast the app sends without checking it. Limits: only actions
+    given as constant strings are matched, receivers registered by another app
+    are out of reach, and receivers whose class the register model cannot
+    resolve at the registerReceiver call are missed."""
+    actions = ctx.sticky_actions
+    if not actions:
+        return
+    targets = set()
+    try:
+        manifest = apk.parse_manifest(os.path.join(decoded_dir, 'AndroidManifest.xml'))
+    except (OSError, ET.ParseError):
+        manifest = {'components': []}
+    for comp in manifest['components']:
+        if comp['type'] != 'receiver' or not comp['name'] or comp.get('permission'):
+            continue
+        if any(a in actions for f in comp['intent_filters'] for a in f['actions']):
+            targets.add('L%s;' % comp['name'].replace('.', '/'))
+    for t, acts, perm in ctx.dyn_receivers:
+        if not perm and set(acts) & actions:
+            targets.add(t)
+    by_name = {c['name']: c for c in classes}
+    for t in sorted(targets):
+        cls = by_name.get(t)
+        if cls is None:
+            continue
+        for m in cls['methods']:
+            if m['name'] == 'onReceive' and m['desc'] == 'Landroid/content/Context;Landroid/content/Intent;' \
+                    and not _checks_broadcast(m):
+                ctx.emit(cls, 'sticky_broadcast_receiver', 'medium', m['line'], m['decl'])
+
+
 # ---------------------------------------------------------------- entry point
 
 def analyze(decoded_dir):
@@ -1218,4 +1349,5 @@ def analyze(decoded_dir):
     _pinning_rules(ctx, classes, decoded_dir)
     _fragment_rules(ctx, classes, decoded_dir)
     _js_interface_rules(ctx, classes, decoded_dir)
+    _sticky_receiver_rules(ctx, classes, decoded_dir)
     return sorted(ctx.findings.values(), key=lambda f: (f['file'], f['line'], f['pattern']))
