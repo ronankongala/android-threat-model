@@ -21,8 +21,13 @@ kinds in CWE below, five can be seen in a manifest and have rules here:
                           depends on the path the caller supplies
   task-affinity-hijack    activity whose android:taskAffinity names another
                           package (not the app package or a name under it), so
-                          it joins a task another app can own; the evidence
-                          also names a singleTask or singleInstance launchMode
+                          it joins a task another app can own (confidence high;
+                          the evidence also names a singleTask or singleInstance
+                          launchMode). Also any activity with launchMode
+                          singleTask or singleInstance (or apktool's numeric 2
+                          or 3), whatever its taskAffinity, since it starts or
+                          joins a task by affinity (confidence medium). An
+                          activity hit by both rules yields one finding (high)
 
 The other six (dynamic-receiver-no-permission, missing-certificate-validation,
 sql-no-parameterization, js-enabled-webview, hardcoded-key, weak-cipher) are
@@ -137,16 +142,24 @@ def _foreign_affinity(affinity, package):
 
 
 def _task_affinity(comp, package):
-    """Evidence text when an activity's taskAffinity points at another package."""
+    """(confidence, evidence) for the task-affinity-hijack rule, or None.
+
+    high: the activity's taskAffinity points at another package.
+    medium: the activity uses launchMode singleTask or singleInstance.
+    """
     if comp['type'] not in ('activity', 'activity-alias'):
         return None
     affinity = comp.get('task_affinity')
-    if not _foreign_affinity(affinity, package):
-        return None
-    evidence = 'android:taskAffinity="%s"' % affinity
-    if comp.get('launch_mode') in LAUNCH_MODES_NEW_TASK:
-        evidence += ' with android:launchMode="%s"' % comp['launch_mode']
-    return evidence
+    mode = comp.get('launch_mode')
+    new_task = mode in LAUNCH_MODES_NEW_TASK
+    if _foreign_affinity(affinity, package):
+        evidence = 'android:taskAffinity="%s"' % affinity
+        if new_task:
+            evidence += ' with android:launchMode="%s"' % mode
+        return 'high', evidence
+    if new_task:
+        return 'medium', 'android:launchMode="%s"' % mode
+    return None
 
 
 LOCAL_HOSTS = ('localhost', '127.0.0.1', '10.0.2.2')
@@ -242,10 +255,10 @@ def _manifest_findings(apk):
             conf = rule(comp)
             if conf:
                 findings.append(_finding(comp, issue, conf))
-        evidence = _task_affinity(comp, apk.get('package'))
-        if evidence:
-            f = _finding(comp, 'task-affinity-hijack', 'high')
-            f['evidence'] = evidence
+        hit = _task_affinity(comp, apk.get('package'))
+        if hit:
+            f = _finding(comp, 'task-affinity-hijack', hit[0])
+            f['evidence'] = hit[1]
             findings.append(f)
     conf = _cleartext(apk)
     if conf:
