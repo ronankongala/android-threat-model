@@ -69,7 +69,7 @@ def test_score_row_readme_not_run_is_blank():
     entry = {'category': 'ICC', 'cwes': {'CWE-926'}, 'secondary': set()}
     row, _ = evaluate.score_row('B', entry, [], [])
     assert row['readme_findings'] == ''
-    assert evaluate.COLUMNS[-1] == 'readme_findings'
+    assert evaluate.COLUMNS[9] == 'readme_findings'  # A1-1 appended false_positive_any after it
 
 
 def _setup(tmp_path, monkeypatch, observations):
@@ -115,7 +115,10 @@ def test_main_auto_readme_scores_benign_once(tmp_path, monkeypatch):
     # one README finding (hijack, deduped); the crossover after the Secure step is ignored
     assert row['readme_findings'] == '1'
     assert row['benign_findings'] == '2' and row['secure_findings'] == '1'
-    assert row['true_positive'] == '1' and row['false_positive'] == '1'
+    # A1-1: the Secure CWE-926 finding is not a cwe_ids CWE (CWE-1021), so only the
+    # legacy "any Secure finding" column counts it
+    assert row['true_positive'] == '1' and row['false_positive'] == '0'
+    assert row['false_positive_any'] == '1'
     saved = tmp_path / 'eval-tmp' / 'Bench-Lean' / 'readme-observations.json'
     assert len(json.loads(saved.read_text())) == 4
     # --rescore --auto-readme rebuilds the same row from the saved files

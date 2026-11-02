@@ -25,7 +25,8 @@ def test_parse_cwes():
 
 def test_load_ground_truth_reads_secondary(tmp_path):
     gt = _gt(tmp_path, 'System,A,CWE-359,CWE-200,m\nWeb,B,CWE-830,,m\n')
-    assert gt['A'] == {'category': 'System', 'cwes': {'CWE-359'}, 'secondary': {'CWE-200'}}
+    assert gt['A'] == {'category': 'System', 'cwes': {'CWE-359'}, 'secondary': {'CWE-200'},
+                       'components': []}  # A1-1: no vulnerable_component column in this file
     assert gt['B']['secondary'] == set()
 
 

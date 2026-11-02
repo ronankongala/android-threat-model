@@ -7,7 +7,8 @@ File: `data/ground-truth.csv`. One row per Ghera benchmark (57 rows) at tag `Jan
 Every value except `secondary_cwe_ids` (derived from the evaluator and a reviewed correction, see Columns) comes from one of these, and from nothing else:
 - the files under `docs/threat-models/` (`benchmark-index.md`, the threat models `ICC-*.md` and `Web-*.md`, and `other-categories-mapping.md`);
 - the benchmark `README.md`;
-- the benchmark Testing code (`Testing/**/androidTest/**/*.java`).
+- the benchmark Testing code (`Testing/**/androidTest/**/*.java`);
+- for `vulnerable_component` only, the benchmark Java source of Benign and Secure, used to confirm class packages (see that column).
 
 A cell is blank when these sources have nothing for it. A blank cell means "not stated in the sources", not "none".
 

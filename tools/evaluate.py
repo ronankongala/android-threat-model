@@ -13,7 +13,8 @@ because every APK has the same file name and the reports would overwrite each ot
 
 Writes data/evaluation-results.csv with the columns
   benchmark, category, benign_findings, secure_findings, true_positive, false_positive,
-  strict_true_positive, two_app_benign, two_app_secure, readme_findings
+  strict_true_positive, two_app_benign, two_app_secure, readme_findings,
+  false_positive_any
 where
   true_positive  = 1 if benign_findings > 0 and any Benign finding's CWE matches any
                    of the benchmark's ground-truth CWEs (cwe_ids), either directly,
@@ -22,8 +23,29 @@ where
                    to), or because it is listed in the benchmark's secondary_cwe_ids
                    column (P1-3: CWEs reviewed against the threat model and README
                    as describing this benchmark's own weakness), else 0
-  false_positive = 1 if secure_findings > 0, else 0
+  false_positive = 1 if some Secure finding has a CWE that is exactly one of the
+                   benchmark's cwe_ids (no SECONDARY_CWE, no secondary_cwe_ids) AND
+                   is on the benchmark's vulnerable component (A1-1), else 0
   strict_true_positive = like true_positive, but only cwe_ids count
+  false_positive_any = the legacy definition: 1 if secure_findings > 0, else 0
+                   (kept so the old precision stays visible next to the new one)
+
+A1-1 false positive rule. A Secure app is fixed for the benchmark's weakness, not
+for every weakness, so a finding there is only a false positive when it claims the
+benchmark's own weakness (an exact cwe_ids CWE) on the component that carries it.
+The component comes from the vulnerable_component column of data/ground-truth.csv
+(one or more class names separated by "; "). A finding's "component" (manifest
+findings: the component class; code findings: the smali class, e.g.
+edu.ksu.cs.benign.MainActivity$1; app-level findings: "(application)") matches when
+  - it is the same class as a listed name, or an inner class of it (Outer$Inner
+    matches Outer, at any depth);
+  - a listed name without a package (no ".") is compared with the finding's simple
+    class name (the part after the last "."; inner classes again match their outer);
+  - the column is blank or "(application)": every finding matches, so the CWE alone
+    decides.
+An "(application)" finding therefore does not match a named class. A Secure app that
+still exports its launcher activity, or a finding with a related but not exact CWE,
+is not a false positive under this rule; it is under false_positive_any.
 A count is left blank when the APK is missing or the tool fails; the scores then
 treat it as 0 findings, and the reason is printed.
 
@@ -92,7 +114,9 @@ APK_REL = os.path.join('app', 'build', 'outputs', 'apk', 'api27', 'debug', 'app-
 REPORT = 'app-api27-debug-report.json'
 SRC = os.path.join(ROOT, 'src')
 COLUMNS = ['benchmark', 'category', 'benign_findings', 'secure_findings', 'true_positive', 'false_positive',
-           'strict_true_positive', 'two_app_benign', 'two_app_secure', 'readme_findings']
+           'strict_true_positive', 'two_app_benign', 'two_app_secure', 'readme_findings',
+           'false_positive_any']
+APPLICATION = '(application)'
 
 # Fix A: alternative CWEs that the rules report for a weakness the ground truth
 # records under a related CWE. A finding with the key CWE counts as the value CWE.
@@ -147,13 +171,47 @@ def parse_cwes(value):
     return {c.strip() for c in (value or '').split(';') if c.strip()}
 
 
+def parse_components(value):
+    """List of class names from a semicolon separated vulnerable_component cell."""
+    return [c.strip() for c in (value or '').split(';') if c.strip()]
+
+
 def load_ground_truth(path=None):
-    """{folder: {'category', 'cwes' (cwe_ids), 'secondary' (secondary_cwe_ids)}}."""
+    """{folder: {'category', 'cwes' (cwe_ids), 'secondary' (secondary_cwe_ids),
+    'components' (vulnerable_component)}}."""
     gt = {}
     for row in read_csv(path or GROUND_TRUTH):
         gt[row['folder']] = {'category': row['category'], 'cwes': parse_cwes(row['cwe_ids']),
-                             'secondary': parse_cwes(row.get('secondary_cwe_ids'))}
+                             'secondary': parse_cwes(row.get('secondary_cwe_ids')),
+                             'components': parse_components(row.get('vulnerable_component'))}
     return gt
+
+
+def component_matches(component, vulnerable):
+    """True when a finding's component is one of the vulnerable components.
+
+    vulnerable is the parsed vulnerable_component list. Blank, or only
+    "(application)", matches every finding. Otherwise the finding's class (with
+    any $Inner suffix removed) must equal a listed fully qualified name, or, for a
+    listed name without a package, have that simple name.
+    """
+    names = [v for v in vulnerable or () if v != APPLICATION]
+    if not names:
+        return True
+    outer = str(component or '').split('$', 1)[0]
+    simple = outer.rsplit('.', 1)[-1]
+    for name in names:
+        if (outer == name) if '.' in name else (simple == name):
+            return True
+    return False
+
+
+def is_false_positive(secure, gt_entry):
+    """A1-1: some Secure finding has an exact cwe_ids CWE and is on the
+    vulnerable component."""
+    return any(f.get('cwe') in gt_entry['cwes']
+               and component_matches(f.get('component'), gt_entry.get('components'))
+               for f in secure or [])
 
 
 def benchmark_list():
@@ -214,11 +272,12 @@ def score_row(bench, gt_entry, benign, secure, two_app=None, readme=None):
         'benign_findings': '' if benign is None else benign_n,
         'secure_findings': '' if secure is None else secure_n,
         'true_positive': 1 if benign_n > 0 and matched else 0,
-        'false_positive': 1 if secure_n > 0 else 0,
+        'false_positive': 1 if is_false_positive(secure, gt_entry) else 0,
         'strict_true_positive': 1 if benign_n > 0 and strict else 0,
         'two_app_benign': counts['Benign'],
         'two_app_secure': counts['Secure'],
         'readme_findings': '' if readme_added is None else len(readme_added),
+        'false_positive_any': 1 if secure_n > 0 else 0,
     }
     return row, matched
 
@@ -262,26 +321,35 @@ def rescore(benchmarks, gt, dynamic=False, tmp=None, auto_readme=False):
                 base = os.path.join(ROOT, 'benchmarks', 'ghera', gt[bench]['category'], bench)
                 readme = readme_findings(benign_only(observations), readme_runner.bench_apps(base))
         row, matched = score_row(bench, gt[bench], result['Benign'], result['Secure'], two_app, readme)
-        print('%-58s benign=%-3s secure=%-3s tp=%d strict_tp=%d fp=%d two_app=%s/%s readme=%s %s'
+        print('%-58s benign=%-3s secure=%-3s tp=%d strict_tp=%d fp=%d fp_any=%d two_app=%s/%s readme=%s %s'
               % (bench, row['benign_findings'], row['secure_findings'], row['true_positive'],
-                 row['strict_true_positive'], row['false_positive'], row['two_app_benign'],
+                 row['strict_true_positive'], row['false_positive'], row['false_positive_any'],
+                 row['two_app_benign'],
                  row['two_app_secure'], row['readme_findings'], ', '.join(matched)))
         rows.append(row)
     return rows
 
 
+def _precision(tp, fp):
+    return '%.2f' % (tp / (tp + fp)) if tp + fp else 'n/a'
+
+
 def summary(rows):
-    """Summary lines: TP, FP, precision and recall, expanded and strict."""
+    """Summary lines: TP, FP, precision and recall, expanded and strict, with the
+    A1-1 false positives and, for comparison, the legacy "any Secure finding" ones."""
     tp = sum(r['true_positive'] for r in rows)
     fp = sum(r['false_positive'] for r in rows)
-    lines = ['Evaluated %d benchmarks: %d true positives, %d false positives' % (len(rows), tp, fp)]
+    fp_any = sum(r.get('false_positive_any', 0) for r in rows)
+    lines = ['Evaluated %d benchmarks: %d true positives, %d false positives '
+             '(exact CWE on the vulnerable component; %d with any Secure finding)'
+             % (len(rows), tp, fp, fp_any)]
     if rows:
-        precision = '%.2f' % (tp / (tp + fp)) if tp + fp else 'n/a'
-        lines.append('Precision %s, recall %.2f' % (precision, tp / len(rows)))
+        lines.append('Precision %s, recall %.2f' % (_precision(tp, fp), tp / len(rows)))
         stp = sum(r['strict_true_positive'] for r in rows)
-        sprec = '%.2f' % (stp / (stp + fp)) if stp + fp else 'n/a'
         lines.append('Strict CWE match only (cwe_ids, no secondary CWEs): %d true positives, '
-                     'precision %s, recall %.2f' % (stp, sprec, stp / len(rows)))
+                     'precision %s, recall %.2f' % (stp, _precision(stp, fp), stp / len(rows)))
+        lines.append('Legacy precision (false positive = any Secure finding): %s, strict %s'
+                     % (_precision(tp, fp_any), _precision(stp, fp_any)))
     return lines
 
 
@@ -514,9 +582,10 @@ def main(argv=None):
         else:
             readme = None
         row, matched = score_row(bench, gt[bench], result['Benign'], result['Secure'], two_app, readme)
-        print('   true_positive=%d (matching CWEs: %s) strict_true_positive=%d false_positive=%d'
+        print('   true_positive=%d (matching CWEs: %s) strict_true_positive=%d false_positive=%d '
+              'false_positive_any=%d'
               % (row['true_positive'], ', '.join(matched) or 'none', row['strict_true_positive'],
-                 row['false_positive']))
+                 row['false_positive'], row['false_positive_any']))
         rows.append(row)
 
     write_rows(rows, args.out or OUT_CSV)
