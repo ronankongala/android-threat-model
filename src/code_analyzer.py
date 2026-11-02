@@ -55,11 +55,17 @@ Patterns:
                                setPackage, setClass, setClassName (or other target)
                                call before the PendingIntent call
   no_validity_check            onReceive starts a component without checking the action
+  ordered_broadcast_priority   BroadcastReceiver subclass whose onReceive calls
+                               setResult, setResultData, setResultExtras or
+                               abortBroadcast, declared in AndroidManifest.xml with an
+                               intent filter of android:priority greater than 0
   unique_ids                   device identifiers (IMEI, serial, ANDROID_ID)
 """
 import os
 import re
+import xml.etree.ElementTree as ET
 
+import apk
 import call_graph
 
 PATTERNS = {
@@ -82,6 +88,7 @@ PATTERNS = {
     'pending_intent_empty': 'CWE-927',
     'pending_intent_implicit': 'CWE-927',
     'no_validity_check': 'CWE-925',
+    'ordered_broadcast_priority': 'CWE-927',
     'unique_ids': 'CWE-359',
 }
 
@@ -737,6 +744,57 @@ def _class_rules(ctx, cls):
                 ctx.emit(cls, 'hostname_not_verified', 'medium', m['line'], m['decl'])
 
 
+RECEIVER = 'Landroid/content/BroadcastReceiver;'
+RESULT_CALLS = ('setResult', 'setResultData', 'setResultExtras', 'abortBroadcast')
+
+
+def _receiver_priorities(decoded_dir):
+    """{class descriptor: highest intent filter priority} for the receivers in
+    the decoded AndroidManifest.xml."""
+    path = os.path.join(decoded_dir, 'AndroidManifest.xml')
+    try:
+        manifest = apk.parse_manifest(path)
+    except (OSError, ET.ParseError):
+        return {}
+    out = {}
+    for comp in manifest['components']:
+        if comp['type'] != 'receiver' or not comp['name']:
+            continue
+        values = [_int(f['priority']) for f in comp['intent_filters'] if f.get('priority')]
+        values = [v for v in values if v is not None]
+        if values:
+            out['L%s;' % comp['name'].replace('.', '/')] = max(values)
+    return out
+
+
+def _is_receiver(cls, by_name):
+    seen = set()
+    sup = cls['super']
+    while sup and sup not in seen:
+        if sup == RECEIVER:
+            return True
+        seen.add(sup)
+        sup = by_name[sup]['super'] if sup in by_name else None
+    return False
+
+
+def _ordered_broadcast_rules(ctx, classes, decoded_dir):
+    priorities = _receiver_priorities(decoded_dir)
+    by_name = {c['name']: c for c in classes}
+    for cls in classes:
+        if priorities.get(cls['name'], 0) <= 0 or not _is_receiver(cls, by_name):
+            continue
+        for m in cls['methods']:
+            if m['name'] != 'onReceive' or m['desc'] != 'Landroid/content/Context;Landroid/content/Intent;':
+                continue
+            for no, text in _code(m['body']):
+                inv = INVOKE_RE.match(text)
+                ref = METHOD_REF_RE.match(inv.group(3)) if inv else None
+                if ref and ref.group(2) in RESULT_CALLS:
+                    ctx.emit(cls, 'ordered_broadcast_priority', 'medium', no, text)
+                    break
+
+
 # ---------------------------------------------------------------- entry point
 
 def analyze(decoded_dir):
@@ -752,4 +810,5 @@ def analyze(decoded_dir):
         ctx.settle_fields()
     for cls in classes:
         _class_rules(ctx, cls)
+    _ordered_broadcast_rules(ctx, classes, decoded_dir)
     return sorted(ctx.findings.values(), key=lambda f: (f['file'], f['line'], f['pattern']))
