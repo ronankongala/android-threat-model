@@ -58,6 +58,9 @@ By category: Crypto precision 0.44, recall 0.80 (5 benchmarks); ICC precision 0.
 
 ## Tool in Action
 
+![Tool run](docs/screenshots/step_demo_01_tool-run-summary.png)
+*Running the tool on a Ghera benchmark APK: 3 findings detected in 2 components*
+
 ![Tool findings](docs/screenshots/step_demo_02_tool-report-output.png)
 *The analysis tool detecting CWE-925, CWE-927 and a taint flow (CWE-926) in the DynamicRegBroadcastReceiver Benign APK*
 
