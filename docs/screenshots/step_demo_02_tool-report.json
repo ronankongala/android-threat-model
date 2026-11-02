@@ -1,0 +1,37 @@
+[
+  {
+    "component": "edu.ksu.cs.benign.EmailBroadcastRecv",
+    "component_type": "class",
+    "file": "smali/edu/ksu/cs/benign/EmailBroadcastRecv.smali",
+    "line": 58,
+    "pattern": "no_validity_check",
+    "issue": "no_validity_check",
+    "cwe": "CWE-925",
+    "confidence": "medium",
+    "evidence": "invoke-virtual {p1, v2}, Landroid/content/Context;->startActivity(Landroid/content/Intent;)V"
+  },
+  {
+    "component": "edu.ksu.cs.benign.MainActivity$1",
+    "component_type": "class",
+    "file": "smali/edu/ksu/cs/benign/MainActivity$1.smali",
+    "line": 68,
+    "pattern": "implicit_broadcast",
+    "issue": "implicit_broadcast",
+    "cwe": "CWE-927",
+    "confidence": "medium",
+    "evidence": "invoke-virtual {v1, v0}, Ledu/ksu/cs/benign/MainActivity;->sendBroadcast(Landroid/content/Intent;)V"
+  },
+  {
+    "component": "edu.ksu.cs.benign.EmailBroadcastRecv",
+    "component_type": "class",
+    "issue": "taint-flow",
+    "pattern": "taint:getStringExtra->startActivity",
+    "cwe": "CWE-926",
+    "confidence": "high",
+    "file": "smali/edu/ksu/cs/benign/EmailBroadcastRecv.smali",
+    "line": 58,
+    "evidence": "source L34: invoke-virtual {p2, v1}, Landroid/content/Intent;->getStringExtra(Ljava/lang/String;)Ljava/lang/String; | sink L58: invoke-virtual {p1, v2}, Landroid/content/Context;->startActivity(Landroid/content/Intent;)V",
+    "source_line": 34,
+    "sink_line": 58
+  }
+]
