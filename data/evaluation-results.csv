@@ -30,3 +30,9 @@ UnEncryptedSocketComm-MITM-Lean,Networking,2,1,1,1
 UnpinnedCertificates-MITM-Lean,Networking,2,2,0,1
 MergeManifest-UnintendedBehavior-Lean,NonAPI,2,,1,0
 UnnecesaryPerms-PrivEscalation-Lean,Permission,2,2,1,1
+WeakPermission-UnauthorizedAccess-Lean,Permission,1,1,1,1
+ExternalStorage-DataInjection-Lean,Storage,1,1,0,1
+ExternalStorage-InformationLeak-Lean,Storage,0,0,0,0
+InternalStorage-DirectoryTraversal-Lean,Storage,1,0,1,0
+InternalToExternalStorage-InformationLeak-Lean,Storage,2,1,1,1
+SQLite-execSQL-Lean,Storage,4,3,1,1
