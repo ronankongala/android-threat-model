@@ -51,7 +51,8 @@ A count is left blank when the APK is missing or the tool fails; the scores then
 treat it as 0 findings, and the reason is printed.
 
 Usage: python tools/evaluate.py [--no-dynamic | --dynamic] [--auto-readme] [--diff-mode] [--out CSV]
-       python tools/evaluate.py --rescore [--dynamic] [--diff-mode] [--out CSV]
+       python tools/evaluate.py --rescore [--dynamic] [--diff-mode] [--calibrate]
+                                [--write-rule-precision] [--out CSV]
 
 --no-dynamic (the default) scores the static layers only: manifest rules, smali
 code patterns and taint analysis. --dynamic also passes --dynamic to ate.py, so
@@ -109,6 +110,18 @@ scored as in the standard mode. Diff mode needs the fixed app, so it measures
 whether the tool sees what a fix changed; it is not the precision of the tool
 on a single unknown APK, and its numbers are not comparable with the standard
 mode. It works with --rescore as well.
+
+--calibrate (P-9, with --rescore only) applies the empirical confidence
+calibration of src/calibration.py to the Benign and Secure findings before
+scoring, with leave-one-out rule precision: each benchmark is scored with the
+per-rule true and false positive counts of the other benchmarks, so no
+benchmark's own result calibrates it. --write-rule-precision (with --rescore)
+counts, per rule (finding issue), the benchmarks where the rule gives a true
+positive (a Benign finding with a ground-truth CWE, as for true_positive) or a
+false positive (a Secure finding that meets the false positive definition)
+over all scored benchmarks, and writes data/rule-precision.json, which
+`src/ate.py --calibrate` uses. Counts always come from the uncalibrated,
+non-differential findings.
 
 --rescore runs nothing: it rescans the reports a previous run left in
 data/eval-tmp/<benchmark>/<Benign|Secure>/app-api27-debug-report.json and scores
@@ -282,6 +295,74 @@ def diff_findings(benign, secure):
             [f for f in secure if diff_key(f) not in b_keys])
 
 
+RULE_PRECISION = os.path.join(ROOT, 'data', 'rule-precision.json')
+
+
+def _calibration():
+    if SRC not in sys.path:
+        sys.path.insert(0, SRC)
+    import calibration
+    return calibration
+
+
+def rule_hits(gt_entry, benign, secure):
+    """{rule: [tp, fp]} for one benchmark (P-9): tp 1 when a Benign finding of
+    the rule has a matching CWE (cwe_ids, SECONDARY_CWE or secondary_cwe_ids),
+    fp 1 when a Secure finding of the rule is a false positive (A1-1)."""
+    rule_of = _calibration().rule_of
+    hits = {}
+    for f in benign or []:
+        _, matched = matching_cwes({f.get('cwe')}, gt_entry['cwes'], gt_entry.get('secondary', ()))
+        if matched:
+            hits.setdefault(rule_of(f), [0, 0])[0] = 1
+    for f in secure or []:
+        if is_false_positive([f], gt_entry):
+            hits.setdefault(rule_of(f), [0, 0])[1] = 1
+    return hits
+
+
+def rule_totals(per_bench, exclude=None):
+    """{rule: (tp, fp)} summed over per_bench ({bench: rule_hits()}), leaving
+    out the benchmark `exclude`."""
+    totals = {}
+    for bench, hits in per_bench.items():
+        if bench == exclude:
+            continue
+        for rule, (tp, fp) in hits.items():
+            t = totals.setdefault(rule, [0, 0])
+            t[0] += tp
+            t[1] += fp
+    return {r: tuple(v) for r, v in totals.items()}
+
+
+def rule_scores(totals):
+    """{rule: precision or None} from rule_totals()."""
+    precision = _calibration().precision
+    return {r: precision(tp, fp) for r, (tp, fp) in totals.items()}
+
+
+def write_rule_precision(per_bench, path=None):
+    totals = rule_totals(per_bench)
+    precision = _calibration().precision
+    data = {
+        'source': 'python tools/evaluate.py --rescore --write-rule-precision (static layers, '
+                  '%d benchmarks)' % len(per_bench),
+        'definition': 'tp: benchmarks where a Benign finding of the rule has a ground-truth CWE; '
+                      'fp: benchmarks where a Secure finding of the rule is a false positive '
+                      '(exact cwe_ids CWE on the vulnerable component, confidence not low); '
+                      'precision = tp / (tp + fp), null when both are 0',
+        'rules': {r: {'tp': tp, 'fp': fp,
+                      'precision': None if precision(tp, fp) is None else round(precision(tp, fp), 4)}
+                  for r, (tp, fp) in sorted(totals.items())},
+    }
+    path = path or RULE_PRECISION
+    with open(path, 'w', encoding='utf-8', newline='\n') as f:
+        json.dump(data, f, indent=2)
+        f.write('\n')
+    print('Wrote %s (%d rules)' % (os.path.relpath(path, ROOT), len(data['rules'])))
+    return data
+
+
 def score_row(bench, gt_entry, benign, secure, two_app=None, readme=None, diff=False):
     """Score one benchmark; return (CSV row dict, expanded matching CWEs).
 
@@ -344,11 +425,15 @@ def is_dynamic(finding):
     return str(finding.get('issue', '')).startswith('dynamic-')
 
 
-def rescore(benchmarks, gt, dynamic=False, tmp=None, auto_readme=False, diff=False):
+def rescore(benchmarks, gt, dynamic=False, tmp=None, auto_readme=False, diff=False,
+            calibrate=False, write_precision=None):
     """Score the reports a previous run left in `tmp` (default data/eval-tmp),
-    without running anything."""
+    without running anything. With calibrate, the findings are filtered by
+    leave-one-out calibrated confidence (P-9) before scoring; with
+    write_precision (a path), the per-rule counts are written there."""
     tmp = tmp or TMP
     rows = []
+    loaded = {}
     for bench in benchmarks:
         if bench not in gt:
             print('skip %s: not in ground-truth.csv' % bench)
@@ -370,8 +455,18 @@ def rescore(benchmarks, gt, dynamic=False, tmp=None, auto_readme=False, diff=Fal
                 import readme_runner
                 base = os.path.join(ROOT, 'benchmarks', 'ghera', gt[bench]['category'], bench)
                 readme = readme_findings(benign_only(observations), readme_runner.bench_apps(base))
-        row, matched = score_row(bench, gt[bench], result['Benign'], result['Secure'], two_app, readme,
-                                 diff)
+        loaded[bench] = (result, two_app, readme)
+    per_bench = {b: rule_hits(gt[b], r['Benign'], r['Secure']) for b, (r, _, _) in loaded.items()}
+    if write_precision:
+        write_rule_precision(per_bench, write_precision)
+    calibrate_fn = _calibration().calibrate if calibrate else None
+    for bench, (result, two_app, readme) in loaded.items():
+        benign, secure = result['Benign'], result['Secure']
+        if calibrate_fn:
+            scores = rule_scores(rule_totals(per_bench, exclude=bench))
+            benign = None if benign is None else calibrate_fn(benign, scores)
+            secure = None if secure is None else calibrate_fn(secure, scores)
+        row, matched = score_row(bench, gt[bench], benign, secure, two_app, readme, diff)
         print('%-58s benign=%-3s secure=%-3s tp=%d strict_tp=%d fp=%d fp_any=%d two_app=%s/%s readme=%s %s'
               % (bench, row['benign_findings'], row['secure_findings'], row['true_positive'],
                  row['strict_true_positive'], row['false_positive'], row['false_positive_any'],
@@ -571,6 +666,12 @@ def main(argv=None):
     p.add_argument('--diff-mode', action='store_true',
                    help='P-8: score only the findings that differ between the Benign and '
                         'Secure APK of each benchmark')
+    p.add_argument('--calibrate', action='store_true',
+                   help='P-9 (with --rescore): filter findings by leave-one-out calibrated '
+                        'confidence before scoring')
+    p.add_argument('--write-rule-precision', action='store_true',
+                   help='P-9 (with --rescore): write the per-rule precision to '
+                        'data/rule-precision.json')
     p.add_argument('--rescore', action='store_true',
                    help='run nothing; rescore the reports already in data/eval-tmp')
     p.add_argument('--out', help='CSV to write (default data/evaluation-results.csv; '
@@ -583,13 +684,18 @@ def main(argv=None):
     if args.only:
         benchmarks = [b for b in benchmarks if b in args.only]
 
+    if (args.calibrate or args.write_rule_precision) and not args.rescore:
+        p.error('--calibrate and --write-rule-precision need --rescore')
     if args.rescore:
         print('Rescore of data/eval-tmp (%s)' % ('all findings' if args.dynamic
                                                  else 'static layers only, dynamic-* findings dropped'))
         if args.diff_mode:
             print('Differential mode (--diff-mode): Benign minus Secure, Secure minus Benign')
+        if args.calibrate:
+            print('Calibrated (--calibrate): leave-one-out rule precision, threshold 0.3')
         rows = rescore(benchmarks, gt, args.dynamic, auto_readme=args.auto_readme,
-                       diff=args.diff_mode)
+                       diff=args.diff_mode, calibrate=args.calibrate,
+                       write_precision=RULE_PRECISION if args.write_rule_precision else None)
         print('\n' + '\n'.join(summary(rows)))
         if args.out:
             write_rows(rows, args.out)

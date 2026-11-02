@@ -1,0 +1,186 @@
+{
+  "source": "python tools/evaluate.py --rescore --write-rule-precision (static layers, 53 benchmarks)",
+  "definition": "tp: benchmarks where a Benign finding of the rule has a ground-truth CWE; fp: benchmarks where a Secure finding of the rule is a false positive (exact cwe_ids CWE on the vulnerable component, confidence not low); precision = tp / (tp + fp), null when both are 0",
+  "rules": {
+    "certificate_pinning_missing": {
+      "tp": 5,
+      "fp": 0,
+      "precision": 1.0
+    },
+    "cleartext-http": {
+      "tp": 3,
+      "fp": 0,
+      "precision": 1.0
+    },
+    "clipboard_sensitive": {
+      "tp": 1,
+      "fp": 0,
+      "precision": 1.0
+    },
+    "constant_iv": {
+      "tp": 1,
+      "fp": 0,
+      "precision": 1.0
+    },
+    "default-task-affinity": {
+      "tp": 2,
+      "fp": 0,
+      "precision": 1.0
+    },
+    "directory_traversal": {
+      "tp": 1,
+      "fp": 0,
+      "precision": 1.0
+    },
+    "ecb_mode": {
+      "tp": 1,
+      "fp": 0,
+      "precision": 1.0
+    },
+    "empty_trustmanager": {
+      "tp": 4,
+      "fp": 1,
+      "precision": 0.8
+    },
+    "exported-no-permission": {
+      "tp": 18,
+      "fp": 9,
+      "precision": 0.6667
+    },
+    "external_storage_io": {
+      "tp": 4,
+      "fp": 2,
+      "precision": 0.6667
+    },
+    "fragment_injection": {
+      "tp": 1,
+      "fp": 0,
+      "precision": 1.0
+    },
+    "hardcoded_key": {
+      "tp": 3,
+      "fp": 0,
+      "precision": 1.0
+    },
+    "hardcoded_key_pbe": {
+      "tp": 1,
+      "fp": 0,
+      "precision": 1.0
+    },
+    "hostname_not_verified": {
+      "tp": 4,
+      "fp": 0,
+      "precision": 1.0
+    },
+    "implicit-intent": {
+      "tp": 1,
+      "fp": 0,
+      "precision": 1.0
+    },
+    "implicit_broadcast": {
+      "tp": 0,
+      "fp": 1,
+      "precision": 0.0
+    },
+    "insecure_ssl_socket_factory": {
+      "tp": 2,
+      "fp": 0,
+      "precision": 1.0
+    },
+    "js_enabled": {
+      "tp": 2,
+      "fp": 0,
+      "precision": 1.0
+    },
+    "keystore_entry_unprotected": {
+      "tp": 1,
+      "fp": 0,
+      "precision": 1.0
+    },
+    "no_validity_check": {
+      "tp": 1,
+      "fp": 0,
+      "precision": 1.0
+    },
+    "null_deref_intent_extra": {
+      "tp": 1,
+      "fp": 0,
+      "precision": 1.0
+    },
+    "ordered_broadcast_priority": {
+      "tp": 1,
+      "fp": 0,
+      "precision": 1.0
+    },
+    "pending_intent_empty": {
+      "tp": 2,
+      "fp": 0,
+      "precision": 1.0
+    },
+    "pending_intent_implicit": {
+      "tp": 0,
+      "fp": 1,
+      "precision": 0.0
+    },
+    "server_socket_no_peer_check": {
+      "tp": 1,
+      "fp": 0,
+      "precision": 1.0
+    },
+    "sql_injection_no_args": {
+      "tp": 1,
+      "fp": 0,
+      "precision": 1.0
+    },
+    "sql_injection_raw": {
+      "tp": 2,
+      "fp": 2,
+      "precision": 0.5
+    },
+    "sticky_broadcast": {
+      "tp": 1,
+      "fp": 0,
+      "precision": 1.0
+    },
+    "taint-flow": {
+      "tp": 3,
+      "fp": 0,
+      "precision": 1.0
+    },
+    "task-affinity-hijack": {
+      "tp": 2,
+      "fp": 0,
+      "precision": 1.0
+    },
+    "unique_ids": {
+      "tp": 1,
+      "fp": 0,
+      "precision": 1.0
+    },
+    "weak-permission-protection": {
+      "tp": 1,
+      "fp": 0,
+      "precision": 1.0
+    },
+    "webview_file_access": {
+      "tp": 1,
+      "fp": 0,
+      "precision": 1.0
+    },
+    "webview_file_url_access": {
+      "tp": 1,
+      "fp": 0,
+      "precision": 1.0
+    },
+    "webview_override_allows_all": {
+      "tp": 1,
+      "fp": 0,
+      "precision": 1.0
+    },
+    "webview_ssl_proceed": {
+      "tp": 1,
+      "fp": 0,
+      "precision": 1.0
+    }
+  }
+}

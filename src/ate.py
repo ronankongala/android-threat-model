@@ -3,6 +3,7 @@
 Usage: python src/ate.py --apk app.apk [--out DIR] [--dynamic]
                         [--dynamic-two-app MALICIOUS_APK] [--policy POLICY.txt]
                         [--ml] [--no-ai] [--second-apk APK]
+                        [--calibrate [RULE_PRECISION_JSON]]
 
 Decodes the APK (apk.py), extracts manifest, smali code and taint
 findings (surface.py, code_analyzer.py, taint_analyzer.py), writes
@@ -38,6 +39,13 @@ the app vulnerable (probability >= 0.5), one APK-level finding is added:
 component "(application)", issue "ml-vulnerable-app", CWE "ML" (the
 classifier names no weakness), confidence medium at probability >= 0.75 and
 low otherwise, with the probability in the evidence.
+
+With --calibrate (P-9), each static finding's confidence (high 0.9, medium
+0.6, low 0.3) is multiplied by its rule's empirical precision on the Ghera
+benchmarks (data/rule-precision.json, or the JSON file given), and only
+findings whose calibrated confidence is above 0.3 are reported
+(calibration.py). Every low finding is dropped. The kept findings carry
+calibrated_confidence and rule_precision keys.
 """
 import argparse
 import os
@@ -68,6 +76,9 @@ def parse_args(argv=None):
     p.add_argument('--ml', action='store_true',
                    help='also score the APK with the ML classifier in data/ml-model.pkl')
     p.add_argument('--no-ai', action='store_true', help='reserved; has no effect yet')
+    p.add_argument('--calibrate', nargs='?', const='', metavar='RULE_PRECISION_JSON',
+                   help='P-9: scale confidences by the per-rule precision (default '
+                        'data/rule-precision.json) and drop findings at 0.3 or below')
     p.add_argument('--second-apk', metavar='APK',
                    help='second (for example malicious) APK to compare with statically: '
                         'shared task affinity, sticky broadcasts it receives')
@@ -148,6 +159,15 @@ def main(argv=None):
             print('error: cannot load the ML model (%s); run python src/ml_layer.py train' % e,
                   file=sys.stderr)
             return 1
+    scores = None
+    if args.calibrate is not None:
+        import calibration
+        try:
+            scores = calibration.load(args.calibrate or None)
+        except (OSError, ValueError) as e:
+            print('error: cannot read rule precision file (%s); run python tools/evaluate.py '
+                  '--rescore --write-rule-precision' % e, file=sys.stderr)
+            return 1
     work = tempfile.mkdtemp(prefix='ate-')
     try:
         try:
@@ -174,6 +194,8 @@ def main(argv=None):
                 findings = findings + [ml_layer.finding(prob)]
     finally:
         shutil.rmtree(work, ignore_errors=True)
+    if scores is not None:
+        findings = calibration.calibrate(findings, scores)
     dynamic = run_dynamic(args.apk, manifest) if args.dynamic else None
     if args.dynamic_two_app:
         dynamic = (dynamic or []) + run_dynamic_two_app(args.apk, manifest, args.dynamic_two_app)
