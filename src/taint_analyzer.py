@@ -58,9 +58,37 @@ overrides of that method in subclasses (or implementing classes) up to
 MAX_HIERARCHY levels below the owner are analyzed too, with the same argument
 taint and the same depth limit and confidence step as the resolved callee.
 invoke-super is not followed this way, since it never dispatches to a subclass.
+
+Inter-component flows: the components and their intent-filter actions are read
+from the decoded AndroidManifest.xml, and receivers registered in code with
+registerReceiver(receiver, IntentFilter) are added by action. Each method body
+also tracks constant strings and classes, so that an Intent built with
+new Intent(ctx, Cls.class), setClass, setClassName, setComponent or an action
+(new Intent(action), setAction) has a known target. When an Intent tainted by
+putExtra / putExtras (or a Bundle filled by put*) reaches startActivity,
+startService or sendBroadcast (and their ForResult / ordered variants), the
+target component is resolved: the explicit class, or else the components of
+the matching kind whose intent filters list the action. The receiving
+component's entry methods (onCreate, onNewIntent, onStartCommand,
+onHandleIntent, onReceive) and their callees are then scanned with every
+Intent get*Extra / getExtras call, and Bundle get* on such extras, as a source
+labelled 'icc:<getter>'. Confidence drops one step for the component boundary
+on top of the steps of the sending flow. A finding whose sink location
+(file, line) is already reported is not repeated, so this adds flows that the
+plain sources miss (other extra types, Bundle extras) in receiving components,
+exported or not. Its evidence starts with
+'icc <Sender>.<method> L<n> (<sink>) -> <Receiver> | '. Taint can cross up to
+MAX_ICC component boundaries in a chain.
 """
 
+import os
+
 import call_graph as cg
+
+try:
+    import apk as _apk
+except ImportError:      # pragma: no cover
+    _apk = None
 
 # Sink label -> CWE.
 #   rawQuery, execSQL      SQL built from input (CWE-89, SQL injection)
@@ -116,7 +144,10 @@ _PASS = {
     (URI, 'getPath'), (URI, 'getLastPathSegment'), (URI, 'parse'),
     (URI, 'toString'), (URI, 'getQueryParameter'),
 }
-_INTENT_PUTS = ('putExtra', 'putExtras', 'setData', 'setDataAndType')
+_INTENT_PUTS = ('putExtra', 'putExtras', 'setData', 'setDataAndType',
+                'putStringArrayListExtra', 'putIntegerArrayListExtra',
+                'putParcelableArrayListExtra',
+                'putCharSequenceArrayListExtra', 'replaceExtras')
 _EQUALS = ('equals', 'equalsIgnoreCase')
 
 _CLEARS = ('const', 'new-instance', 'new-array', 'filled-new-array', 'sget',
@@ -127,6 +158,18 @@ _CLEARS = ('const', 'new-instance', 'new-array', 'filled-new-array', 'sget',
 
 MAX_DEPTH = 3
 MAX_HIERARCHY = 2
+MAX_ICC = 2
+
+COMPONENT_NAME = 'Landroid/content/ComponentName;'
+INTENT_FILTER = 'Landroid/content/IntentFilter;'
+# start/send sink label -> manifest component types an implicit Intent reaches
+_ICC_TYPES = {
+    'startActivity': ('activity',),
+    'startService': ('service',),
+    'sendBroadcast': ('receiver',),
+}
+_ICC_ENTRIES = ('onCreate', 'onNewIntent', 'onStartCommand', 'onHandleIntent',
+                'onReceive')
 CONFIDENCE = ('high', 'medium', 'low')
 
 
@@ -213,6 +256,10 @@ class _Context:
         self.locals = {}
         self.visited = {}     # (signature, seeds) -> origin of a tainted return, or None
         self.findings = {}
+        self.components = []  # manifest components (see apk.parse_manifest)
+        self.dynamic = {}     # action -> classes registered with registerReceiver
+        self.icc = None       # (hops, path) while scanning a receiving component
+        self.edges = {}       # (receiver class, sender file, line) -> (hops, path)
 
     def resolve(self, sig):
         if sig in self.app:
@@ -276,8 +323,149 @@ def _operands(rest, nlocals):
     return out
 
 
+def _literal(rest):
+    """'v0, "text"' -> 'text' (escapes left as written)."""
+    i = rest.find('"')
+    return rest[i + 1:rest.rfind('"')] if i >= 0 else None
+
+
+def _class_of(name):
+    return 'L%s;' % name.replace('.', '/')
+
+
+def _val_invoke(cls, name, desc, recv, args, vals):
+    """Track Intent, ComponentName and IntentFilter targets through one call.
+
+    Returns the value the next move-result receives, or None."""
+    def get(r, kind):
+        v = vals.get(r)
+        return v[1] if v and v[0] == kind else None
+
+    def target(r):
+        text = get(r, 'str')
+        return _class_of(text) if text else get(r, 'class')
+
+    if cls == INTENT and recv is not None:
+        it = get(recv, 'intent')
+        if it is None:
+            return None
+        if name == '<init>' and args:
+            other = get(args[0], 'intent')
+            if other is not None:
+                it.update(other)
+            action = get(args[0], 'str')
+            if action and len(args) <= 2:
+                it['action'] = action
+            if len(args) >= 2 and get(args[-1], 'class'):
+                it['cls'] = get(args[-1], 'class')
+        elif name == 'setAction' and args:
+            it['action'] = get(args[0], 'str')
+        elif name in ('setClass', 'setClassName') and args:
+            it['cls'] = target(args[-1]) or it.get('cls')
+        elif name == 'setComponent' and args:
+            it['cls'] = get(args[0], 'comp') or it.get('cls')
+        if desc.endswith(')' + INTENT):
+            return vals[recv]
+        return None
+    if cls == COMPONENT_NAME and name == '<init>' and recv in vals and args:
+        vals[recv] = ('comp', target(args[-1]))
+    elif cls == INTENT_FILTER and name in ('<init>', 'addAction') and args:
+        actions = get(recv, 'filter')
+        action = get(args[0], 'str')
+        if actions is not None and action:
+            actions.add(action)
+    return None
+
+
+def _val_op(op, rest, ops, vals, pending_val):
+    """Track constant strings, classes and new objects in plain instructions."""
+    if not ops:
+        return
+    dst = ops[0]
+    if op.startswith('move-result'):
+        vals.pop(dst, None)
+        if pending_val is not None:
+            vals[dst] = pending_val
+    elif op.startswith('const-string'):
+        vals[dst] = ('str', _literal(rest))
+    elif op == 'const-class':
+        vals[dst] = ('class', rest.split(',')[-1].strip())
+    elif op == 'new-instance':
+        kind = rest.split(',')[-1].strip()
+        if kind == INTENT:
+            vals[dst] = ('intent', {'cls': None, 'action': None})
+        elif kind == COMPONENT_NAME:
+            vals[dst] = ('comp', None)
+        elif kind == INTENT_FILTER:
+            vals[dst] = ('filter', set())
+        else:
+            vals[dst] = ('obj', kind)
+    elif op.startswith('move') and op != 'move-exception' and len(ops) == 2:
+        vals.pop(dst, None)
+        if ops[1] in vals:
+            vals[dst] = vals[ops[1]]
+    elif op.startswith(_CLEARS) or op.startswith('aget'):
+        vals.pop(dst, None)
+
+
+def _dynamic_receivers(ctx):
+    """action -> classes of receivers registered in code for it."""
+    out = {}
+    for method in ctx.methods.values():
+        if not any('registerReceiver' in line for _, line in method['body']):
+            continue
+        nl = ctx.nlocals(method)
+        vals = {} if method['static'] else {nl: ('obj', method['class'])}
+        pending_val = None
+        for _, line in method['body']:
+            if line[0] in '.:#':
+                continue
+            op, _, rest = line.partition(' ')
+            if op.startswith('invoke-'):
+                inv = cg.parse_invoke(line)
+                pending_val = None
+                if not inv:
+                    continue
+                opc, regtext, sig = inv
+                cls, name, desc = cg.split_ref(sig)
+                regs = _regs(regtext, nl)
+                static = 'static' in opc
+                recv = None if static or not regs else regs[0]
+                args = regs if static else regs[1:]
+                if name == 'registerReceiver' and len(args) >= 2:
+                    rv, fv = vals.get(args[0]), vals.get(args[1])
+                    if rv and rv[0] == 'obj' and fv and fv[0] == 'filter':
+                        for action in fv[1]:
+                            out.setdefault(action, set()).add(rv[1])
+                    continue
+                pending_val = _val_invoke(cls, name, desc, recv, args, vals)
+                continue
+            _val_op(op, rest, _operands(rest, nl), vals, pending_val)
+            pending_val = None
+    return out
+
+
+def _icc_targets(ctx, intent, label):
+    """Classes that an Intent with this target info reaches through label."""
+    if intent.get('cls'):
+        return [intent['cls']]
+    action = intent.get('action')
+    if not action:
+        return []
+    kinds = _ICC_TYPES[label]
+    out = []
+    for comp in ctx.components:
+        if comp.get('type') in kinds and any(
+                action in (f.get('actions') or ())
+                for f in comp.get('intent_filters') or ()):
+            out.append(_class_of(comp['name']))
+    if label == 'sendBroadcast':
+        out += sorted(ctx.dynamic.get(action, ()))
+    return sorted(set(out))
+
+
 def _record(ctx, method, origin, label, no, line, depth):
-    src_label, _src_file, src_no, src_text, hops = origin
+    src_label, _src_file, src_no, src_text, hops = origin[:5]
     key = (method['file'], no, src_no)
     conf = CONFIDENCE[min(depth + hops, 2)]
     old = ctx.findings.get(key)
@@ -292,10 +480,77 @@ def _record(ctx, method, origin, label, no, line, depth):
         'confidence': conf,
         'file': method['file'],
         'line': no,
-        'evidence': 'source L%d: %s | sink L%d: %s' % (src_no, src_text, no, line),
+        'evidence': ('%ssource L%d: %s | sink L%d: %s'
+                     % (origin[5] + ' | ' if len(origin) > 5 else '',
+                        src_no, src_text, no, line)),
         'source_line': src_no,
         'sink_line': no,
     }
+
+
+def _icc_edges(ctx, method, label, args, taint, vals, no, depth):
+    """Record the components that a tainted Intent passed to label reaches."""
+    for r in args:
+        v = vals.get(r)
+        if r not in taint or not v or v[0] != 'intent':
+            continue
+        origin = taint[r]
+        hops = origin[4] + depth + 1
+        for target in _icc_targets(ctx, v[1], label):
+            step = '%s.%s L%d (%s) -> %s' % (
+                _dotted(method['class']), method['name'], no, label,
+                _dotted(target))
+            path = (origin[5] + ' -> ' + step if len(origin) > 5
+                    else 'icc ' + step)
+            key = (target, method['file'], no)
+            old = ctx.edges.get(key)
+            if old is None or hops < old[0]:
+                ctx.edges[key] = (hops, path)
+
+
+def _icc_pass(ctx):
+    """Scan the receiving components of the recorded Intent edges and add
+    the flows whose sink location is not reported yet."""
+    main = dict(ctx.findings)
+    done = set()
+    extra = {}
+    for _ in range(MAX_ICC):
+        todo = [(k, v) for k, v in sorted(ctx.edges.items()) if k not in done]
+        if not todo:
+            break
+        for key, (hops, path) in todo:
+            done.add(key)
+            entries = [m for _s, m in sorted(ctx.methods.items())
+                       if m['class'] == key[0] and m['name'] in _ICC_ENTRIES]
+            ctx.icc = (hops, path)
+            ctx.visited = {}
+            ctx.findings = {}
+            for m in entries:
+                _scan(ctx, m, {}, 0)
+            ctx.icc = None
+            for f in ctx.findings.values():
+                if not f['pattern'].startswith('taint:icc:'):
+                    continue
+                loc = (f['file'], f['sink_line'])
+                old = extra.get(loc)
+                if old is None or (CONFIDENCE.index(f['confidence'])
+                                   < CONFIDENCE.index(old['confidence'])):
+                    extra[loc] = f
+    reported = {(f['file'], f['sink_line']) for f in main.values()}
+    ctx.findings = main
+    for loc, f in extra.items():
+        if loc not in reported:
+            ctx.findings[loc + ('icc',)] = f
+
+
+def _load_components(decoded_dir):
+    path = os.path.join(decoded_dir, 'AndroidManifest.xml')
+    if _apk is None or not os.path.isfile(path):
+        return []
+    try:
+        return _apk.parse_manifest(path).get('components', [])
+    except Exception:     # unreadable manifest: no inter-component flows
+        return []
 
 
 def _scan(ctx, method, seeds, depth):
@@ -312,6 +567,8 @@ def _scan(ctx, method, seeds, depth):
     taint = dict(seeds)      # register -> origin (label, file, line_no, text, hops)
     cursors = set()
     pending = None           # what the next move-result receives
+    vals = {}                # register -> ('str'|'class'|'intent'|..., value)
+    pending_val = None
 
     def clear(reg):
         taint.pop(reg, None)
@@ -324,6 +581,8 @@ def _scan(ctx, method, seeds, depth):
 
         if op.startswith('move-result'):
             dest = _operands(rest, nl)
+            _val_op(op, rest, dest, vals, pending_val)
+            pending_val = None
             if dest:
                 clear(dest[0])
                 if pending == 'cursor':
@@ -333,6 +592,7 @@ def _scan(ctx, method, seeds, depth):
             pending = None
             continue
         pending = None
+        pending_val = None
 
         if op.startswith('invoke-'):
             inv = cg.parse_invoke(line)
@@ -345,6 +605,7 @@ def _scan(ctx, method, seeds, depth):
             recv = None if static or not regs else regs[0]
             args = regs if static else regs[1:]
             hit = [taint[r] for r in regs if r in taint]
+            pending_val = _val_invoke(cls, name, desc, recv, args, vals)
 
             if name in _EQUALS and hit:
                 for origin in hit:
@@ -358,7 +619,17 @@ def _scan(ctx, method, seeds, depth):
                 in_try = any(a <= idx <= b for a, b in tries)
                 if arg_hit and not in_try:
                     _record(ctx, method, arg_hit[0], label, no, line, depth)
+                if label in _ICC_TYPES:
+                    _icc_edges(ctx, method, label, args, taint, vals, no, depth)
 
+            if ctx.icc and cls == INTENT and name.startswith('get') and (
+                    name.endswith('Extra') or name == 'getExtras'):
+                hops, path = ctx.icc
+                pending = ('icc:' + name, method['file'], no, line, hops, path)
+                continue
+            if ctx.icc and cls in _BUNDLES and name.startswith('get') and recv in taint:
+                pending = taint[recv]
+                continue
             src = _source(cls, name, recv, cursors)
             if src:
                 pending = (src, method['file'], no, line, 0)
@@ -381,6 +652,8 @@ def _scan(ctx, method, seeds, depth):
                 elif cls == INTENT and name in _INTENT_PUTS and arg_origin:
                     taint[recv] = arg_origin
                     pending = arg_origin
+                elif cls in _BUNDLES and name.startswith('put') and arg_origin:
+                    taint[recv] = arg_origin
                 elif cls == INTENT and ret == INTENT and recv in taint:
                     pending = taint[recv]
 
@@ -405,6 +678,7 @@ def _scan(ctx, method, seeds, depth):
             continue
 
         ops = _operands(rest, nl)
+        _val_op(op, rest, ops, vals, None)
         if not ops:
             continue
         if op in ('return', 'return-object', 'return-wide'):
@@ -441,7 +715,11 @@ def analyze(decoded_dir, graph=None, skip_libs=True):
         graph = graph[0]
     app = {s for s in graph if s in methods}
     ctx = _Context(methods, app)
+    ctx.components = _load_components(decoded_dir)
+    ctx.dynamic = _dynamic_receivers(ctx)
     for sig in sorted(methods):
         _scan(ctx, methods[sig], {}, 0)
+    if ctx.edges:
+        _icc_pass(ctx)
     return sorted(ctx.findings.values(),
                   key=lambda f: (f['file'], f['sink_line'], f['source_line']))
