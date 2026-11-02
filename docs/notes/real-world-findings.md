@@ -143,3 +143,27 @@ The Ghera evaluation (`docs/notes/evaluation-report.md`) predicts a precision ne
 - **The rules match patterns, not conditions.** `task-affinity-hijack` now fires on any `singleTask` or `singleInstance` activity (Fix C), but the Ghera TaskAffinity attacks need a shared or empty affinity or reparenting. None of the real apps' hits has that, so all are false positives. The Ghera set could not show this, because no Ghera app sets `launchMode`.
 - **Where the tool helps.** The findings worth a closer look are the ones Ghera trains for: the Markor WebView with JavaScript, file access and a JavaScript bridge, opened from browsable intents (`Web-JavaScriptExecution`, `Web-WebViewAllowFileAccess`); unprotected trigger components (OpenTracks Public API, Loop and Tasks.org plugin receivers, as in `UnprotectedBroadcastRecv`); and cleartext traffic (Markor, as in `HttpConnection-MITM`).
 - **What it misses.** The tool did not report Loop's `android:permission="false"`. It treats any `android:permission` value as protection, whatever its name or protection level, which is the same gap behind its false negatives on Ghera Secure apps with weak or mismatched permissions. It did report the Tasks.org providers, but for the wrong reason: it ignores `readPermission` and `writePermission`, so it calls them unprotected, when the actual weakness is that the guard is a `dangerous` permission.
+
+## Privacy policy analysis
+
+Run of `src/privacy_checker.py` (the check behind `ate.py --policy`) on each APK with its published privacy statement, on 2026-11-02. Results: `data/real-world-reports/privacy/<package>_<versionCode>-privacy.{json,md}`. The policy texts used are saved in `data/real-world-reports/privacy/policies/`, each with its source URL.
+
+**Where the policies came from.** F-Droid package pages carry no privacy policy; they link to each app's website and source repository. Loop, drip and Tasks.org publish a policy page on their website. Markor and OpenTracks have no separate policy; the "Privacy" section of the README in the source repository that F-Droid links to was used instead. The Tasks.org page loads its text from Termly at run time, so the text was taken from the Termly content API for the policy embedded on `tasks.org/privacy`.
+
+The run called `apk.decode` and `privacy_checker.check` directly, the same calls `ate.py --policy` makes, without the code and taint layers, which the privacy check does not use and which take up to 30 minutes per app.
+
+| App | Negative claims recognized in the policy | INTERNET | Ad or analytics SDK | Contradictions | Verdict |
+|-----|------------------------------------------|:--------:|:-------------------:|---------------:|---------|
+| Loop Habit Tracker | data stored only on the device; not shared with 3rd parties; no advertisement or analytics code | no | none | 0 | Consistent |
+| Tasks.org | not sold or shared to third parties in the last 12 months (CCPA wording) | yes | none | 0 | Consistent (policy discloses location, analytics and service providers) |
+| Markor | works offline, "no internet connection required"; no data shared with third parties | yes | none | 1 (medium) | False positive |
+| OpenTracks | "No Internet access"; no advertising; no in-app analytics | no | none | 0 | Consistent |
+| drip | data stored only on the device; no ads, no tracking | no | none | 0 | Consistent |
+
+**Review of the one contradiction.** Markor's README says "The app works completely offline, no internet connection required!" and the manifest requests `INTERNET`. The same README lists `INTERNET` under its permissions, used when "user-generated content data can be loaded from the internet" (an image URL in a note). The claim is that the app needs no connection, not that it never uses one, so this is a false positive of the keyword rule. It is reported as medium, not high, because no SDK gives the data a way out. The cleartext setting found in the static run (Markor finding 7) is the more useful observation: the loads the README mentions may go over plain HTTP.
+
+**What the check found and missed.**
+- The three apps that claim no network use (Loop, OpenTracks, drip) indeed request no `INTERNET` permission, and none of the five F-Droid builds contains an advertising or analytics SDK package. F-Droid's inclusion policy forbids proprietary tracking libraries, so this result is expected for this source; Play Store builds would be a harder test.
+- Tasks.org's policy is a generic template that covers the website, the Play build and the paid sync service. It makes no negative claim the manifest could contradict, so the checker has nothing to compare. Its location permissions (`ACCESS_FINE_LOCATION`, `ACCESS_BACKGROUND_LOCATION`) are disclosed ("We may request access or permission to track location-based information").
+- Running on real policies exposed three gaps in the keyword rules, fixed in `src/privacy_checker.py` with tests: "3rd parties" was not read as "third parties" (Loop), Markdown emphasis such as `__No Internet access:__` hid claims (OpenTracks), and a hyphenated word such as "in-app" broke the "no analytics" claim (OpenTracks).
+- Claims about data the manifest cannot show (for example drip's "We do not collect, retain, or share any usage data") are out of scope: there is no permission or package to compare them with.

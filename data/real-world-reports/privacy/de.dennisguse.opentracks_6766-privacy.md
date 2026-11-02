@@ -1,0 +1,11 @@
+# de.dennisguse.opentracks_6766 privacy report
+
+Permissions: android.permission.ACCESS_COARSE_LOCATION, android.permission.ACCESS_FINE_LOCATION, android.permission.ACCESS_NETWORK_STATE, android.permission.BLUETOOTH, android.permission.BLUETOOTH_ADMIN, android.permission.BLUETOOTH_CONNECT, android.permission.BLUETOOTH_SCAN, android.permission.FOREGROUND_SERVICE, android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE, android.permission.FOREGROUND_SERVICE_LOCATION, android.permission.POST_NOTIFICATIONS, android.permission.RECEIVE_BOOT_COMPLETED, android.permission.VIBRATE, android.permission.WAKE_LOCK, android.permission.health.WRITE_DISTANCE, android.permission.health.WRITE_ELEVATION_GAINED, android.permission.health.WRITE_EXERCISE, android.permission.health.WRITE_EXERCISE_ROUTE, android.permission.health.WRITE_SPEED, de.dennisguse.opentracks.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
+
+SDK packages found: none
+
+## Privacy Policy Analysis
+
+Policy file: `policies/de.dennisguse.opentracks.txt`
+
+No contradictions between the policy and the manifest were found.

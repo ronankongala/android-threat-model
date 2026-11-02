@@ -1,0 +1,15 @@
+{
+  "apk": "org.isoron.uhabits_20302.apk",
+  "package": "org.isoron.uhabits",
+  "policy": "policies/org.isoron.uhabits.txt",
+  "permissions": [
+    "android.permission.POST_NOTIFICATIONS",
+    "android.permission.RECEIVE_BOOT_COMPLETED",
+    "android.permission.SCHEDULE_EXACT_ALARM",
+    "android.permission.USE_EXACT_ALARM",
+    "android.permission.VIBRATE",
+    "org.isoron.uhabits.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+  ],
+  "sdk_packages": {},
+  "privacy": []
+}

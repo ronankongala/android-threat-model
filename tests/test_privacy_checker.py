@@ -99,3 +99,17 @@ def test_cli_policy_flag():
     args = ate.parse_args(['--apk', 'a.apk', '--policy', 'p.txt'])
     assert args.policy == 'p.txt'
     assert ate.main(['--apk', 'a.apk', '--policy', 'missing-policy.txt']) == 1
+
+
+def test_3rd_party_spelling():
+    f = pc.check('Your data is not shared with any 3rd parties.',
+                 apk(components=['com.google.android.gms.ads.AdActivity']))
+    assert rules(f) == [('no-third-party-sharing', 'high')]
+
+
+def test_markdown_emphasis_claims():
+    text = '* __No Internet access:__ Internet is not used\n* __No in-app analytics__\n'
+    f = pc.check(text, apk(['android.permission.INTERNET'], ['com.google.android.gms.ads.AdActivity']))
+    assert ('data-stays-on-device', 'high') in rules(f)
+    assert ('no-third-party-sharing', 'high') in rules(f)
+    assert 'ACCESS_FINE_LOCATION' in pc.sentences('* _ACCESS_FINE_LOCATION_: GPS')[0]

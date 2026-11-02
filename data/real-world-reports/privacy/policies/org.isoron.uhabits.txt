@@ -1,0 +1,15 @@
+Source: https://loophabits.org/privacy
+Retrieved: 2026-11-02
+
+All data provided to Loop Habit Tracker is only stored locally in your
+ device. Your data is not uploaded anywhere. The developers of Loop Habit Tracker do not have access to it. Your
+ data is not shared with any 3rd parties. Loop Habit Tracker does not
+ include any advertisement libraries or any 3rd party tracking
+ (analytics) code, such as Google Analytics or Facebook SDK.
+
+ NOTE: If you have activated “Backup & Reset” in your phone settings
+ (Settings / Backup & Reset / Back up my data), you should be aware
+ that Android itself (not Loop Habit Tracker) will periodically save a copy of your phone’s data
+ in Google’s servers. This allows Android to recover your data in case your device gets damaged, or you purchase a new device.
+ The developers of Loop Habit Tracker do not have
+ access to this data.

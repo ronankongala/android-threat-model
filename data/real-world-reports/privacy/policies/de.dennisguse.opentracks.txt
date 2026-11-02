@@ -1,0 +1,12 @@
+Source: https://codeberg.org/OpenTracksApp/OpenTracks/src/branch/main/README.md (Privacy section; no separate policy page)
+Retrieved: 2026-11-02
+
+### Privacy
+* __No Internet access:__ Internet is not used
+* __No advertising__
+* __No in-app analytics__
+* __No use of Google Play Services__
+
+__Only required permissions:__
+* _ACCESS_FINE_LOCATION_: required to use the GPS.
+* _ACCESS_BACKGROUND_LOCATION_: required to start recording with GPS while phone is in standby. (e.g. when triggered by Public API from an external device)

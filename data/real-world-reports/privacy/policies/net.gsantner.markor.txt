@@ -1,0 +1,17 @@
+Source: https://github.com/gsantner/markor/blob/master/README.md#privacy (README section; no separate policy page)
+Retrieved: 2026-11-02
+
+## Privacy<a name="privacy"></a>
+Markor does not use your internet connection unless your own user-generated content references external resources (for example, when you reference an external image by URL).
+The app works completely offline, no internet connection required!
+No personal data is shared with the author or any third parties.
+Files can be shared to other apps from inside the app by pressing the share button.
+Files are stored locally in a user selectable folder, defaulting to the internal storage "Documents" directory.
+
+#### Android Permissions
+* WRITE_EXTERNAL_STORAGE, READ_EXTERNAL_STORAGE  
+  Read from and write files to storage.
+* INTERNET  
+  In user-generated content data can be loaded from the internet.
+* INSTALL_SHORTCUT  
+  Install a shortcut to launchers to open a file/folder in Markor.

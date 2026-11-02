@@ -64,10 +64,10 @@ ON_DEVICE_RE = re.compile(
     r'|\bno\s+(?:network|internet)\s+(?:access|connection|permission))', re.I)
 NO_SHARING_RE = re.compile(
     NEGATION + r"\s+(?:\w+\s+){0,3}(?:share|sell|disclose|transfer|give|provide|pass)\w*"
-    r"[^.]{0,120}?\bthird[- ]part(?:y|ies)", re.I)
+    r"[^.]{0,120}?\b(?:third|3rd)[- ]part(?:y|ies)", re.I)
 NO_SHARING_RE2 = re.compile(r'\b(?:no|not)\s+(?:\w+\s+){0,2}(?:shared|sold|disclosed)\s+'
-                            r'(?:\w+\s+){0,2}(?:with|to)\s+(?:any\s+)?third[- ]part', re.I)
-NO_TRACKING_RE = re.compile(r'\b(?:no|without|' + NEGATION[3:-1] + r')\s+(?:\w+\s+){0,3}'
+                            r'(?:\w+\s+){0,2}(?:with|to)\s+(?:any\s+)?(?:third|3rd)[- ]part', re.I)
+NO_TRACKING_RE = re.compile(r'\b(?:no|without|' + NEGATION[3:-1] + r')\s+(?:[\w-]+\s+){0,3}'
                             r'(?:ads|advertis\w*|tracking|trackers|analytics)\b', re.I)
 
 
@@ -77,9 +77,12 @@ def load_policy(path):
 
 
 def sentences(text):
-    """Split policy text into sentences (and list items), whitespace collapsed."""
+    """Split policy text into sentences (and list items), whitespace collapsed.
+    Markdown emphasis (**bold**, __bold__) is removed first, since a policy
+    kept in a README writes claims like "__No Internet access:__"."""
+    text = re.sub(r'\*{2,3}|(?<!\w)_{1,3}|_{1,3}(?!\w)', ' ', text)
     text = re.sub(r'[ \t]+', ' ', text)
-    parts = re.split(r'(?<=[.!?])\s+|\n\s*\n|\n\s*[-*•]\s+', text)
+    parts = re.split(r'(?<=[.!?])\s+|\n\s*\n|(?:^|\n)\s*[-*•]\s+', text)
     return [re.sub(r'\s+', ' ', p).strip() for p in parts if p and p.strip()]
 
 
