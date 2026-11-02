@@ -81,6 +81,18 @@ Patterns:
                                CertificatePinner, or a KeyStore filled with
                                setCertificateEntry and passed to
                                TrustManagerFactory.init.
+  fragment_injection           class extending PreferenceActivity (directly or through
+                               app classes) that declares no isValidFragment (high;
+                               medium when targetSdkVersion is 19 or more, where the
+                               framework default throws instead of loading any
+                               fragment), or whose isValidFragment is branch-free and
+                               returns const/4 0x1 (medium). Also (medium) a call to
+                               Fragment.instantiate, or to an app method returning a
+                               Fragment that calls Class.forName or
+                               Fragment.instantiate, from a class whose outer class
+                               (with its inner classes) reads an intent extra and
+                               neither declares nor calls a method whose name contains
+                               "valid" (no check on the fragment name)
 """
 import os
 import re
@@ -112,6 +124,7 @@ PATTERNS = {
     'ordered_broadcast_priority': 'CWE-927',
     'unique_ids': 'CWE-359',
     'certificate_pinning_missing': 'CWE-295',
+    'fragment_injection': 'CWE-470',
 }
 
 CONFIDENCE = ('high', 'medium', 'low')
@@ -174,7 +187,8 @@ def _parse_class(path, decoded_dir):
     with open(path, encoding='utf-8', errors='replace') as f:
         lines = f.read().splitlines()
     cls = {'file': os.path.relpath(path, decoded_dir).replace(os.sep, '/'),
-           'name': None, 'super': None, 'implements': [], 'field_inits': {}, 'methods': []}
+           'name': None, 'super': None, 'super_line': None, 'implements': [],
+           'field_inits': {}, 'methods': []}
     method = None
     for no, raw in enumerate(lines, 1):
         text = raw.strip()
@@ -189,6 +203,7 @@ def _parse_class(path, decoded_dir):
             cls['name'] = text.split()[-1]
         elif text.startswith('.super '):
             cls['super'] = text.split()[-1]
+            cls['super_line'] = no
         elif text.startswith('.implements '):
             cls['implements'].append(text.split()[-1])
         elif text.startswith('.field '):
@@ -975,6 +990,89 @@ def _pinning_rules(ctx, classes, decoded_dir):
               % ('="%s"' % cleartext if cleartext is not None else 'unset', call))
 
 
+FRAGMENT_LOADERS = ('Landroid/app/Fragment;->instantiate',
+                    'Landroid/support/v4/app/Fragment;->instantiate',
+                    'Landroidx/fragment/app/Fragment;->instantiate')
+INTENT_READS = TAINT_SOURCES
+
+
+def _outer(name):
+    """Descriptor of the outermost class: La/B$1; -> La/B;"""
+    return name.split('$', 1)[0].rstrip(';') + ';'
+
+
+def _preference_activity_chain(cls, by_name):
+    """App classes from cls up to the one whose .super names a PreferenceActivity,
+    or None when cls is not a PreferenceActivity."""
+    chain, cur = [], cls
+    while cur is not None and cur not in chain:
+        chain.append(cur)
+        if cur['super'] and 'PreferenceActivity' in cur['super']:
+            return chain
+        cur = by_name.get(cur['super'])
+    return None
+
+
+def _fragment_factories(classes):
+    """Signatures of app methods that return a Fragment and build it from a class
+    name (Class.forName or Fragment.instantiate)."""
+    out = set()
+    for cls in classes:
+        for m in cls['methods']:
+            if not m['ret'].endswith('Fragment;'):
+                continue
+            refs = [ref for _, _, ref in _invokes(m)]
+            if any(r.startswith(('Ljava/lang/Class;->forName',) + FRAGMENT_LOADERS) for r in refs):
+                out.add('%s->%s(%s)%s' % (cls['name'], m['name'], m['desc'], m['ret']))
+    return out
+
+
+def _fragment_rules(ctx, classes, decoded_dir):
+    """fragment_injection (CWE-470). Limits: a PreferenceActivity's
+    isValidFragment that has branches is trusted; the fragment name rule does
+    not follow the name from the intent to the loader (it only looks for an
+    intent read and the absence of any *valid* method in the same outer class),
+    and checks done inside the loader itself are not counted, since they
+    usually only pick among fragments instead of rejecting names."""
+    try:
+        target = apk._sdk_info(decoded_dir).get('target_sdk')
+    except OSError:
+        target = None
+    by_name = {c['name']: c for c in classes}
+    for cls in classes:
+        chain = _preference_activity_chain(cls, by_name)
+        if not chain:
+            continue
+        checks = [m for c in chain for m in c['methods'] if m['name'] == 'isValidFragment']
+        if not checks:
+            conf = 'medium' if target is not None and target >= 19 else 'high'
+            ctx.emit(cls, 'fragment_injection', conf, cls['super_line'] or 1,
+                     '.super ' + cls['super'])
+        elif checks[0] in cls['methods'] and _always_true(_only(checks[0])):
+            ctx.emit(cls, 'fragment_injection', 'medium', checks[0]['line'], checks[0]['decl'])
+    factories = _fragment_factories(classes)
+    groups = {}
+    for cls in classes:
+        groups.setdefault(_outer(cls['name']), []).append(cls)
+    for members in groups.values():
+        reads, validated, calls = False, False, []
+        for cls in members:
+            for m in cls['methods']:
+                if 'valid' in m['name'].lower():
+                    validated = True
+                for no, text, ref in _invokes(m):
+                    callee = ref.split('->', 1)[-1].split('(')[0]
+                    if callee in INTENT_READS:
+                        reads = True
+                    if 'valid' in callee.lower():
+                        validated = True
+                    if ref in factories or ref.startswith(FRAGMENT_LOADERS):
+                        calls.append((cls, no, text))
+        if reads and not validated:
+            for cls, no, text in calls:
+                ctx.emit(cls, 'fragment_injection', 'medium', no, text)
+
+
 # ---------------------------------------------------------------- entry point
 
 def analyze(decoded_dir):
@@ -992,4 +1090,5 @@ def analyze(decoded_dir):
         _class_rules(ctx, cls)
     _ordered_broadcast_rules(ctx, classes, decoded_dir)
     _pinning_rules(ctx, classes, decoded_dir)
+    _fragment_rules(ctx, classes, decoded_dir)
     return sorted(ctx.findings.values(), key=lambda f: (f['file'], f['line'], f['pattern']))
