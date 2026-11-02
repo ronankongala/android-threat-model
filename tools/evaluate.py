@@ -14,8 +14,10 @@ because every APK has the same file name and the reports would overwrite each ot
 Writes data/evaluation-results.csv with the columns
   benchmark, category, benign_findings, secure_findings, true_positive, false_positive
 where
-  true_positive  = 1 if benign_findings > 0 and a Benign finding's CWE is one of the
-                   benchmark's ground-truth CWEs, else 0
+  true_positive  = 1 if benign_findings > 0 and any Benign finding's CWE matches any
+                   of the benchmark's ground-truth CWEs, either directly or through
+                   SECONDARY_CWE (an alternative CWE that names a closely related
+                   weakness and is counted as the ground-truth CWE it maps to), else 0
   false_positive = 1 if secure_findings > 0, else 0
 A count is left blank when the APK is missing or the tool fails; the scores then
 treat it as 0 findings, and the reason is printed.
@@ -40,7 +42,43 @@ OUT_CSV = os.path.join(ROOT, 'data', 'evaluation-results.csv')
 TMP = os.path.join(ROOT, 'data', 'eval-tmp')
 ATE = os.path.join(ROOT, 'src', 'ate.py')
 APK_REL = os.path.join('app', 'build', 'outputs', 'apk', 'api27', 'debug', 'app-api27-debug.apk')
-COLUMNS = ['benchmark', 'category', 'benign_findings', 'secure_findings', 'true_positive', 'false_positive']
+COLUMNS = ['benchmark', 'category', 'benign_findings', 'secure_findings', 'true_positive', 'false_positive',
+           'strict_true_positive']
+
+# Fix A: alternative CWEs that the rules report for a weakness the ground truth
+# records under a related CWE. A finding with the key CWE counts as the value CWE.
+#   CWE-829 (inclusion of functionality from untrusted control sphere)
+#       -> CWE-749 (exposed dangerous method), e.g. webview_file_access
+#   CWE-925 (improper verification of intent by broadcast receiver)
+#       -> CWE-926 (improper export of components)
+#   CWE-360 (trust of system event data) -> CWE-925
+#   CWE-348 (use of less trusted source) -> CWE-927 (sensitive data in implicit intent)
+#   CWE-346 (origin validation error)    -> CWE-927
+#   CWE-441 (unintended proxy / confused deputy) -> CWE-926
+# The mapping is applied one step only (CWE-360 counts as CWE-925, not CWE-926).
+SECONDARY_CWE = {
+    'CWE-829': 'CWE-749',
+    'CWE-925': 'CWE-926',
+    'CWE-360': 'CWE-925',
+    'CWE-348': 'CWE-927',
+    'CWE-346': 'CWE-927',
+    'CWE-441': 'CWE-926',
+}
+
+
+def matching_cwes(finding_cwes, gt_cwes):
+    """Return (strict, expanded) sorted lists of matches.
+
+    strict: finding CWEs that are ground-truth CWEs.
+    expanded: strict plus 'found->gt' entries for finding CWEs that map to a
+    ground-truth CWE through SECONDARY_CWE.
+    """
+    strict = sorted(set(finding_cwes) & gt_cwes)
+    expanded = list(strict)
+    for c in sorted(set(finding_cwes) - gt_cwes):
+        if SECONDARY_CWE.get(c) in gt_cwes:
+            expanded.append('%s->%s' % (c, SECONDARY_CWE[c]))
+    return strict, expanded
 
 
 def read_csv(path):
@@ -107,10 +145,12 @@ def main(argv=None):
         benign, secure = result['Benign'], result['Secure']
         benign_n = len(benign) if benign is not None else 0
         secure_n = len(secure) if secure is not None else 0
-        matched = sorted({f['cwe'] for f in benign or []} & gt[bench]['cwes'])
+        strict, matched = matching_cwes({f['cwe'] for f in benign or []}, gt[bench]['cwes'])
         tp = 1 if benign_n > 0 and matched else 0
+        strict_tp = 1 if benign_n > 0 and strict else 0
         fp = 1 if secure_n > 0 else 0
-        print('   true_positive=%d (matching CWEs: %s) false_positive=%d' % (tp, ', '.join(matched) or 'none', fp))
+        print('   true_positive=%d (matching CWEs: %s) strict_true_positive=%d false_positive=%d'
+              % (tp, ', '.join(matched) or 'none', strict_tp, fp))
         rows.append({
             'benchmark': bench,
             'category': category,
@@ -118,6 +158,7 @@ def main(argv=None):
             'secure_findings': '' if secure is None else secure_n,
             'true_positive': tp,
             'false_positive': fp,
+            'strict_true_positive': strict_tp,
         })
 
     with open(OUT_CSV, 'w', encoding='utf-8', newline='') as f:
@@ -130,6 +171,10 @@ def main(argv=None):
     if rows:
         precision = '%.2f' % (tp / (tp + fp)) if tp + fp else 'n/a'
         print('Precision %s, recall %.2f' % (precision, tp / len(rows)))
+        stp = sum(r['strict_true_positive'] for r in rows)
+        sprec = '%.2f' % (stp / (stp + fp)) if stp + fp else 'n/a'
+        print('Strict CWE match only (no SECONDARY_CWE): %d true positives, precision %s, recall %.2f'
+              % (stp, sprec, stp / len(rows)))
     print('Wrote %s' % os.path.relpath(OUT_CSV, ROOT))
     return 0
 
