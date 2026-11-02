@@ -2,7 +2,7 @@
 
 Usage: python src/ate.py --apk app.apk [--out DIR] [--dynamic]
                         [--dynamic-two-app MALICIOUS_APK] [--policy POLICY.txt]
-                        [--ml] [--no-ai]
+                        [--ml] [--no-ai] [--second-apk APK]
 
 Decodes the APK (apk.py), extracts manifest, smali code and taint
 findings (surface.py, code_analyzer.py, taint_analyzer.py), writes
@@ -19,6 +19,10 @@ malicious one, and task hijacks, foreign foreground activities, changes to the
 benign app's internal storage and Permission Denial lines are reported
 (dynamic_analyzer.run_two_app). The findings go to the same dynamic section of
 the report as the --dynamic findings.
+
+With --second-apk APK, APK is decoded too and the static two-APK rules of
+surface.py compare it with the analyzed APK (shared task affinity, sticky
+broadcasts it receives). No device is needed.
 
 With --policy POLICY.txt, the privacy policy text is compared with the
 manifest permissions and the advertising and analytics SDK packages in the APK
@@ -64,6 +68,9 @@ def parse_args(argv=None):
     p.add_argument('--ml', action='store_true',
                    help='also score the APK with the ML classifier in data/ml-model.pkl')
     p.add_argument('--no-ai', action='store_true', help='reserved; has no effect yet')
+    p.add_argument('--second-apk', metavar='APK',
+                   help='second (for example malicious) APK to compare with statically: '
+                        'shared task affinity, sticky broadcasts it receives')
     return p.parse_args(argv)
 
 
@@ -148,7 +155,15 @@ def main(argv=None):
         except apk.ApkError as e:
             print('error: %s' % e, file=sys.stderr)
             return 1
-        findings = surface.find(manifest)
+        second = None
+        if args.second_apk:
+            try:
+                os.makedirs(os.path.join(work, 'second'))
+                second = apk.decode(args.second_apk, os.path.join(work, 'second'))
+            except apk.ApkError as e:
+                print('error: second APK: %s' % e, file=sys.stderr)
+                return 1
+        findings = surface.find(manifest, second=second) if second else surface.find(manifest)
         if policy_text is not None:
             # Needs the decoded smali folders, so it runs before they are removed.
             privacy = privacy_checker.check(policy_text, manifest)

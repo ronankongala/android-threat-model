@@ -74,6 +74,17 @@ tools/evaluate.py --with-malicious, the benchmark's Malicious APK):
                           second app can read the sticky data and replace it
                           with its own (interception and data injection).
                           Reported on the sending class, confidence high
+  task-affinity-shared    an activity of the second APK has the same effective
+                          taskAffinity as this app's main task: the affinity
+                          of the launcher activity (android:taskAffinity,
+                          else the application's, else the package name;
+                          an explicit empty affinity means no task and never
+                          matches). The second app can then start into, or
+                          reparent its activity into, this app's task (task
+                          hijack, phishing). Reported on the launcher activity,
+                          confidence high; also on any other activity of this
+                          app whose non-empty affinity the second APK shares.
+                          Skipped when both APKs have the same package name
 
 The other six (dynamic-receiver-no-permission, missing-certificate-validation,
 sql-no-parameterization, js-enabled-webview, hardcoded-key, weak-cipher) are
@@ -117,6 +128,7 @@ CWE = {
     # Two-APK mode (find(..., second=...)): rules that compare the analyzed APK
     # with a second, possibly malicious, APK.
     'sticky-broadcast-intercepted': 'CWE-927',
+    'task-affinity-shared': 'CWE-1021',
 }
 
 ISSUES = tuple(CWE)
@@ -437,11 +449,58 @@ def _sticky_intercepted(decoded_dir, second, code_findings):
     return findings
 
 
+def effective_affinity(comp, manifest):
+    """(affinity, source) of an activity: its android:taskAffinity, else the
+    application's, else the package name. An explicit "" is kept: it means the
+    activity belongs to no task."""
+    if comp.get('task_affinity') is not None:
+        return comp['task_affinity'], 'explicit android:taskAffinity'
+    app = (manifest.get('application') or {}).get('taskAffinity')
+    if app is not None:
+        return app, 'inherited from <application android:taskAffinity>'
+    return manifest.get('package'), 'default: the package name'
+
+
+def _activities(manifest):
+    return [c for c in manifest.get('components', [])
+            if c['type'] in ('activity', 'activity-alias')]
+
+
+def _task_affinity_shared(apk, second):
+    """task-affinity-shared findings for `apk` compared with `second`."""
+    if not second or not apk.get('package') or apk.get('package') == second.get('package'):
+        return []
+    theirs = {}
+    for c in _activities(second):
+        affinity, source = effective_affinity(c, second)
+        if affinity:
+            theirs.setdefault(affinity, []).append('%s (%s)' % (c['name'], source))
+    launcher = next((c for c in _activities(apk) if _is_launcher(c)), None)
+    findings = []
+    for comp in _activities(apk):
+        affinity, source = effective_affinity(comp, apk)
+        if not affinity or affinity not in theirs:
+            continue
+        if comp is launcher:
+            what = "this app's main task affinity"
+        elif comp.get('task_affinity'):
+            what = 'the taskAffinity of this activity'
+        else:
+            continue   # same task as the launcher: reported there
+        f = _finding(comp, 'task-affinity-shared', 'high')
+        f['evidence'] = ('taskAffinity "%s" (%s) is %s and is shared by the second APK %s: %s'
+                         % (affinity, source, what, second.get('package') or '',
+                            ', '.join(theirs[affinity])))
+        findings.append(f)
+    return findings
+
+
 def two_app_findings(apk, second, decoded_dir=None, code_findings=()):
     """Findings of the two-APK rules for `apk` compared with the manifest dict
     `second` (with its 'decoded_dir' for the code based rules)."""
     decoded_dir = decoded_dir or apk.get('decoded_dir')
-    return _sticky_intercepted(decoded_dir, second, code_findings)
+    return (_task_affinity_shared(apk, second)
+            + _sticky_intercepted(decoded_dir, second, code_findings))
 
 
 def find(apk, decoded_dir=None, second=None):

@@ -84,6 +84,12 @@ data/eval-tmp/<benchmark>/two-app-<Benign|Secure>.json and counted in the extra
 columns two_app_benign and two_app_secure (blank when the two-app run did not
 happen). Without a device the two-app step is skipped with a warning.
 
+--with-malicious (A3-2, off by default) passes the benchmark's Malicious
+api27 APK, when it is built, to ate.py as --second-apk for BOTH the Benign and
+the Secure run, so the static two-APK rules (shared task affinity, sticky
+broadcasts the Malicious app receives) count toward true and false positives
+alike. Runs with and without it are not directly comparable.
+
 --out CSV writes the per-benchmark results to CSV instead of
 data/evaluation-results.csv. A --rescore run writes a CSV only when --out is given.
 --only BENCH (repeatable) restricts the run to the named benchmarks; combine it
@@ -361,12 +367,15 @@ def write_rows(rows, path):
     print('Wrote %s' % os.path.relpath(path, ROOT))
 
 
-def run_tool(apk, out_dir, dynamic=False):
-    """Return the findings list, or None with a reason when it cannot be produced."""
+def run_tool(apk, out_dir, dynamic=False, second_apk=None):
+    """Return the findings list, or None with a reason when it cannot be produced.
+    second_apk is passed to ate.py as --second-apk (--with-malicious)."""
     if not os.path.exists(apk):
         return None, 'APK not found: %s' % os.path.relpath(apk, ROOT)
     os.makedirs(out_dir, exist_ok=True)
     cmd = [sys.executable, ATE, '--apk', apk, '--out', out_dir] + (['--dynamic'] if dynamic else [])
+    if second_apk:
+        cmd += ['--second-apk', second_apk]
     r = subprocess.run(cmd, capture_output=True, text=True)
     if r.returncode != 0:
         return None, 'ate.py exit %d: %s' % (r.returncode, (r.stderr or r.stdout).strip())
@@ -511,6 +520,9 @@ def main(argv=None):
     p.set_defaults(dynamic=False)
     p.add_argument('--auto-readme', action='store_true',
                    help='also replay each README exploit on the emulator (tools/readme_runner.py)')
+    p.add_argument('--with-malicious', action='store_true',
+                   help="pass the benchmark's Malicious APK as --second-apk to the Benign "
+                        'and Secure runs (static two-APK rules)')
     p.add_argument('--rescore', action='store_true',
                    help='run nothing; rescore the reports already in data/eval-tmp')
     p.add_argument('--out', help='CSV to write (default data/evaluation-results.csv; '
@@ -533,6 +545,8 @@ def main(argv=None):
         return 0
 
     print('Mode: %s' % ('static and dynamic' if args.dynamic else 'static only (--no-dynamic)'))
+    if args.with_malicious:
+        print('Static two-APK rules on: Malicious APK passed as --second-apk (--with-malicious)')
     print('Benchmarks with a successful api27 build: %d' % len(benchmarks))
     adb = None
     if args.dynamic:
@@ -548,9 +562,12 @@ def main(argv=None):
         base = os.path.join(ROOT, 'benchmarks', 'ghera', category, bench)
         print('== %s/%s (ground truth CWEs: %s)' % (category, bench, ', '.join(sorted(gt[bench]['cwes'])) or 'none'))
         result = {}
+        second = os.path.join(base, 'Malicious', APK_REL)
+        extra = ({'second_apk': second} if args.with_malicious and os.path.exists(second)
+                 else {})
         for variant in ('Benign', 'Secure'):
             findings, msg = run_tool(os.path.join(base, variant, APK_REL),
-                                     os.path.join(TMP, bench, variant), args.dynamic)
+                                     os.path.join(TMP, bench, variant), args.dynamic, **extra)
             result[variant] = findings
             print('   %-6s %s' % (variant, msg))
             for f in findings or []:
