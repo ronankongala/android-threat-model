@@ -50,7 +50,15 @@ Issues reported only by run_all:
   dynamic-file-deleted                 a file in files/ disappeared after a
                                        broadcast (CWE-922)
 
-Without adb or a device run() and run_all() log a warning and return []. Device and adb
+run_two_app(benign_apk, malicious_apk, benign_package, malicious_package, adb=None,
+            wait=2, benign_activity=None, malicious_activity=None, benign_affinities=())
+installs a benign and a malicious app, starts the benign app and then the
+malicious one, and reports task hijacks and foreign activities in the benign
+task (CWE-1021), files created in or deleted from the benign app's internal
+storage (CWE-922) and Permission Denial lines naming either package. Both apps
+are always uninstalled.
+
+Without adb or a device run(), run_all() and run_two_app() log a warning and return []. Device and adb
 failures are logged, never raised. adb honours ANDROID_SERIAL when more than one
 device is attached.
 
@@ -647,6 +655,195 @@ def _run(apk_path, package, main_activity=None, adb=None, wait=3, manifest=None,
         code, out = _adb(adb, ['uninstall', package], timeout=60)
         if code != 0:
             log.warning('uninstall of %s failed: %s', package, out.strip())
+    return findings
+
+
+# two-app scenario: a benign app and a malicious app on the same device
+
+def _list_data_files(adb, package):
+    """Paths of the regular files in the app's internal storage, relative to its
+    data folder (e.g. 'files/a.txt', 'shared_prefs/p.xml'), or None when run-as
+    cannot read it.
+
+    Tries 'find /data/data/<pkg> -type f', then 'find . -type f' from the run-as
+    working folder, then the files/ listing of _list_files().
+    """
+    root = '/data/data/%s/' % package
+    for args, prefix in ((['find', root.rstrip('/'), '-type', 'f'], root),
+                         (['find', '.', '-type', 'f'], './')):
+        code, out = _adb(adb, ['shell', 'run-as', package] + args)
+        if code != 0 or 'run-as:' in out:
+            continue
+        paths = set()
+        for line in out.splitlines():
+            line = line.strip()
+            if line.startswith(prefix):
+                paths.add(line[len(prefix):])
+        return paths
+    names = _list_files(adb, package)
+    return None if names is None else {'files/' + n for n in names}
+
+
+def _start_app(adb, package, activity=None):
+    """Start `activity` (or the resolved launcher activity) of `package`; without
+    one, fall back to a monkey LAUNCHER event."""
+    activity = activity or _resolve_main_activity(adb, package)
+    if activity:
+        target = activity if '/' in activity else package + '/' + activity
+        _shell(adb, 'am', 'start', '-n', target)
+    else:
+        log.warning('no main activity found for %s; starting it with monkey', package)
+        _shell(adb, 'monkey', '-p', package, '-c', 'android.intent.category.LAUNCHER', '1')
+
+
+def _benign_tasks(stack, package):
+    """Ids of tasks holding an activity of `package` or having its affinity."""
+    return {t['id'] for t in stack['tasks']
+            if t['affinity'] == package or any(a['package'] == package for a in t['activities'])}
+
+
+def _two_app_task_findings(before_text, after_text, benign, malicious, benign_affinities=()):
+    """Task stack findings after the malicious app started: dynamic-task-hijack
+    (a foreign activity joined the benign task, a foreign task took the benign
+    affinity, or the top activity of a benign task is the malicious app's) and
+    dynamic-foreground-foreign-activity (the foreground task is a benign task and
+    shows an activity of another package that was not there before).
+
+    `benign_affinities` are other task affinities the benign app declares
+    (android:taskAffinity); a task of the malicious app with one of them is
+    reported too, since the benign activity with that affinity will be started
+    on top of the malicious activity."""
+    before = parse_activities(before_text)
+    after = parse_activities(after_text)
+    findings = []
+
+    old_hijack = _task_hijack(before, benign)
+    for f in _task_hijack(after, benign):
+        if f not in old_hijack and f not in findings:
+            findings.append(f)
+
+    benign_ids = _benign_tasks(after, benign)
+    for t in after['tasks']:
+        if t['id'] in benign_ids and t['activities'] and t['activities'][0]['package'] == malicious:
+            top = t['activities'][0]['component']
+            f = _finding(benign, 'application', 'dynamic-task-hijack', 'high',
+                         'top activity of task #%d (affinity %s) is %s of %s' % (
+                             t['id'], t['affinity'], top, malicious))
+            if not any(top in g['evidence'] and g['issue'] == 'dynamic-task-hijack' for g in findings):
+                findings.append(f)
+
+    extra = set(benign_affinities or ()) - {benign, None}
+    for t in after['tasks']:
+        mal_acts = [a['component'] for a in t['activities'] if a['package'] == malicious]
+        if t['affinity'] in extra and mal_acts and t['id'] not in benign_ids:
+            findings.append(_finding(
+                benign, 'application', 'dynamic-task-hijack', 'medium',
+                'task #%d of %s has the affinity %s declared by %s; its activity with that '
+                'affinity will start on top of the malicious one' % (
+                    t['id'], ', '.join(mal_acts), t['affinity'], benign)))
+
+    fg = parse_foreground_task(after_text)
+    old_placed = {(a['component'], a['task_id']) for a in before['activities']}
+    if fg['id'] in benign_ids:
+        for comp in fg['activities']:
+            if comp.split('/', 1)[0] != benign and (comp, fg['id']) not in old_placed:
+                findings.append(_finding(
+                    benign, 'application', 'dynamic-foreground-foreign-activity', 'high',
+                    '%s appeared in the foreground task #%s of %s after %s started' % (
+                        comp, fg['id'], benign, malicious)))
+    return findings
+
+
+def _file_diff_findings(start, mid, end, benign, malicious):
+    """dynamic-file-created/-deleted for changes in the benign app's storage
+    between the first and the last snapshot. Changes already present in `mid`
+    (taken after the benign app started, before the malicious app did) come from
+    the benign app's own start-up and are left out."""
+    if start is None or end is None:
+        log.warning('run-as cannot read the data folder of %s (not debuggable?); no file diff', benign)
+        return []
+    mid = start if mid is None else mid
+    findings = []
+    for path in sorted(end - start):
+        if path in mid:
+            log.info('%s appeared while %s itself started; not reported', path, benign)
+            continue
+        findings.append(_finding(benign, 'application', 'dynamic-file-created', 'high',
+                                 '%s appeared in the internal storage of %s after %s started' % (
+                                     path, benign, malicious)))
+    for path in sorted(start - end):
+        if path not in mid:
+            log.info('%s disappeared while %s itself started; not reported', path, benign)
+            continue
+        findings.append(_finding(benign, 'application', 'dynamic-file-deleted', 'high',
+                                 '%s disappeared from the internal storage of %s after %s started' % (
+                                     path, benign, malicious)))
+    return findings
+
+
+def run_two_app(benign_apk, malicious_apk, benign_package, malicious_package, adb=None,
+                wait=2, benign_activity=None, malicious_activity=None, benign_affinities=()):
+    """Install a benign and a malicious app, start the benign app, then the
+    malicious one, and report what the malicious app did to the benign one.
+
+    Steps: install both, snapshot the benign app's internal storage, clear
+    logcat, start the benign app, wait `wait` s, snapshot again, start the
+    malicious app, wait `wait` s, read logcat and dumpsys activity activities,
+    snapshot the storage a last time, and uninstall both apps (always).
+
+    Findings: dynamic-task-hijack and dynamic-foreground-foreign-activity
+    (CWE-1021), dynamic-file-created and dynamic-file-deleted (CWE-922) and
+    dynamic-permission-denial-observed (a Permission Denial naming either
+    package). `benign_affinities` are task affinities the benign app declares
+    besides its package name (from its manifest); a malicious task holding one
+    is a task hijack too. Without adb or a device it logs a warning and returns [].
+    """
+    adb = adb or find_adb()
+    if not adb:
+        log.warning('adb not found; skipping two-app dynamic analysis')
+        return []
+    if not device_available(adb):
+        log.warning('no adb device in the "device" state; skipping two-app dynamic analysis')
+        return []
+
+    findings = []
+    try:
+        for path in (benign_apk, malicious_apk):
+            code, out = _adb(adb, ['install', '-r', path], timeout=INSTALL_TIMEOUT)
+            if code != 0 or 'Success' not in out:
+                log.warning('install of %s failed: %s', path, out.strip())
+                return []
+
+        start_files = _list_data_files(adb, benign_package)
+        _adb(adb, ['logcat', '-c'])
+        _start_app(adb, benign_package, benign_activity)
+        time.sleep(wait)
+        mid_files = _list_data_files(adb, benign_package)
+        before_text = _shell(adb, 'dumpsys', 'activity', 'activities')
+
+        _start_app(adb, malicious_package, malicious_activity)
+        time.sleep(wait)
+
+        lines = parse_logcat(_logcat(adb, 1000))
+        after_text = _shell(adb, 'dumpsys', 'activity', 'activities')
+        end_files = _list_data_files(adb, benign_package)
+
+        findings += _two_app_task_findings(before_text, after_text, benign_package,
+                                           malicious_package, benign_affinities)
+        findings += _file_diff_findings(start_files, mid_files, end_files,
+                                        benign_package, malicious_package)
+        denials = _denials(lines, benign_package) + _denials(lines, malicious_package)
+        for line in dict.fromkeys(denials):
+            findings.append(_finding('(application)', 'application',
+                                     'dynamic-permission-denial-observed', 'high', line))
+    except Exception as e:  # device problems must not stop the pipeline
+        log.warning('two-app dynamic analysis of %s and %s stopped: %s',
+                    benign_package, malicious_package, e)
+    finally:
+        for package in (malicious_package, benign_package):
+            code, out = _adb(adb, ['uninstall', package], timeout=60)
+            if code != 0:
+                log.warning('uninstall of %s failed: %s', package, out.strip())
     return findings
 
 

@@ -1,6 +1,7 @@
 """android-threat-engine command line entry point.
 
-Usage: python src/ate.py --apk app.apk [--out DIR] [--dynamic] [--no-ai]
+Usage: python src/ate.py --apk app.apk [--out DIR] [--dynamic]
+                        [--dynamic-two-app MALICIOUS_APK] [--no-ai]
 
 Decodes the APK (apk.py), extracts manifest, smali code and taint
 findings (surface.py, code_analyzer.py, taint_analyzer.py), writes
@@ -10,6 +11,13 @@ summary line. <name> is the APK file name without its extension.
 With --dynamic, the APK is then installed and exercised on a running emulator
 or device over adb (dynamic_analyzer.py). If adb finds no device, a warning is
 printed and the dynamic step is skipped; the static report is still written.
+
+With --dynamic-two-app MALICIOUS_APK, the analyzed APK (the benign app) and
+MALICIOUS_APK are installed together; the benign app is started, then the
+malicious one, and task hijacks, foreign foreground activities, changes to the
+benign app's internal storage and Permission Denial lines are reported
+(dynamic_analyzer.run_two_app). The findings go to the same dynamic section of
+the report as the --dynamic findings.
 """
 import argparse
 import os
@@ -31,6 +39,9 @@ def parse_args(argv=None):
     p.add_argument('--out', default='.', help='output directory (default: current directory)')
     p.add_argument('--dynamic', action='store_true',
                    help='also run dynamic analysis on a running emulator over adb')
+    p.add_argument('--dynamic-two-app', metavar='MALICIOUS_APK',
+                   help='also install MALICIOUS_APK next to the analyzed APK, start both on a '
+                        'running emulator and report what it does to the analyzed app')
     p.add_argument('--no-ai', action='store_true', help='reserved; has no effect yet')
     return p.parse_args(argv)
 
@@ -43,17 +54,51 @@ def main_activity(manifest):
     return None
 
 
-def run_dynamic(apk_path, manifest):
-    """Dynamic findings from dynamic_analyzer.run_all (the run() checks plus the
-    per-broadcast crash, foreground task and deleted file sweep), or [] with a
-    warning when no device is attached."""
+def _device_adb():
+    """Path to adb when a device is attached, else None after a warning."""
     adb = dynamic_analyzer.find_adb()
     if not adb or not dynamic_analyzer.device_available(adb):
         print('warning: no emulator or device found by adb; dynamic analysis skipped '
               '(start the ghera27 emulator and check "adb devices")', file=sys.stderr)
+        return None
+    return adb
+
+
+def run_dynamic(apk_path, manifest):
+    """Dynamic findings from dynamic_analyzer.run_all (the run() checks plus the
+    per-broadcast crash, foreground task and deleted file sweep), or [] with a
+    warning when no device is attached."""
+    adb = _device_adb()
+    if not adb:
         return []
     return dynamic_analyzer.run_all(apk_path, manifest['package'], main_activity(manifest),
                                     adb=adb, manifest=manifest)
+
+
+def task_affinities(manifest):
+    """android:taskAffinity values the app declares (application and activities)."""
+    found = [manifest.get('application', {}).get('taskAffinity')]
+    found += [c.get('task_affinity') for c in manifest.get('components', [])]
+    return sorted({a for a in found if a})
+
+
+def run_dynamic_two_app(apk_path, manifest, malicious_apk):
+    """Findings of dynamic_analyzer.run_two_app with the analyzed APK as the
+    benign app and `malicious_apk` as the malicious one, or [] with a warning
+    when no device is attached or the malicious APK cannot be decoded."""
+    adb = _device_adb()
+    if not adb:
+        return []
+    try:
+        mal = apk.decode(malicious_apk)
+    except apk.ApkError as e:
+        print('warning: cannot read the malicious APK (%s); two-app analysis skipped' % e,
+              file=sys.stderr)
+        return []
+    return dynamic_analyzer.run_two_app(apk_path, malicious_apk, manifest['package'], mal['package'],
+                                        adb=adb, benign_activity=main_activity(manifest),
+                                        malicious_activity=main_activity(mal),
+                                        benign_affinities=task_affinities(manifest))
 
 
 def main(argv=None):
@@ -69,6 +114,8 @@ def main(argv=None):
     finally:
         shutil.rmtree(work, ignore_errors=True)
     dynamic = run_dynamic(args.apk, manifest) if args.dynamic else None
+    if args.dynamic_two_app:
+        dynamic = (dynamic or []) + run_dynamic_two_app(args.apk, manifest, args.dynamic_two_app)
     name = os.path.splitext(os.path.basename(args.apk))[0]
     report.write(findings, name, args.out, dynamic)
     findings = findings + (dynamic or [])
