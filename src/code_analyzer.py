@@ -93,6 +93,19 @@ Patterns:
                                (with its inner classes) reads an intent extra and
                                neither declares nor calls a method whose name contains
                                "valid" (no check on the fragment name)
+  webview_js_interface         method of an object passed to addJavascriptInterface
+                               that does a sensitive operation (high): file access,
+                               network, database (SQLiteDatabase, ContentResolver
+                               query/insert/update/delete) or sending intents
+                               (startActivity, startService, sendBroadcast and
+                               similar), directly or in an app method it calls (one
+                               level). The object's class comes from new-instance
+                               (or this, or a parameter's declared type); when it
+                               cannot be resolved, every app class with a
+                               @JavascriptInterface method is checked. Only
+                               @JavascriptInterface methods count, unless
+                               minSdkVersion is below 17, where every public
+                               method is exposed to JavaScript
 """
 import os
 import re
@@ -125,6 +138,7 @@ PATTERNS = {
     'unique_ids': 'CWE-359',
     'certificate_pinning_missing': 'CWE-295',
     'fragment_injection': 'CWE-470',
+    'webview_js_interface': 'CWE-749',
 }
 
 CONFIDENCE = ('high', 'medium', 'low')
@@ -300,8 +314,10 @@ class _Method:
         if not method['static']:
             self.regs['p0'] = ('this',)
             k = 1
+        self.param_types = {}   # register number -> declared type
         for t in _types(method['desc']):
             self.regs['p%d' % k] = ('param', k)
+            self.param_types[k] = t
             k += 2 if t in ('J', 'D') else 1
         self.seen = set()       # names of methods invoked so far
         self.action_read = False
@@ -393,6 +409,7 @@ class _Method:
         self.crypto(no, text, owner, name, desc, args)
         self.tls(no, text, owner, name, desc)
         self.webview(no, text, owner, name, args)
+        self.js_interface(no, text, name, desc, args)
         self.sql(no, text, owner, name, types, args)
         self.files(no, text, owner, name, types, args)
         self.icc(no, text, owner, name, desc, args, recv)
@@ -528,6 +545,22 @@ class _Method:
         elif name in ('setAllowFileAccessFromFileURLs', 'setAllowUniversalAccessFromFileURLs'):
             self.report('webview_file_access', 'high', no, text)
 
+    def js_interface(self, no, text, name, desc, args):
+        """Record addJavascriptInterface calls with the class of the object
+        passed, or None when the register model does not know it."""
+        if name != 'addJavascriptInterface' or not args:
+            return
+        if not desc.startswith('Ljava/lang/Object;'):
+            return
+        v, t = args[0], None
+        if v and v[0] == 'new':
+            t = v[1]
+        elif v and v[0] == 'this':
+            t = self.cls['name']
+        elif v and v[0] == 'param':
+            t = self.param_types.get(v[1])
+        self.ctx.js_interfaces.add((self.cls['file'], no, text, t))
+
     def sql(self, no, text, owner, name, types, args):
         db = owner == 'Landroid/database/sqlite/SQLiteDatabase;'
         if db and name in ('rawQuery', 'execSQL', 'rawQueryWithFactory'):
@@ -656,6 +689,7 @@ class _Context:
         self.seeded = set()
         self.findings = {}
         self.input_readers = set()
+        self.js_interfaces = set()   # (file, line, text, interface class or None)
 
     def field_write(self, ref, value, in_clinit):
         const = value if value and value[0] in ('str', 'lit') and in_clinit else None
@@ -1073,6 +1107,98 @@ def _fragment_rules(ctx, classes, decoded_dir):
                 ctx.emit(cls, 'fragment_injection', 'medium', no, text)
 
 
+JS_ANNOTATION = 'Landroid/webkit/JavascriptInterface;'
+FILE_CLASSES = ('Ljava/io/File;', 'Ljava/io/FileInputStream;', 'Ljava/io/FileOutputStream;',
+                'Ljava/io/FileReader;', 'Ljava/io/FileWriter;', 'Ljava/io/RandomAccessFile;')
+FILE_CALLS = ('openFileInput', 'openFileOutput', 'deleteFile')
+RESOLVER_CALLS = ('query', 'insert', 'update', 'delete', 'bulkInsert')
+INTENT_SENDS = CONTEXT_START + ('sendBroadcast', 'sendOrderedBroadcast', 'sendStickyBroadcast',
+                                'sendBroadcastAsUser')
+
+
+def _js_annotated(method):
+    return any(t.startswith('.annotation') and JS_ANNOTATION in t for _, t in method['body'])
+
+
+def _sensitive_call(ref):
+    """'file', 'network', 'database' or 'intent' when the method reference is a
+    sensitive operation, else None."""
+    m = METHOD_REF_RE.match(ref)
+    if not m:
+        return None
+    owner, name = m.group(1), m.group(2)
+    if owner in FILE_CLASSES or name in FILE_CALLS:
+        return 'file'
+    if ref.startswith(NETWORK_CALLS) or owner == 'Ljava/net/Socket;':
+        return 'network'
+    if owner == 'Landroid/database/sqlite/SQLiteDatabase;' or (
+            owner in ('Landroid/content/ContentResolver;', 'Landroid/content/ContentProviderClient;')
+            and name in RESOLVER_CALLS):
+        return 'database'
+    if name in INTENT_SENDS:
+        return 'intent'
+    return None
+
+
+def _sensitive(method, by_name, depth=1):
+    """Kind of the first sensitive operation in method, following up to depth
+    calls into app methods (looked up by owner, name and descriptor; virtual
+    dispatch to subclasses is not followed)."""
+    for _, _, ref in _invokes(method):
+        kind = _sensitive_call(ref)
+        if kind:
+            return kind
+        m = METHOD_REF_RE.match(ref)
+        if depth and m and m.group(1) in by_name:
+            for callee in by_name[m.group(1)]['methods']:
+                if callee['name'] == m.group(2) and callee['desc'] == m.group(3) \
+                        and callee is not method:
+                    kind = _sensitive(callee, by_name, depth - 1)
+                    if kind:
+                        return kind
+    return None
+
+
+def _js_interface_rules(ctx, classes, decoded_dir):
+    """webview_js_interface (CWE-749): sensitive methods reachable from
+    JavaScript through addJavascriptInterface. Limits: the interface object is
+    resolved within one method only; a sensitive call reached through more than
+    one app call level, reflection or a field holding a helper is missed, and a
+    method that checks its arguments before acting is still reported."""
+    if not ctx.js_interfaces:
+        return
+    try:
+        min_sdk = apk._sdk_info(decoded_dir).get('min_sdk')
+    except OSError:
+        min_sdk = None
+    all_public = min_sdk is not None and min_sdk < 17
+    by_name = {c['name']: c for c in classes}
+    targets, unresolved = set(), False
+    for _, _, _, t in ctx.js_interfaces:
+        if t in by_name:
+            targets.add(t)
+        else:
+            unresolved = True
+    if unresolved:
+        targets |= {c['name'] for c in classes if any(_js_annotated(m) for m in c['methods'])}
+    done = set()
+    for t in sorted(targets):
+        cls, seen = by_name.get(t), set()
+        while cls is not None and cls['name'] not in seen:   # the class and its app superclasses
+            seen.add(cls['name'])
+            for m in cls['methods']:
+                key = (cls['name'], m['line'])
+                if key in done or m['static'] or m['name'].startswith('<') \
+                        or ' public ' not in ' ' + m['decl'] + ' ':
+                    continue
+                if not (_js_annotated(m) or all_public):
+                    continue
+                done.add(key)
+                if _sensitive(m, by_name):
+                    ctx.emit(cls, 'webview_js_interface', 'high', m['line'], m['decl'])
+            cls = by_name.get(cls['super'])
+
+
 # ---------------------------------------------------------------- entry point
 
 def analyze(decoded_dir):
@@ -1091,4 +1217,5 @@ def analyze(decoded_dir):
     _ordered_broadcast_rules(ctx, classes, decoded_dir)
     _pinning_rules(ctx, classes, decoded_dir)
     _fragment_rules(ctx, classes, decoded_dir)
+    _js_interface_rules(ctx, classes, decoded_dir)
     return sorted(ctx.findings.values(), key=lambda f: (f['file'], f['line'], f['pattern']))
