@@ -75,6 +75,14 @@ Patterns:
                                Reported whatever the targetSdkVersion (the evidence
                                names it); flags the register model cannot resolve
                                to a constant are not reported
+  dynamic_receiver_no_permission  (high) Context.registerReceiver with no
+                               broadcastPermission: the (receiver, filter) or
+                               (receiver, filter, flags) overload, or a null
+                               permission in the (receiver, filter, String,
+                               Handler[, flags]) overloads. Skipped for
+                               LocalBroadcastManager (app local) and when the flags
+                               hold RECEIVER_NOT_EXPORTED (0x4); medium when the
+                               flags are not a known constant
   no_validity_check            onReceive starts a component without checking the action
   ordered_broadcast_priority   BroadcastReceiver subclass whose onReceive calls
                                setResult, setResultData, setResultExtras or
@@ -155,6 +163,7 @@ PATTERNS = {
     'pending_intent_empty': 'CWE-927',
     'pending_intent_implicit': 'CWE-927',
     'pending_intent_mutable': 'CWE-927',
+    'dynamic_receiver_no_permission': 'CWE-926',
     'no_validity_check': 'CWE-925',
     'ordered_broadcast_priority': 'CWE-927',
     'unique_ids': 'CWE-359',
@@ -190,6 +199,7 @@ PENDING_INTENT_FACTORIES = ('getActivity', 'getActivities', 'getBroadcast', 'get
                             'getForegroundService')
 FLAG_IMMUTABLE = 0x4000000   # PendingIntent.FLAG_IMMUTABLE
 FLAG_MUTABLE = 0x2000000     # PendingIntent.FLAG_MUTABLE (API 31)
+RECEIVER_NOT_EXPORTED = 0x4  # Context.RECEIVER_NOT_EXPORTED (API 33)
 SINK_KINDS = {'iv': 'constant_iv', 'key': 'hardcoded_key', 'pbe_salt': 'hardcoded_key_pbe',
               'pbe_pass': 'hardcoded_key_pbe'}
 
@@ -441,7 +451,7 @@ class _Method:
         self.sql(no, text, owner, name, types, args)
         self.files(no, text, owner, name, types, args)
         self.icc(no, text, owner, name, desc, args, recv)
-        self.receivers(owner, name, desc, args, recv)
+        self.receivers(no, text, owner, name, desc, args, recv)
         self.misc(no, text, owner, name, args)
         self.summaries(owner + '->' + name + '(' + desc + ')' + ret, vals)
         self.flow(owner, name, desc, ret, args, recv, vals)
@@ -690,9 +700,9 @@ class _Method:
                     % (text, flags[1] & 0xffffffff, target if target is not None else 'unknown'))
         self.report('pending_intent_mutable', 'high', no, evidence)
 
-    def receivers(self, owner, name, desc, args, recv):
+    def receivers(self, no, text, owner, name, desc, args, recv):
         """IntentFilter actions and registerReceiver calls (for
-        sticky_broadcast_receiver)."""
+        sticky_broadcast_receiver and dynamic_receiver_no_permission)."""
         f = self.obj(recv, 'filter')
         if f is not None and name in ('<init>', 'addAction') and args \
                 and desc.startswith('Ljava/lang/String;') and args[0] and args[0][0] == 'str':
@@ -714,6 +724,37 @@ class _Method:
             and args[2] is not None and not _is_null(args[2])
         if t and f is not None and f.get('actions'):
             self.ctx.dyn_receivers.add((t, tuple(sorted(f['actions'])), perm))
+        if 'LocalBroadcastManager' not in owner:
+            self.dynamic_receiver(no, text, types, args)
+
+    def dynamic_receiver(self, no, text, types, args):
+        """dynamic_receiver_no_permission: Context.registerReceiver with no
+        broadcastPermission. Overloads (after receiver and filter):
+          ()                        no permission
+          (int flags)               no permission
+          (String, Handler)         permission is args[2]
+          (String, Handler, int)    permission is args[2]
+        Only a permission known to be null counts as missing (a string from a
+        parameter or field is assumed to be a permission). Skipped when the
+        flags hold RECEIVER_NOT_EXPORTED (0x4); flags the register model cannot
+        resolve lower the confidence to medium."""
+        rest = types[2:]
+        if rest and rest[0] == 'Ljava/lang/String;':
+            if not _is_null(args[2] if len(args) > 2 else None):
+                return
+            how = 'null broadcastPermission'
+        else:
+            how = 'no broadcastPermission argument'
+        conf = 'high'
+        if rest and rest[-1] == 'I':
+            flags = args[len(rest) + 1] if len(args) > len(rest) + 1 else None
+            if flags and flags[0] == 'int' and flags[1] is not None:
+                if flags[1] & RECEIVER_NOT_EXPORTED:
+                    return
+            else:
+                conf = 'medium'   # flags unknown: may hold RECEIVER_NOT_EXPORTED
+        self.report('dynamic_receiver_no_permission', conf, no,
+                    '%s [%s: any app can send this receiver a broadcast]' % (text, how))
 
     @property
     def is_on_receive(self):
