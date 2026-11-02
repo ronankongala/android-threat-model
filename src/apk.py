@@ -3,7 +3,9 @@
 decode(apk_path) returns a dict:
   package               manifest package name (string)
   permissions           names from <uses-permission> (and <uses-permission-sdk-23>)
-  declared_permissions  [{name, protectionLevel}] from <permission>
+  declared_permissions  [{name, protectionLevel}] from <permission> (the raw
+                        android:protectionLevel, which apktool may write as a
+                        name or a number; 'normal' when absent)
   components            [{name, type, exported, intent_filters, permission, ...}]
   min_sdk, target_sdk   from apktool.yml (int or None)
   application           application attributes the surface rules use

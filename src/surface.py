@@ -48,6 +48,19 @@ kinds in CWE below, six can be seen in a manifest and have rules here:
                           are to be reviewed. The report lists findings with
                           a 'note' key under "Candidates to check"
 
+  weak-permission-protection
+                          exported component protected (android:permission,
+                          or a provider's readPermission / writePermission) by
+                          a custom permission declared in this manifest whose
+                          android:protectionLevel is normal (also when absent)
+                          or dangerous, rather than signature or
+                          signatureOrSystem (confidence medium). Normal
+                          permissions are granted automatically to any app
+                          that asks for them; dangerous ones only need the
+                          user to accept. apktool's numeric levels (0 normal,
+                          1 dangerous, 2 signature, 3 signatureOrSystem) are
+                          read as well
+
 The other six (dynamic-receiver-no-permission, missing-certificate-validation,
 sql-no-parameterization, js-enabled-webview, hardcoded-key, weak-cipher) are
 properties of code, not of the manifest. They are listed for their CWE IDs;
@@ -86,6 +99,7 @@ CWE = {
     # truth of InadequatePathPermission-InformationExposure-Lean lists it.
     # Children such as CWE-285 or CWE-732 are to be reviewed.
     'provider-path-permission-only': 'CWE-284',
+    'weak-permission-protection': 'CWE-926',
 }
 
 ISSUES = tuple(CWE)
@@ -227,6 +241,52 @@ def _provider_path_permission(comp):
     return 'medium', evidence
 
 
+PROTECTION_LEVELS = {0: 'normal', 1: 'dangerous', 2: 'signature', 3: 'signatureOrSystem'}
+WEAK_LEVELS = ('normal', 'dangerous')
+
+
+def protection_base(level):
+    """Base protection level name of an android:protectionLevel value: 'normal'
+    when absent, apktool's numeric form (0-3, decimal or hex, flag bits above
+    0xf ignored) mapped to its name, or the first name of an 'a|b' list."""
+    if level is None or not str(level).strip():
+        return 'normal'
+    text = str(level).strip()
+    try:
+        return PROTECTION_LEVELS.get(int(text, 0) & 0xf, 'other')
+    except ValueError:
+        pass
+    return text.split('|')[0].strip() or 'normal'
+
+
+def _weak_permissions(comp, declared):
+    """[(attribute, permission, base level)] for the custom permissions (declared
+    in this manifest) that protect the exported component `comp` with a
+    protectionLevel of normal or dangerous."""
+    if not comp['exported']:
+        return []
+    found = []
+    for key, attr in (('permission', 'permission'), ('read_permission', 'readPermission'),
+                      ('write_permission', 'writePermission')):
+        name = comp.get(key)
+        if name in declared:
+            base = protection_base(declared[name])
+            if base in WEAK_LEVELS and (attr, name, base) not in found:
+                found.append((attr, name, base))
+    return found
+
+
+WEAK_LEVEL_NOTE = {
+    'normal': 'normal permissions are granted automatically to any app that requests them',
+    'dangerous': 'dangerous permissions are granted by the user to any app that requests them',
+}
+
+
+def _weak_permission_evidence(weak):
+    return '; '.join('android:%s="%s" is declared with protectionLevel %s: %s'
+                     % (attr, name, base, WEAK_LEVEL_NOTE[base]) for attr, name, base in weak)
+
+
 LAUNCH_MODES_NEW_TASK = ('singleTask', 'singleInstance', '2', '3')
 
 
@@ -343,6 +403,8 @@ def find(apk, decoded_dir=None):
 
 def _manifest_findings(apk):
     findings = []
+    declared = {p['name']: p.get('protectionLevel')
+                for p in apk.get('declared_permissions', []) if p.get('name')}
     for comp in apk.get('components', []):
         for issue, rule in (('exported-no-permission', _exported_no_permission),
                             ('implicit-intent', _implicit_intent),
@@ -357,6 +419,11 @@ def _manifest_findings(apk):
         if hit:
             f = _finding(comp, 'task-affinity-hijack', hit[0])
             f['evidence'] = hit[1]
+            findings.append(f)
+        weak = _weak_permissions(comp, declared)
+        if weak:
+            f = _finding(comp, 'weak-permission-protection', 'medium')
+            f['evidence'] = _weak_permission_evidence(weak)
             findings.append(f)
         hit = _provider_path_permission(comp)
         if hit:
