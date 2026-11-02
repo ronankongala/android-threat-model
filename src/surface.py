@@ -9,8 +9,13 @@ kinds in CWE below, five can be seen in a manifest and have rules here:
   exported-no-permission  exported component with no permission
   implicit-intent         component exported only because it has an intent filter
                           (no android:exported), reachable by implicit intents
-  cleartext-http          app may send cleartext HTTP (usesCleartextTraffic, or the
-                          pre-API 28 default) and requests INTERNET
+  cleartext-http          app may send cleartext HTTP (usesCleartextTraffic, the
+                          pre-API 28 default, or a network security config that
+                          permits cleartext) and requests INTERNET. Skipped when
+                          the config permits cleartext only to localhost,
+                          127.0.0.1 or 10.0.2.2 (the emulator's host), and when
+                          usesCleartextTraffic="true" but minSdkVersion is below
+                          23 (cleartext was the default before Android 6)
   path-not-sanitized      exported content provider protected only by path
                           permissions, or granting URI permissions, so access
                           depends on the path the caller supplies
@@ -34,6 +39,9 @@ carry extra keys (file, line, pattern, evidence; taint findings also
 source_line and sink_line). The merged list
 keeps one finding per (component, cwe): the one with the highest confidence.
 """
+import os
+import xml.etree.ElementTree as ET
+
 import code_analyzer
 import taint_analyzer
 
@@ -141,15 +149,55 @@ def _task_affinity(comp, package):
     return evidence
 
 
+LOCAL_HOSTS = ('localhost', '127.0.0.1', '10.0.2.2')
+
+
+def _nsc_cleartext_hosts(apk):
+    """Domains for which the network security config permits cleartext ('*' for
+    a base-config that permits it), or None when the config cannot be read."""
+    ref = (apk.get('application') or {}).get('networkSecurityConfig') or ''
+    decoded_dir = apk.get('decoded_dir')
+    if not ref.startswith('@xml/') or not decoded_dir:
+        return None
+    path = os.path.join(decoded_dir, 'res', 'xml', ref[len('@xml/'):] + '.xml')
+    try:
+        root = ET.parse(path).getroot()
+    except (OSError, ET.ParseError):
+        return None
+    hosts = []
+    base = root.find('base-config')
+    if base is not None and base.get('cleartextTrafficPermitted') == 'true':
+        hosts.append('*')
+
+    def walk(elem, inherited):
+        permitted = elem.get('cleartextTrafficPermitted')
+        permitted = inherited if permitted is None else permitted == 'true'
+        if permitted:
+            hosts.extend((d.text or '').strip().lower() for d in elem.findall('domain'))
+        for child in elem.findall('domain-config'):
+            walk(child, permitted)
+    for dc in root.findall('domain-config'):
+        walk(dc, False)
+    return hosts
+
+
 def _cleartext(apk):
     if 'android.permission.INTERNET' not in apk.get('permissions', []):
         return None
     app = apk.get('application') or {}
+    if app.get('networkSecurityConfig'):
+        # From API 24 the config takes precedence over usesCleartextTraffic.
+        hosts = _nsc_cleartext_hosts(apk)
+        if not hosts or all(h in LOCAL_HOSTS for h in hosts):
+            return None
+        return 'high' if '*' in hosts else 'medium'
     flag = app.get('usesCleartextTraffic')
     if flag == 'true':
+        min_sdk = apk.get('min_sdk')
+        if min_sdk is not None and min_sdk < 23:
+            return None   # cleartext was the default before Android 6: low value
         return 'high'
-    if flag == 'false' or app.get('networkSecurityConfig'):
-        # A network security config can still allow cleartext; it is not read here.
+    if flag == 'false':
         return None
     target = apk.get('target_sdk')
     if target is not None and target < 28:
