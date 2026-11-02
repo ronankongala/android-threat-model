@@ -67,6 +67,14 @@ Patterns:
                                wrapping an Intent built in the same method with no
                                setPackage, setClass, setClassName (or other target)
                                call before the PendingIntent call
+  pending_intent_mutable       (high) PendingIntent.getActivity / getActivities /
+                               getBroadcast / getService / getForegroundService
+                               whose flags argument is a constant with neither
+                               FLAG_IMMUTABLE (0x4000000) nor FLAG_MUTABLE
+                               (0x2000000), which apps targeting API 31+ must set.
+                               Reported whatever the targetSdkVersion (the evidence
+                               names it); flags the register model cannot resolve
+                               to a constant are not reported
   no_validity_check            onReceive starts a component without checking the action
   ordered_broadcast_priority   BroadcastReceiver subclass whose onReceive calls
                                setResult, setResultData, setResultExtras or
@@ -146,6 +154,7 @@ PATTERNS = {
     'implicit_broadcast': 'CWE-927',
     'pending_intent_empty': 'CWE-927',
     'pending_intent_implicit': 'CWE-927',
+    'pending_intent_mutable': 'CWE-927',
     'no_validity_check': 'CWE-925',
     'ordered_broadcast_priority': 'CWE-927',
     'unique_ids': 'CWE-359',
@@ -177,6 +186,10 @@ CONTEXT_START = ('startService', 'startForegroundService', 'startActivity',
                  'startActivities', 'startActivityForResult', 'bindService')
 TAINT_SOURCES = ('getStringExtra', 'getExtras', 'getExtra', 'getBundleExtra',
                  'getCharSequenceExtra')
+PENDING_INTENT_FACTORIES = ('getActivity', 'getActivities', 'getBroadcast', 'getService',
+                            'getForegroundService')
+FLAG_IMMUTABLE = 0x4000000   # PendingIntent.FLAG_IMMUTABLE
+FLAG_MUTABLE = 0x2000000     # PendingIntent.FLAG_MUTABLE (API 31)
 SINK_KINDS = {'iv': 'constant_iv', 'key': 'hardcoded_key', 'pbe_salt': 'hardcoded_key_pbe',
               'pbe_pass': 'hardcoded_key_pbe'}
 
@@ -638,9 +651,10 @@ class _Method:
                     self.report('implicit_broadcast', 'medium', no, text)
             elif not (self.seen & set(INTENT_EXPLICIT)) and not self.ctx_class_intent:
                 self.report('implicit_broadcast', 'medium', no, text)
-        elif owner == 'Landroid/app/PendingIntent;' and name in (
-                'getActivity', 'getBroadcast', 'getService', 'getForegroundService'):
-            intent = args[2] if len(args) > 2 else None
+        elif owner == 'Landroid/app/PendingIntent;' and name in PENDING_INTENT_FACTORIES:
+            self.pending_intent_flags(no, text, args)
+            # getActivities takes an Intent[]: the Intent rules below do not apply.
+            intent = args[2] if len(args) > 2 and name != 'getActivities' else None
             o = self.obj(intent, 'intent')
             if o is not None:
                 flags = o['flags']
@@ -658,6 +672,23 @@ class _Method:
         elif self.action_read and owner == 'Ljava/lang/String;' and name in (
                 'equals', 'equalsIgnoreCase', 'contentEquals', 'hashCode', 'startsWith'):
             self.action_checked = True
+
+    def pending_intent_flags(self, no, text, args):
+        """pending_intent_mutable: the flags argument (4th parameter of every
+        PendingIntent factory) is a known constant with neither FLAG_IMMUTABLE
+        nor FLAG_MUTABLE. A flags value the register model does not know (a
+        parameter, a field, a computed value) is not reported."""
+        flags = args[3] if len(args) > 3 else None
+        if not flags or flags[0] != 'int' or flags[1] is None:
+            return
+        if flags[1] & (FLAG_IMMUTABLE | FLAG_MUTABLE):
+            return
+        target = self.ctx.target_sdk
+        evidence = ('%s [flags 0x%x: neither FLAG_IMMUTABLE nor FLAG_MUTABLE; required '
+                    'for apps targeting API 31+ (targetSdkVersion %s), a mutable '
+                    'PendingIntent lets the receiving app fill in its Intent]'
+                    % (text, flags[1] & 0xffffffff, target if target is not None else 'unknown'))
+        self.report('pending_intent_mutable', 'high', no, evidence)
 
     def receivers(self, owner, name, desc, args, recv):
         """IntentFilter actions and registerReceiver calls (for
@@ -740,6 +771,7 @@ class _Context:
         self.js_interfaces = set()   # (file, line, text, interface class or None)
         self.sticky_actions = set()  # actions of sticky broadcasts sent by the app
         self.dyn_receivers = set()   # (receiver class, actions, permission given)
+        self.target_sdk = None       # targetSdkVersion from apktool.yml, if known
 
     def field_write(self, ref, value, in_clinit):
         const = value if value and value[0] in ('str', 'lit') and in_clinit else None
@@ -1336,6 +1368,7 @@ def analyze(decoded_dir):
     """Return the code findings for the apktool output folder `decoded_dir`."""
     classes = [c for c in (_parse_class(p, decoded_dir) for p in _class_files(decoded_dir)) if c]
     ctx = _Context(classes)
+    ctx.target_sdk = apk._sdk_info(decoded_dir).get('target_sdk')
     ctx.find_input_readers(decoded_dir)
     for _ in range(PASSES):
         ctx.findings = {}
