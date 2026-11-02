@@ -15,6 +15,7 @@ invoke-super, invoke-interface and their /range forms.
 parse_methods(decoded_dir, skip_libs=True) yields one dict per defined method:
   class      'Lpkg/Cls;'
   super      superclass descriptor, or None
+  interfaces list of interface descriptors from .implements
   signature  'Lpkg/Cls;->name(args)ret'
   name, desc method name and descriptor '(args)ret'
   static     True for static methods
@@ -100,6 +101,7 @@ def parse_file(path, rel):
     with open(path, encoding='utf-8', errors='replace') as f:
         lines = f.read().splitlines()
     cls = sup = None
+    interfaces = []
     current = None
     for no, raw in enumerate(lines, 1):
         line = raw.strip()
@@ -110,6 +112,8 @@ def parse_file(path, rel):
                 cls = line.split()[-1]
             elif line.startswith('.super'):
                 sup = line.split()[-1]
+            elif line.startswith('.implements'):
+                interfaces.append(line.split()[-1])
             elif line.startswith('.method'):
                 m = METHOD_RE.match(line)
                 if not m or cls is None:
@@ -119,6 +123,7 @@ def parse_file(path, rel):
                 current = {
                     'class': cls,
                     'super': sup,
+                    'interfaces': list(interfaces),
                     'signature': '%s->%s' % (cls, namedesc),
                     'name': namedesc[:i],
                     'desc': namedesc[i:],

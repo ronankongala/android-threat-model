@@ -50,6 +50,14 @@ crosses. Argument i of the invoke
 register list maps to p<i> of the callee: p0 is 'this' for a non-static
 method, and a wide (J or D) argument fills two registers in both the invoke
 list and the parameter list, so positions line up. p<n> is v<locals + n>.
+
+Class hierarchy: a map from each app class to its subclasses is built from the
+.super and .implements declarations. When a tainted register is passed to an
+invoke-virtual or invoke-interface call whose owner type is an app class, the
+overrides of that method in subclasses (or implementing classes) up to
+MAX_HIERARCHY levels below the owner are analyzed too, with the same argument
+taint and the same depth limit and confidence step as the resolved callee.
+invoke-super is not followed this way, since it never dispatches to a subclass.
 """
 
 import call_graph as cg
@@ -118,6 +126,7 @@ _CLEARS = ('const', 'new-instance', 'new-array', 'filled-new-array', 'sget',
            'float-to-', 'double-to-')
 
 MAX_DEPTH = 3
+MAX_HIERARCHY = 2
 CONFIDENCE = ('high', 'medium', 'low')
 
 
@@ -196,6 +205,11 @@ class _Context:
         self.methods = methods
         self.app = app
         self.supers = {m['class']: m['super'] for m in methods.values()}
+        self.children = {}
+        for m in methods.values():
+            for parent in [m['super']] + list(m.get('interfaces') or ()):
+                if parent:
+                    self.children.setdefault(parent, set()).add(m['class'])
         self.locals = {}
         self.visited = {}     # (signature, seeds) -> origin of a tainted return, or None
         self.findings = {}
@@ -212,6 +226,27 @@ class _Context:
             if cand in self.app:
                 return cand
         return None
+
+    def overrides(self, sig, exclude=None):
+        """App methods overriding sig in classes up to MAX_HIERARCHY levels
+        below its owner class, nearest first."""
+        cls, name, desc = cg.split_ref(sig)
+        if cls not in self.supers:
+            return []
+        out, level, seen = [], [cls], {cls}
+        for _ in range(MAX_HIERARCHY):
+            nxt = []
+            for c in level:
+                for child in sorted(self.children.get(c, ())):
+                    if child in seen:
+                        continue
+                    seen.add(child)
+                    nxt.append(child)
+                    cand = '%s->%s%s' % (child, name, desc)
+                    if cand in self.app and cand != exclude:
+                        out.append(cand)
+            level = nxt
+        return out
 
     def nlocals(self, method):
         sig = method['signature']
@@ -350,17 +385,23 @@ def _scan(ctx, method, seeds, depth):
                     pending = taint[recv]
 
             target = ctx.resolve(sig)
-            if target and depth < MAX_DEPTH:
-                # Also scanned without tainted arguments, so that an app
-                # method returning a source value (a getter) taints the caller.
-                callee = ctx.methods[target]
-                base = ctx.nlocals(callee)
-                callee_seeds = {base + i: taint[r]
-                                for i, r in enumerate(regs) if r in taint}
-                back = _scan(ctx, callee, callee_seeds, depth + 1)
-                if back and not pending:
-                    # one more call level between the source and the caller
-                    pending = back[:4] + (back[4] + 1,)
+            if depth < MAX_DEPTH:
+                # The resolved callee is also scanned without tainted
+                # arguments, so that an app method returning a source value
+                # (a getter) taints the caller. Subclass overrides are only
+                # followed when an argument is tainted.
+                targets = [target] if target else []
+                if hit and opc.startswith(('invoke-virtual', 'invoke-interface')):
+                    targets += ctx.overrides(sig, exclude=target)
+                for t in targets:
+                    callee = ctx.methods[t]
+                    base = ctx.nlocals(callee)
+                    callee_seeds = {base + i: taint[r]
+                                    for i, r in enumerate(regs) if r in taint}
+                    back = _scan(ctx, callee, callee_seeds, depth + 1)
+                    if back and not pending:
+                        # one more call level between the source and the caller
+                        pending = back[:4] + (back[4] + 1,) + back[5:]
             continue
 
         ops = _operands(rest, nl)
