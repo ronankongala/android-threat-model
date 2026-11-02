@@ -45,12 +45,17 @@ def _smali(name, sup, body):
 """.format(name=name, sup=sup, body=body)
 
 
+# P-7: trigger 2 also needs the earlier result to be read.
+READ = '    invoke-virtual {p0}, La/b/R;->getResultData()Ljava/lang/String;\n'
+
+
 def _call(owner, method='setResultData', op='invoke-virtual'):
     sig = {'setResultData': '(Ljava/lang/String;)V', 'abortBroadcast': '()V',
            'setResult': '(ILjava/lang/String;Landroid/os/Bundle;)V',
            'setResultExtras': '(Landroid/os/Bundle;)V'}[method]
     regs = '{p0, v1}' if method == 'setResultData' else '{p0}'
-    return '    %s %s, %s->%s%s' % (op, regs, owner, method, sig)
+    read = READ.replace('La/b/R;', owner) if op == 'invoke-virtual' else ''
+    return read + '    %s %s, %s->%s%s' % (op, regs, owner, method, sig)
 
 
 def _build(tmp_path, classes, receivers=()):
@@ -144,3 +149,25 @@ def test_not_fired_without_result_call(tmp_path):
 def test_not_fired_for_invoke_super(tmp_path):
     body = _call(RECV, 'abortBroadcast', op='invoke-super')
     assert _build(tmp_path, {'a/b/R': (RECV, body)}) == []
+
+
+def test_p7_set_without_read_not_fired(tmp_path):
+    # OrderedBroadcast-DataInjection-Lean Secure: result built from the Intent.
+    body = '    invoke-virtual {p0, v1}, La/b/R;->setResultData(Ljava/lang/String;)V'
+    assert _build(tmp_path, {'a/b/R': (RECV, body)}, [('a.b.R', None)]) == []
+
+
+def test_p7_abort_only_not_fired(tmp_path):
+    body = '    invoke-virtual {p0}, La/b/R;->abortBroadcast()V'
+    assert _build(tmp_path, {'a/b/R': (RECV, body)}) == []
+
+
+def test_p7_read_then_set_fires(tmp_path):
+    body = READ + '    invoke-virtual {p0, v1}, La/b/R;->setResultData(Ljava/lang/String;)V'
+    found = _build(tmp_path, {'a/b/R': (RECV, body)}, [('a.b.R', None)])
+    assert [f['evidence'].split('->')[1].split('(')[0] for f in found] == ['setResultData']
+
+
+def test_p7_priority_rule_needs_no_read(tmp_path):
+    body = '    invoke-virtual {p0, v1}, La/b/R;->setResultData(Ljava/lang/String;)V'
+    assert len(_build(tmp_path, {'a/b/R': (RECV, body)}, [('a.b.R', 10)])) == 1

@@ -78,7 +78,12 @@ Patterns:
                                with a manifest permission or registered with a
                                broadcast permission are skipped. Any app can
                                replace a sticky broadcast, so its data is untrusted
-  implicit_broadcast           sendBroadcast with an Intent that names no target
+  implicit_broadcast           sendBroadcast / sendOrderedBroadcast / sendBroadcastAsUser
+                               with an Intent that names no target and no receiver
+                               permission: P-7 skips the call when its permission
+                               argument is anything but a constant null
+                               (sendStickyBroadcast has no permission argument, so
+                               sticky_broadcast is not affected)
   pending_intent_empty         PendingIntent wrapping an empty Intent, or one built
                                with new Intent() and no action in the constructor
   pending_intent_implicit      PendingIntent.getActivity / getBroadcast / getService
@@ -110,7 +115,9 @@ Patterns:
                                (medium); or, whatever the priority (including none),
                                any receiver subclass (direct, or through app classes)
                                whose onReceive invoke-virtual's one of those methods on
-                               itself, an app superclass or BroadcastReceiver (medium).
+                               itself, an app superclass or BroadcastReceiver and also
+                               reads the earlier result there (getResultData,
+                               getResultExtras or getResultCode; P-7) (medium).
                                One finding per receiver; the priority match wins.
   unique_ids                   device identifiers (IMEI, serial, ANDROID_ID)
   certificate_pinning_missing  application level (high). The network security
@@ -755,8 +762,12 @@ class _Method:
                 and 'LocalBroadcastManager' not in owner and args:
             types = _types(desc)
             perm = [a for a, t in zip(args, types) if t == 'Ljava/lang/String;']
-            if perm and perm[0] is not None and not _is_null(perm[0]):
-                return   # receiver permission given
+            if perm and not _is_null(perm[0]):
+                # P-7: a receiver permission is passed (the String argument
+                # after the Intent, or after the UserHandle). Only a constant
+                # null leaves the broadcast open; a value the register model
+                # cannot resolve (a field, a parameter) is still a permission.
+                return
             o = self.obj(args[0], 'intent')
             if o is not None:
                 if not o['flags'] & {'explicit', 'unknown'}:
@@ -1112,6 +1123,8 @@ def _class_rules(ctx, cls):
 
 RECEIVER = 'Landroid/content/BroadcastReceiver;'
 RESULT_CALLS = ('setResult', 'setResultData', 'setResultExtras', 'abortBroadcast')
+# Reads of the result left by the receivers that ran earlier in an ordered broadcast.
+RESULT_READS = ('getResultData', 'getResultExtras', 'getResultCode')
 
 
 def _receiver_priorities(decoded_dir):
@@ -1154,13 +1167,14 @@ def _receiver_chain(cls, by_name):
     return chain
 
 
-def _result_call(method, owners=None):
-    """(line, text) of the first call in method to one of RESULT_CALLS, or None.
-    With owners, only an invoke-virtual on one of those class descriptors counts."""
+def _result_call(method, owners=None, calls=RESULT_CALLS):
+    """(line, text) of the first call in method to one of calls (default
+    RESULT_CALLS), or None. With owners, only an invoke-virtual on one of those
+    class descriptors counts."""
     for no, text in _code(method['body']):
         inv = INVOKE_RE.match(text)
         ref = METHOD_REF_RE.match(inv.group(3)) if inv else None
-        if not ref or ref.group(2) not in RESULT_CALLS:
+        if not ref or ref.group(2) not in calls:
             continue
         if owners is None or (inv.group(1).startswith('invoke-virtual')
                               and ref.group(1) in owners):
@@ -1173,9 +1187,13 @@ def _ordered_broadcast_rules(ctx, classes, decoded_dir):
     1. declared with intent filter priority > 0 and onReceive calls a result
        method on any object (the original rule);
     2. any priority, or none: onReceive invoke-virtual's a result method on the
-       receiver itself, an app superclass or BroadcastReceiver. A receiver that
-       changes or aborts the result takes part in an ordered broadcast chain, so a
-       higher priority receiver can inject data into it (CWE-927).
+       receiver itself, an app superclass or BroadcastReceiver, AND reads the
+       result an earlier receiver left (getResultData, getResultExtras or
+       getResultCode on the same objects). A receiver that builds its result on
+       the previous one takes part in an ordered broadcast chain, so a higher
+       priority receiver can inject data into it (CWE-927). P-7: one that sets
+       the result from its own Intent (OrderedBroadcast-DataInjection-Lean
+       Secure reads EXTRA_PHONE_NUMBER) or only aborts is not reported.
     Both report at medium, so when both match the same receiver only the first
     is kept."""
     priorities = _receiver_priorities(decoded_dir)
@@ -1188,7 +1206,8 @@ def _ordered_broadcast_rules(ctx, classes, decoded_dir):
             if m['name'] != 'onReceive' or m['desc'] != 'Landroid/content/Context;Landroid/content/Intent;':
                 continue
             hit = _result_call(m) if priorities.get(cls['name'], 0) > 0 else None
-            hit = hit or _result_call(m, owners)
+            if not hit and _result_call(m, owners, RESULT_READS):
+                hit = _result_call(m, owners)
             if hit:
                 ctx.emit(cls, 'ordered_broadcast_priority', 'medium', *hit)
 

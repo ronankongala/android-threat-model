@@ -14,7 +14,8 @@ kinds in CWE below, six can be seen in a manifest and have rules here:
                           readPermission and writePermission is set (P-2:
                           medium or high only with no permission of any kind)
   implicit-intent         component exported only because it has an intent filter
-                          (no android:exported), reachable by implicit intents
+                          (no android:exported), reachable by implicit intents;
+                          skipped when it has an android:permission (P-7)
   cleartext-http          app may send cleartext HTTP (usesCleartextTraffic, the
                           pre-API 28 default, or a network security config that
                           permits cleartext) and requests INTERNET. Skipped when
@@ -206,7 +207,9 @@ def _exported_no_permission(comp):
 
 
 def _implicit_intent(comp):
-    if not comp['exported'] or comp.get('exported_attr') is not None:
+    """P-7: a component protected by a permission is skipped; implicit
+    intents or broadcasts sent to it need the caller to hold the permission."""
+    if not comp['exported'] or comp.get('exported_attr') is not None or _protected(comp):
         return None
     if not comp['intent_filters'] or _is_launcher(comp) or comp['type'] == 'provider':
         return None
