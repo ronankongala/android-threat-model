@@ -33,14 +33,21 @@ android-threat-engine is an Android app security research project built on the [
 
 ## Results
 
-Static evaluation (`python tools/evaluate.py --no-dynamic`) on the 19 benchmarks with an `api27` build (5 Crypto, 14 ICC), after adding code pattern analysis (Layer 2) and taint analysis (Layer 3):
+Static evaluation (`python tools/evaluate.py --no-dynamic`, 2026-11-01) on the 53 benchmarks with an `api27` build, across all eight categories, using manifest rules, code patterns (Layer 2) and taint analysis (Layer 3):
 
-| Run | TP | FP | Precision | Recall |
-|-----|---:|---:|----------:|-------:|
-| Manifest rules only | 9 | 19 | 0.32 | 0.47 |
-| Manifest, code patterns and taint | 11 | 19 | 0.37 | 0.58 |
+| Category | Benchmarks | TP | FP | Precision | Recall |
+|----------|-----------:|---:|---:|----------:|-------:|
+| Crypto | 5 | 4 | 4 | 0.50 | 0.80 |
+| ICC | 16 | 10 | 11 | 0.48 | 0.62 |
+| Networking | 8 | 6 | 7 | 0.46 | 0.75 |
+| NonAPI | 1 | 1 | 0 | 1.00 | 1.00 |
+| Permission | 2 | 1 | 1 | 0.50 | 0.50 |
+| Storage | 7 | 5 | 4 | 0.56 | 0.71 |
+| System | 6 | 5 | 0 | 1.00 | 0.83 |
+| Web | 8 | 5 | 8 | 0.38 | 0.62 |
+| **Overall** | **53** | **37** | **35** | **0.51** | **0.70** |
 
-By category: Crypto precision 0.44, recall 0.80 (5 benchmarks); ICC precision 0.33, recall 0.50 (14 benchmarks). Every Secure APK counts as a false positive because the exported launcher activity is always reported; counting only Secure findings whose CWE is in the ground truth gives precision 0.52. Networking, Storage, System and Web benchmarks are not built yet, so their code rules are not measured. Details and limits: [docs/notes/evaluation-report.md](docs/notes/evaluation-report.md).
+The dynamic run (`--dynamic`, Layer 4 on the `ghera27` emulator) gives the same scores. A Secure APK counts as a false positive when it has any finding, so precision stays near 0.5 even where the actual weakness is fixed. Details and limits: [docs/notes/evaluation-report.md](docs/notes/evaluation-report.md).
 
 ## Screenshots
 
