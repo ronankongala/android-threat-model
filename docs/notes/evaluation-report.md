@@ -52,6 +52,23 @@ The target of this round (precision above 0.85 with recall at 0.96 or above) is 
 
 Per-rule precision over the 53 benchmarks (`data/rule-precision.json`): most rules have no false positive; `exported-no-permission` is 18 TP / 9 FP (0.67), `external_storage_io` 4 / 2 (0.67), `empty_trustmanager` 4 / 1 (0.80), `sql_injection_raw` 2 / 2 (0.50), `implicit_broadcast` and `pending_intent_implicit` 0 / 1. Calibrated confidence is base confidence (high 0.9, medium 0.6, low 0.3) times rule precision, and only findings above 0.3 are kept. Scored with leave-one-out precision (each benchmark calibrated by the other 52, so no benchmark calibrates itself), it lowers both scores: every low finding is dropped, including true positives such as `default-task-affinity` (TaskAffinity benchmarks) and the low `external_storage_io` of ExternalStorage-DataInjection-Lean, while `exported-no-permission` (0.67) stays above the threshold and keeps its 9 false positives. Calibration is therefore opt-in (`--calibrate`) and the standard numbers above do not use it. In-sample scoring (precision computed with the benchmark itself) would also be biased upward and is not reported.
 
+## Independent Validation
+
+On 2026-11-02 the tool was run (static, default flags) on three intentionally vulnerable apps that publish their own vulnerability lists and were not used to write or tune the rules: BugBazaar v1.2.1, InsecureShop v1.0 and DIVA (2016 beta). A known vulnerability is a true positive when a finding names its weakness on the component where it lives; a finding that matches no listed vulnerability is a false positive; findings that only locate a listed vulnerability (for example, the exported deep-link activity whose URL check is the actual flaw) are neither, and that vulnerability counts as a false negative. Full method, per-finding labels and analysis: [validation-results.md](validation-results.md).
+
+| App | Known Vulnerabilities | Tool Findings | True Positives | False Positives | False Negatives | Precision | Recall |
+|-----|----------------------:|--------------:|---------------:|----------------:|----------------:|----------:|-------:|
+| BugBazaar | 42 | 44 | 13 | 16 | 29 | 0.45 | 0.31 |
+| InsecureShop | 19 | 29 | 8 | 6 | 11 | 0.57 | 0.42 |
+| DIVA | 13 | 11 | 5 | 2 | 8 | 0.71 | 0.38 |
+| **Overall** | **74** | **84** | **26** | **24** | **48** | **0.52** | **0.35** |
+
+Compared with Ghera (precision 0.79, recall 0.98), both numbers drop, and the scoring is stricter here: every finding outside the README lists counts against precision, and 8 of the 74 listed items are server-side, runtime or logic issues that a static APK scan cannot see (recall without them: 0.39).
+
+- **Generalizes:** exported components and IPC (15 of 21 found), SQL injection and dynamic code loading (4 of 6), WebView settings and `onReceivedSslError` proceeding.
+- **Does not generalize:** URL and host checks in WebView and deep-link handlers, intent redirection, plain credential storage and logging (2 of 15 storage and leakage items), hardcoded secrets (0 of 4), the `debuggable` and `allowBackup` flags, FileProvider paths and native code.
+- **Precision:** 18 of the 24 false positives are in bundled third-party libraries (Razorpay, Glide, Evernote android-job, Picasso, uploadservice). Without them precision would be 0.81.
+
 ## Previous round (P1 and P2)
 
 Run of the analysis tool (`src/ate.py`) against the Ghera ground truth (`data/ground-truth.csv`), produced by `python tools/evaluate.py --no-dynamic` on 2026-11-02 after the Phase 1 and Phase 2 detection improvements (P1-1 to P1-5, P2-1 to P2-5; listed below). The earlier fixes (Fix 1 to Fix 7, Fix A to Fix E) are included. The run was split into two halves with `--only` that ran side by side; `python tools/evaluate.py --rescore` then wrote `data/evaluation-results.csv` from the saved reports in `data/eval-tmp/`.
