@@ -1,0 +1,85 @@
+app,finding,component,issue,label,known_id,note
+DIVA,1,APICredsActivity,exported-no-permission,match,DV-09,
+DIVA,2,APICredsActivity,implicit-intent,match,DV-09,same exposure (VIEW_CREDS action)
+DIVA,3,APICreds2Activity,exported-no-permission,match,DV-10,
+DIVA,4,APICreds2Activity,implicit-intent,match,DV-10,same exposure (VIEW_CREDS2 action)
+DIVA,5,NotesProvider,exported-no-permission,match,DV-11,
+DIVA,6,(application),cleartext-http,fp,,not documented
+DIVA,7,(application),default-task-affinity,fp,,not documented
+DIVA,8,InputValidation2URISchemeActivity,js_enabled,located,DV-08,right WebView but names JS not the arbitrary/file URL load
+DIVA,9,InsecureDataStorage2Activity,sql_injection_raw,located,DV-04,right code but names SQL injection not plaintext storage
+DIVA,10,InsecureDataStorage4Activity,external_storage_io,match,DV-06,
+DIVA,11,SQLInjectionActivity,sql_injection_raw,match,DV-07,
+InsecureShop,1,ChooserActivity,exported-no-permission,match,IS-07,entry point of IS-07
+InsecureShop,2,ChooserActivity,implicit-intent,match,IS-07,entry point of IS-07
+InsecureShop,3,AboutUsActivity,exported-no-permission,match,IS-09,exported activity that registers CustomReceiver
+InsecureShop,4,WebViewActivity,exported-no-permission,located,IS-02,deep link entry; URL check not named
+InsecureShop,5,WebViewActivity,implicit-intent,located,IS-02,deep link entry; URL check not named
+InsecureShop,6,WebView2Activity,exported-no-permission,located,IS-05,entry point; extra_intent redirection not named
+InsecureShop,7,WebView2Activity,implicit-intent,located,IS-05,entry point; extra_intent redirection not named
+InsecureShop,8,ResultActivity,exported-no-permission,located,IS-14,entry point; setResult flaw not named
+InsecureShop,9,UploadService,exported-no-permission,match,IS-08,exported service of net.gotev uploadservice 3.2.3
+InsecureShop,10,InsecureShopProvider,weak-permission-protection,match,IS-15,
+InsecureShop,11,(application),default-task-affinity,fp,,not documented
+InsecureShop,12,(application),certificate_pinning_missing,fp,,not documented (README: no APIs used)
+InsecureShop,13,glide DefaultConnectivityMonitor,dynamic_receiver_no_permission,fp,,library code
+InsecureShop,14,AboutUsActivity,implicit_broadcast,match,IS-12,
+InsecureShop,15,ChooserActivity,directory_traversal,match,IS-07,
+InsecureShop,16,CustomReceiver,no_validity_check,match,IS-09,
+InsecureShop,17,PrivateActivity,js_enabled,match,IS-17,
+InsecureShop,18,PrivateActivity,webview_file_url_access,match,IS-17,
+InsecureShop,19,ProductAdapter,implicit_broadcast,match,IS-13,PRODUCT_DETAIL implicit broadcast with url
+InsecureShop,20,ProductListActivity,dynamic_receiver_no_permission,match,IS-13,unprotected receiver in the IS-13 chain
+InsecureShop,21,WebView2Activity,js_enabled,match,IS-17,
+InsecureShop,22,WebView2Activity,webview_file_url_access,match,IS-17,
+InsecureShop,23,WebViewActivity,js_enabled,match,IS-17,
+InsecureShop,24,WebViewActivity,webview_file_url_access,match,IS-17,
+InsecureShop,25,ProductDetailBroadCast,no_validity_check,match,IS-13,implicit WEBVIEW startActivity in the IS-13 chain
+InsecureShop,26,CustomWebViewClient,webview_ssl_proceed,match,IS-16,
+InsecureShop,27,uploadservice UploadNotificationConfig,pending_intent_empty,fp,,library code; not documented
+InsecureShop,28,uploadservice UploadServiceBroadcastReceiver,dynamic_receiver_no_permission,fp,,library code; not documented
+InsecureShop,29,uploadservice UploadTask,implicit_broadcast,fp,,library code; not documented
+BugBazaar,1,ExternalAuthLogin,exported-no-permission,match,BB-15,
+BugBazaar,2,ExternalAuthLogin,task-affinity-hijack,match,BB-39,singleTask exported activity
+BugBazaar,3,ReferUs,exported-no-permission,match,BB-15,
+BugBazaar,4,MyProfile,exported-no-permission,match,BB-15,
+BugBazaar,5,TermsAndConditionsActivity,exported-no-permission,match,BB-15,
+BugBazaar,6,Contact_us,exported-no-permission,match,BB-15,
+BugBazaar,7,Signin,exported-no-permission,match,BB-15,
+BugBazaar,8,Deeplink,exported-no-permission,match,BB-15,
+BugBazaar,9,razorpay CheckoutActivity,exported-no-permission,fp,,library code
+BugBazaar,10,SMSService,exported-no-permission,match,BB-19,
+BugBazaar,11,CustomBR,exported-no-permission,match,BB-17,
+BugBazaar,12,razorpay RzpTokenReceiver,exported-no-permission,fp,,library code
+BugBazaar,13,UserProfileProvider,exported-no-permission,match,BB-15,
+BugBazaar,14,AddressContentProvider,exported-no-permission,match,BB-23,
+BugBazaar,15,(application),cleartext-http,fp,,not documented
+BugBazaar,16,(application),default-task-affinity,match,BB-39,
+BugBazaar,17,Contact_us,js_enabled,match,BB-06,
+BugBazaar,18,Contact_us,webview_file_access,match,BB-06,
+BugBazaar,19,Contact_us,webview_file_url_access,match,BB-06,
+BugBazaar,20,ReferUs,fragment_injection,match,BB-20,
+BugBazaar,21,Deeplink,js_enabled,match,BB-06,
+BugBazaar,22,Deeplink,webview_file_url_access,match,BB-06,
+BugBazaar,23,TermsAndConditionsActivity,js_enabled,match,BB-05,WebView with addJavascriptInterface
+BugBazaar,24,TermsAndConditionsActivity,webview_file_url_access,match,BB-06,
+BugBazaar,25,AddressDatabaseHelper,sql_injection_raw,match,BB-22,
+BugBazaar,26,NotificationHelper,pending_intent_empty,match,BB-10,
+BugBazaar,27,CustomBR,no_validity_check,match,BB-18,
+BugBazaar,28,OrderHistoryDatabaseHelper,sql_injection_raw,match,BB-21,
+BugBazaar,29,DeviceDetails,unique_ids,fp,,not documented
+BugBazaar,30,NotificationUtils,pending_intent_empty,match,BB-10,second mutable PendingIntent in app code
+BugBazaar,31,checkWorker,dynamic_code_load,match,BB-11,
+BugBazaar,32,glide DefaultConnectivityMonitor,dynamic_receiver_no_permission,fp,,library code
+BugBazaar,33,evernote JobStorage$JobOpenHelper,sql_injection_raw,fp,,library code
+BugBazaar,34,evernote Device,dynamic_receiver_no_permission,fp,,library code
+BugBazaar,35,evernote TransientBundleCompat,pending_intent_mutable,fp,,library code
+BugBazaar,36,razorpay BaseUtils,js_enabled,fp,,library code
+BugBazaar,37,razorpay BaseUtils,unique_ids,fp,,library code
+BugBazaar,38,razorpay CheckoutPresenterImpl,dynamic_receiver_no_permission,fp,,library code
+BugBazaar,39,razorpay PrimaryWebViewClient,webview_override_allows_all,fp,,library code
+BugBazaar,40,razorpay SecondaryWebViewClient,webview_override_allows_all,fp,,library code
+BugBazaar,41,razorpay SmsReceiver,implicit_broadcast,fp,,library code
+BugBazaar,42,picasso Dispatcher$NetworkBroadcastReceiver,dynamic_receiver_no_permission,fp,,library code
+BugBazaar,43,SMSService,taint-flow,match,BB-19,intent extra to sendTextMessage
+BugBazaar,44,razorpay CheckoutPresenterImpl,taint-flow,fp,,library code
