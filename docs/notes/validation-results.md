@@ -82,3 +82,76 @@ would be 26 / 32 = 0.81.
   write. Missed: logging, hardcoded keys (Java and native), SharedPreferences, SQLite and temp-file
   storage, and the native buffer overflow. The WebView URL challenge and the SQLite storage
   challenge were located (JavaScript enabled, raw `execSQL`) but not named.
+
+## Comparison with the Ghera benchmark
+
+| Dataset | Scope | Precision | Recall |
+|---------|-------|----------:|-------:|
+| Ghera (53 benchmarks, standard mode) | one planted weakness per app, Benign and Secure pair | 0.79 | 0.98 |
+| BugBazaar | 42 documented vulnerabilities | 0.45 | 0.31 |
+| InsecureShop | 19 documented vulnerabilities | 0.57 | 0.42 |
+| DIVA | 13 documented vulnerabilities | 0.71 | 0.38 |
+| Validation overall | 74 documented vulnerabilities | 0.52 | 0.35 |
+
+The two sets of numbers are not measured the same way. On Ghera a false positive is a finding
+with the benchmark's own CWE on the Secure APK, and each app has one known weakness that the
+rules were written for. Here every finding that is not in the README list is a false positive,
+the apps bundle third-party libraries, and the lists include server-side and runtime items a
+static APK scan cannot see. Even so, the gap is large and shows where the rules do and do not
+generalize.
+
+### By vulnerability type
+
+The 74 known vulnerabilities grouped by type, next to the closest Ghera category:
+
+| Type | Known | Found (TP) | Validation recall | Closest Ghera category (recall) |
+|------|------:|-----------:|------------------:|--------------------------------|
+| Exported components and inter-app communication | 21 | 15 | 0.71 | ICC (0.94) |
+| SQL injection and code loading | 6 | 4 | 0.67 | Storage, SQL injection benchmarks (1.00) |
+| Vulnerable library component | 1 | 1 | 1.00 | none |
+| WebView (settings, URL and host checks, file theft) | 16 | 4 | 0.25 | Web (1.00) |
+| Storage and data leakage (logs, prefs, DB, clipboard, cache) | 15 | 2 | 0.13 | Storage, external storage benchmarks (1.00) |
+| Hardcoded credentials and keys | 4 | 0 | 0.00 | none |
+| Manifest flags and UI (debuggable, backup, tapjacking) | 3 | 0 | 0.00 | System (1.00) |
+| Server-side, runtime or app logic | 8 | 0 | 0.00 | none (out of static scope) |
+| **Total** | **74** | **26** | **0.35** | **0.98** |
+
+Leaving out the 8 server-side, runtime and logic items (Firestore rules, AWS Cognito, file
+upload, passcode and Frida bypass, runtime code modification, improper input validation,
+exception handling), recall is 26 / 66 = 0.39.
+
+### Caught well in both datasets
+
+- **Exported components and IPC.** Exported activities, services, receivers and providers
+  without permission, weak (normal-level) provider permissions, receivers that start activities
+  from untrusted intents, implicit broadcasts, mutable PendingIntents and fragment injection.
+  This is the strongest area on Ghera (ICC recall 0.94) and here (0.71).
+- **SQL injection** through `rawQuery` and `execSQL` with built strings (BugBazaar x2, DIVA).
+- **Dynamic code loading** with `DexClassLoader` (BugBazaar).
+- **WebView settings**: JavaScript, file access and universal file URL access, and
+  `onReceivedSslError` calling `proceed()`.
+- **External storage writes** (DIVA part 4).
+
+### Missed consistently
+
+- **Logic inside WebView and deep-link handlers.** The tool flags the exported deep-link
+  activity and its WebView settings but not the weak URL or host check (`contains`, `endsWith`,
+  path switch), open redirects, or intent redirection through an `extra_intent` or `setResult`.
+  Ghera's Web benchmarks test WebView settings and WebViewClient callbacks that accept every
+  URL, not checks done in an activity before `loadUrl`, so Web recall there (1.00) does not carry over.
+- **Sensitive data in logs, SharedPreferences, SQLite and temp files.** Ghera's Storage
+  benchmarks test external storage, directory traversal and SQL injection, which are caught;
+  plain credential storage in private files, which these apps document, has no rule.
+- **Hardcoded credentials and keys**, in Java and in native libraries.
+- **Manifest flags** `android:debuggable` and `android:allowBackup`, and tapjacking. BugBazaar
+  sets both flags; the manifest parser reads them but no rule reports them.
+- **FileProvider path configuration** (root path in `provider_paths.xml`) and the
+  `createPackageContext` code execution pattern.
+- **Native code** (DIVA buffer overflow, native hardcoded key): the tool reads smali only.
+
+### Precision
+
+On Ghera, 14 false positives remain, mostly findings that are true of the Secure app. Here
+18 of 24 false positives are in third-party library code, which Ghera apps do not contain.
+Excluding library packages, or reporting them in a separate section, would raise validation
+precision from 0.52 to 0.81, close to the Ghera figure.
