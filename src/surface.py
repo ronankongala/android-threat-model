@@ -56,10 +56,12 @@ kinds in CWE below, six can be seen in a manifest and have rules here:
                           a custom permission declared in this manifest whose
                           android:protectionLevel is normal (also when absent)
                           or dangerous, rather than signature or
-                          signatureOrSystem (confidence medium). Normal
-                          permissions are granted automatically to any app
-                          that asks for them; dangerous ones only need the
-                          user to accept. apktool's numeric levels (0 normal,
+                          signatureOrSystem. Normal permissions are granted
+                          automatically to any app that asks for them
+                          (confidence medium); dangerous ones need the user
+                          to accept a runtime prompt (confidence low, unless
+                          another protecting permission is normal). apktool's
+                          numeric levels (0 normal,
                           1 dangerous, 2 signature, 3 signatureOrSystem) are
                           read as well
 
@@ -585,7 +587,8 @@ def _manifest_findings(apk):
             findings.append(f)
         weak = _weak_permissions(comp, declared)
         if weak:
-            f = _finding(comp, 'weak-permission-protection', 'medium')
+            level = 'medium' if any(base == 'normal' for _, _, base in weak) else 'low'
+            f = _finding(comp, 'weak-permission-protection', level)
             f['evidence'] = _weak_permission_evidence(weak)
             findings.append(f)
         hit = _provider_path_permission(comp)
