@@ -49,6 +49,16 @@ Static evaluation (`python tools/evaluate.py --no-dynamic`, 2026-11-02) on the 5
 
 Final scores: precision 0.79 and recall 0.98, up from precision 0.53 and recall 0.77 two rounds earlier. A Secure APK counts as a false positive only when one of its findings has the benchmark's own CWE on the vulnerable component at medium or high confidence. Under the legacy rule (any finding on the Secure APK is a false positive) precision is 0.51. With a strict CWE match (no reviewed secondary CWEs) recall is 0.96. Most remaining false positives are findings that are true of the Secure app, whose fix is elsewhere ([docs/notes/false-positive-analysis.md](docs/notes/false-positive-analysis.md)). The differential mode (`--diff-mode`, only findings that differ between the Benign and Secure APK) scores precision 0.93 and recall 0.79; it needs the fixed app, so it is not comparable with the numbers above. Details and limits: [docs/notes/evaluation-report.md](docs/notes/evaluation-report.md).
 
+**Independent validation.** On three intentionally vulnerable apps with published vulnerability lists, not used to build the rules, the tool scores precision 0.52 and recall 0.35 overall (26 of 74 listed vulnerabilities found, 24 findings outside the lists):
+
+| App | Known | Findings | TP | FP | FN | Precision | Recall |
+|-----|------:|---------:|---:|---:|---:|----------:|-------:|
+| BugBazaar v1.2.1 | 42 | 44 | 13 | 16 | 29 | 0.45 | 0.31 |
+| InsecureShop v1.0 | 19 | 29 | 8 | 6 | 11 | 0.57 | 0.42 |
+| DIVA | 13 | 11 | 5 | 2 | 8 | 0.71 | 0.38 |
+
+Exported components and IPC carry over well (15 of 21 found); URL checks in WebView and deep-link handlers, plain credential storage, logging and hardcoded secrets are mostly missed, and 18 of the 24 false positives are in third-party library code. The Ghera numbers above therefore overstate performance on full apps. Details: [docs/notes/validation-results.md](docs/notes/validation-results.md).
+
 ## Screenshots
 
 **Exploit succeeds against Benign** (Malicious triggers an email with no permissions):
