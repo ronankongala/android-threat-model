@@ -1,0 +1,279 @@
+[
+  {
+    "component": "com.insecureshop.ChooserActivity",
+    "component_type": "activity",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "medium"
+  },
+  {
+    "component": "com.insecureshop.ChooserActivity",
+    "component_type": "activity",
+    "issue": "implicit-intent",
+    "cwe": "CWE-927",
+    "confidence": "low"
+  },
+  {
+    "component": "com.insecureshop.AboutUsActivity",
+    "component_type": "activity",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "com.insecureshop.WebViewActivity",
+    "component_type": "activity",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "medium"
+  },
+  {
+    "component": "com.insecureshop.WebViewActivity",
+    "component_type": "activity",
+    "issue": "implicit-intent",
+    "cwe": "CWE-927",
+    "confidence": "low"
+  },
+  {
+    "component": "com.insecureshop.WebView2Activity",
+    "component_type": "activity",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "medium"
+  },
+  {
+    "component": "com.insecureshop.WebView2Activity",
+    "component_type": "activity",
+    "issue": "implicit-intent",
+    "cwe": "CWE-927",
+    "confidence": "medium"
+  },
+  {
+    "component": "com.insecureshop.ResultActivity",
+    "component_type": "activity",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "net.gotev.uploadservice.UploadService",
+    "component_type": "service",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "com.insecureshop.contentProvider.InsecureShopProvider",
+    "component_type": "provider",
+    "issue": "weak-permission-protection",
+    "cwe": "CWE-926",
+    "confidence": "medium",
+    "evidence": "android:readPermission=\"com.insecureshop.permission.READ\" is declared with protectionLevel normal: normal permissions are granted automatically to any app that requests them"
+  },
+  {
+    "component": "(application)",
+    "component_type": "application",
+    "issue": "default-task-affinity",
+    "cwe": "CWE-1021",
+    "confidence": "low",
+    "evidence": "<application> has no android:taskAffinity and no activity sets one; launcher com.insecureshop.ProductListActivity uses the default affinity (the package name com.insecureshop)"
+  },
+  {
+    "component": "(application)",
+    "component_type": "application",
+    "file": "AndroidManifest.xml",
+    "line": 9,
+    "pattern": "certificate_pinning_missing",
+    "issue": "certificate_pinning_missing",
+    "cwe": "CWE-295",
+    "confidence": "high",
+    "evidence": "no network security config, usesCleartextTraffic =\"true\"; network call invoke-virtual {p1}, Ljava/net/URL;->openConnection()Ljava/net/URLConnection;"
+  },
+  {
+    "component": "com.bumptech.glide.manager.DefaultConnectivityMonitor",
+    "component_type": "class",
+    "file": "smali/com/bumptech/glide/manager/DefaultConnectivityMonitor.smali",
+    "line": 88,
+    "pattern": "dynamic_receiver_no_permission",
+    "issue": "dynamic_receiver_no_permission",
+    "cwe": "CWE-926",
+    "confidence": "high",
+    "evidence": "invoke-virtual {v0, v1, v2}, Landroid/content/Context;->registerReceiver(Landroid/content/BroadcastReceiver;Landroid/content/IntentFilter;)Landroid/content/Intent; [no broadcastPermission argument: any app can send this receiver a broadcast]"
+  },
+  {
+    "component": "com.insecureshop.AboutUsActivity",
+    "component_type": "class",
+    "file": "smali/com/insecureshop/AboutUsActivity.smali",
+    "line": 254,
+    "pattern": "implicit_broadcast",
+    "issue": "implicit_broadcast",
+    "cwe": "CWE-927",
+    "confidence": "medium",
+    "evidence": "invoke-virtual {p0, v2}, Lcom/insecureshop/AboutUsActivity;->sendBroadcast(Landroid/content/Intent;)V"
+  },
+  {
+    "component": "com.insecureshop.ChooserActivity",
+    "component_type": "class",
+    "file": "smali/com/insecureshop/ChooserActivity.smali",
+    "line": 496,
+    "pattern": "directory_traversal",
+    "issue": "directory_traversal",
+    "cwe": "CWE-22",
+    "confidence": "medium",
+    "evidence": "invoke-direct {v1, v2}, Ljava/io/File;-><init>(Ljava/lang/String;)V"
+  },
+  {
+    "component": "com.insecureshop.CustomReceiver",
+    "component_type": "class",
+    "file": "smali/com/insecureshop/CustomReceiver.smali",
+    "line": 123,
+    "pattern": "no_validity_check",
+    "issue": "no_validity_check",
+    "cwe": "CWE-925",
+    "confidence": "medium",
+    "evidence": "invoke-virtual {p1, v1}, Landroid/content/Context;->startActivity(Landroid/content/Intent;)V"
+  },
+  {
+    "component": "com.insecureshop.PrivateActivity",
+    "component_type": "class",
+    "file": "smali/com/insecureshop/PrivateActivity.smali",
+    "line": 187,
+    "pattern": "js_enabled",
+    "issue": "js_enabled",
+    "cwe": "CWE-749",
+    "confidence": "medium",
+    "evidence": "invoke-virtual {v1, v3}, Landroid/webkit/WebSettings;->setJavaScriptEnabled(Z)V"
+  },
+  {
+    "component": "com.insecureshop.PrivateActivity",
+    "component_type": "class",
+    "file": "smali/com/insecureshop/PrivateActivity.smali",
+    "line": 225,
+    "pattern": "webview_file_url_access",
+    "issue": "webview_file_url_access",
+    "cwe": "CWE-830",
+    "confidence": "high",
+    "evidence": "invoke-virtual {v1, v3}, Landroid/webkit/WebSettings;->setAllowUniversalAccessFromFileURLs(Z)V"
+  },
+  {
+    "component": "com.insecureshop.ProductAdapter$onBindViewHolder$3",
+    "component_type": "class",
+    "file": "smali/com/insecureshop/ProductAdapter$onBindViewHolder$3.smali",
+    "line": 92,
+    "pattern": "implicit_broadcast",
+    "issue": "implicit_broadcast",
+    "cwe": "CWE-927",
+    "confidence": "medium",
+    "evidence": "invoke-virtual {v1, v0}, Landroid/content/Context;->sendBroadcast(Landroid/content/Intent;)V"
+  },
+  {
+    "component": "com.insecureshop.ProductListActivity",
+    "component_type": "class",
+    "file": "smali/com/insecureshop/ProductListActivity.smali",
+    "line": 212,
+    "pattern": "dynamic_receiver_no_permission",
+    "issue": "dynamic_receiver_no_permission",
+    "cwe": "CWE-926",
+    "confidence": "high",
+    "evidence": "invoke-virtual {p0, v1, v0}, Lcom/insecureshop/ProductListActivity;->registerReceiver(Landroid/content/BroadcastReceiver;Landroid/content/IntentFilter;)Landroid/content/Intent; [no broadcastPermission argument: any app can send this receiver a broadcast]"
+  },
+  {
+    "component": "com.insecureshop.WebView2Activity",
+    "component_type": "class",
+    "file": "smali/com/insecureshop/WebView2Activity.smali",
+    "line": 218,
+    "pattern": "js_enabled",
+    "issue": "js_enabled",
+    "cwe": "CWE-749",
+    "confidence": "medium",
+    "evidence": "invoke-virtual {v2, v4}, Landroid/webkit/WebSettings;->setJavaScriptEnabled(Z)V"
+  },
+  {
+    "component": "com.insecureshop.WebView2Activity",
+    "component_type": "class",
+    "file": "smali/com/insecureshop/WebView2Activity.smali",
+    "line": 245,
+    "pattern": "webview_file_url_access",
+    "issue": "webview_file_url_access",
+    "cwe": "CWE-830",
+    "confidence": "high",
+    "evidence": "invoke-virtual {v2, v4}, Landroid/webkit/WebSettings;->setAllowUniversalAccessFromFileURLs(Z)V"
+  },
+  {
+    "component": "com.insecureshop.WebViewActivity",
+    "component_type": "class",
+    "file": "smali/com/insecureshop/WebViewActivity.smali",
+    "line": 191,
+    "pattern": "js_enabled",
+    "issue": "js_enabled",
+    "cwe": "CWE-749",
+    "confidence": "medium",
+    "evidence": "invoke-virtual {v1, v3}, Landroid/webkit/WebSettings;->setJavaScriptEnabled(Z)V"
+  },
+  {
+    "component": "com.insecureshop.WebViewActivity",
+    "component_type": "class",
+    "file": "smali/com/insecureshop/WebViewActivity.smali",
+    "line": 218,
+    "pattern": "webview_file_url_access",
+    "issue": "webview_file_url_access",
+    "cwe": "CWE-830",
+    "confidence": "high",
+    "evidence": "invoke-virtual {v1, v3}, Landroid/webkit/WebSettings;->setAllowUniversalAccessFromFileURLs(Z)V"
+  },
+  {
+    "component": "com.insecureshop.broadcast.ProductDetailBroadCast",
+    "component_type": "class",
+    "file": "smali/com/insecureshop/broadcast/ProductDetailBroadCast.smali",
+    "line": 72,
+    "pattern": "no_validity_check",
+    "issue": "no_validity_check",
+    "cwe": "CWE-925",
+    "confidence": "medium",
+    "evidence": "invoke-virtual {p1, v0}, Landroid/content/Context;->startActivity(Landroid/content/Intent;)V"
+  },
+  {
+    "component": "com.insecureshop.util.CustomWebViewClient",
+    "component_type": "class",
+    "file": "smali/com/insecureshop/util/CustomWebViewClient.smali",
+    "line": 60,
+    "pattern": "webview_ssl_proceed",
+    "issue": "webview_ssl_proceed",
+    "cwe": "CWE-295",
+    "confidence": "medium",
+    "evidence": "invoke-virtual {p2}, Landroid/webkit/SslErrorHandler;->proceed()V"
+  },
+  {
+    "component": "net.gotev.uploadservice.UploadNotificationConfig",
+    "component_type": "class",
+    "file": "smali/net/gotev/uploadservice/UploadNotificationConfig.smali",
+    "line": 509,
+    "pattern": "pending_intent_empty",
+    "issue": "pending_intent_empty",
+    "cwe": "CWE-927",
+    "confidence": "high",
+    "evidence": "invoke-static {p1, v0, v2, v1}, Landroid/app/PendingIntent;->getBroadcast(Landroid/content/Context;ILandroid/content/Intent;I)Landroid/app/PendingIntent;"
+  },
+  {
+    "component": "net.gotev.uploadservice.UploadServiceBroadcastReceiver",
+    "component_type": "class",
+    "file": "smali/net/gotev/uploadservice/UploadServiceBroadcastReceiver.smali",
+    "line": 227,
+    "pattern": "dynamic_receiver_no_permission",
+    "issue": "dynamic_receiver_no_permission",
+    "cwe": "CWE-926",
+    "confidence": "high",
+    "evidence": "invoke-virtual {p1, p0, v0}, Landroid/content/Context;->registerReceiver(Landroid/content/BroadcastReceiver;Landroid/content/IntentFilter;)Landroid/content/Intent; [no broadcastPermission argument: any app can send this receiver a broadcast]"
+  },
+  {
+    "component": "net.gotev.uploadservice.UploadTask",
+    "component_type": "class",
+    "file": "smali/net/gotev/uploadservice/UploadTask.smali",
+    "line": 263,
+    "pattern": "implicit_broadcast",
+    "issue": "implicit_broadcast",
+    "cwe": "CWE-927",
+    "confidence": "medium",
+    "evidence": "invoke-virtual {v0, v1}, Lnet/gotev/uploadservice/UploadService;->sendBroadcast(Landroid/content/Intent;)V"
+  }
+]

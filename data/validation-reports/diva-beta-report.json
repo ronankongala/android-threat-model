@@ -1,0 +1,97 @@
+[
+  {
+    "component": "jakhar.aseem.diva.APICredsActivity",
+    "component_type": "activity",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "medium"
+  },
+  {
+    "component": "jakhar.aseem.diva.APICredsActivity",
+    "component_type": "activity",
+    "issue": "implicit-intent",
+    "cwe": "CWE-927",
+    "confidence": "medium"
+  },
+  {
+    "component": "jakhar.aseem.diva.APICreds2Activity",
+    "component_type": "activity",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "medium"
+  },
+  {
+    "component": "jakhar.aseem.diva.APICreds2Activity",
+    "component_type": "activity",
+    "issue": "implicit-intent",
+    "cwe": "CWE-927",
+    "confidence": "medium"
+  },
+  {
+    "component": "jakhar.aseem.diva.NotesProvider",
+    "component_type": "provider",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high",
+    "evidence": "android:exported=\"true\" with no android:permission, android:readPermission or android:writePermission: any app can query and modify it"
+  },
+  {
+    "component": "(application)",
+    "component_type": "application",
+    "issue": "cleartext-http",
+    "cwe": "CWE-319",
+    "confidence": "low"
+  },
+  {
+    "component": "(application)",
+    "component_type": "application",
+    "issue": "default-task-affinity",
+    "cwe": "CWE-1021",
+    "confidence": "low",
+    "evidence": "<application> has no android:taskAffinity and no activity sets one; launcher jakhar.aseem.diva.MainActivity uses the default affinity (the package name jakhar.aseem.diva)"
+  },
+  {
+    "component": "jakhar.aseem.diva.InputValidation2URISchemeActivity",
+    "component_type": "class",
+    "file": "smali/jakhar/aseem/diva/InputValidation2URISchemeActivity.smali",
+    "line": 91,
+    "pattern": "js_enabled",
+    "issue": "js_enabled",
+    "cwe": "CWE-749",
+    "confidence": "medium",
+    "evidence": "invoke-virtual {v0, v2}, Landroid/webkit/WebSettings;->setJavaScriptEnabled(Z)V"
+  },
+  {
+    "component": "jakhar.aseem.diva.InsecureDataStorage2Activity",
+    "component_type": "class",
+    "file": "smali/jakhar/aseem/diva/InsecureDataStorage2Activity.smali",
+    "line": 177,
+    "pattern": "sql_injection_raw",
+    "issue": "sql_injection_raw",
+    "cwe": "CWE-89",
+    "confidence": "high",
+    "evidence": "invoke-virtual {v3, v4}, Landroid/database/sqlite/SQLiteDatabase;->execSQL(Ljava/lang/String;)V"
+  },
+  {
+    "component": "jakhar.aseem.diva.InsecureDataStorage4Activity",
+    "component_type": "class",
+    "file": "smali/jakhar/aseem/diva/InsecureDataStorage4Activity.smali",
+    "line": 111,
+    "pattern": "external_storage_io",
+    "issue": "external_storage_io",
+    "cwe": "CWE-922",
+    "confidence": "low",
+    "evidence": "invoke-direct {v1, v4}, Ljava/io/FileWriter;-><init>(Ljava/io/File;)V [hardcoded path \"/.uinfo.txt\" with no sensitive word]"
+  },
+  {
+    "component": "jakhar.aseem.diva.SQLInjectionActivity",
+    "component_type": "class",
+    "file": "smali/jakhar/aseem/diva/SQLInjectionActivity.smali",
+    "line": 183,
+    "pattern": "sql_injection_raw",
+    "issue": "sql_injection_raw",
+    "cwe": "CWE-89",
+    "confidence": "high",
+    "evidence": "invoke-virtual {v4, v5, v6}, Landroid/database/sqlite/SQLiteDatabase;->rawQuery(Ljava/lang/String;[Ljava/lang/String;)Landroid/database/Cursor;"
+  }
+]

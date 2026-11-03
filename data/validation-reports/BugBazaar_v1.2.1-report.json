@@ -1,0 +1,430 @@
+[
+  {
+    "component": "com.BugBazaar.ExternalAuthLogin",
+    "component_type": "activity",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "com.BugBazaar.ExternalAuthLogin",
+    "component_type": "activity",
+    "issue": "task-affinity-hijack",
+    "cwe": "CWE-1021",
+    "confidence": "medium",
+    "evidence": "android:launchMode=\"singleTask\""
+  },
+  {
+    "component": "com.BugBazaar.ui.ContactsPack.ReferUs",
+    "component_type": "activity",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "com.BugBazaar.ui.MyProfile",
+    "component_type": "activity",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "com.BugBazaar.ui.TermsAndConditionsActivity",
+    "component_type": "activity",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "com.BugBazaar.ui.Contact_us",
+    "component_type": "activity",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "com.BugBazaar.ui.Signin",
+    "component_type": "activity",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "com.BugBazaar.ui.Deeplink",
+    "component_type": "activity",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "com.razorpay.CheckoutActivity",
+    "component_type": "activity",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "com.BugBazaar.ui.components.SMSService",
+    "component_type": "service",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "com.BugBazaar.ui.components.CustomBR",
+    "component_type": "receiver",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "com.razorpay.RzpTokenReceiver",
+    "component_type": "receiver",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "com.BugBazaar.provider.UserProfileProvider",
+    "component_type": "provider",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "low",
+    "evidence": "android:exported=\"true\" with android:readPermission but no android:writePermission"
+  },
+  {
+    "component": "com.BugBazaar.ui.addresses.AddressContentProvider",
+    "component_type": "provider",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high",
+    "evidence": "android:exported=\"true\" with no android:permission, android:readPermission or android:writePermission: any app can query and modify it"
+  },
+  {
+    "component": "(application)",
+    "component_type": "application",
+    "issue": "cleartext-http",
+    "cwe": "CWE-319",
+    "confidence": "high"
+  },
+  {
+    "component": "(application)",
+    "component_type": "application",
+    "issue": "default-task-affinity",
+    "cwe": "CWE-1021",
+    "confidence": "low",
+    "evidence": "<application> has no android:taskAffinity and no activity sets one; launcher com.BugBazaar.ui.SplashActivity uses the default affinity (the package name com.BugBazaar)"
+  },
+  {
+    "component": "com.BugBazaar.ui.Contact_us",
+    "component_type": "class",
+    "file": "smali/com/BugBazaar/ui/Contact_us.smali",
+    "line": 83,
+    "pattern": "js_enabled",
+    "issue": "js_enabled",
+    "cwe": "CWE-749",
+    "confidence": "medium",
+    "evidence": "invoke-virtual {v0, v1}, Landroid/webkit/WebSettings;->setJavaScriptEnabled(Z)V"
+  },
+  {
+    "component": "com.BugBazaar.ui.Contact_us",
+    "component_type": "class",
+    "file": "smali/com/BugBazaar/ui/Contact_us.smali",
+    "line": 90,
+    "pattern": "webview_file_access",
+    "issue": "webview_file_access",
+    "cwe": "CWE-829",
+    "confidence": "medium",
+    "evidence": "invoke-virtual {v0, v1}, Landroid/webkit/WebSettings;->setAllowFileAccess(Z)V"
+  },
+  {
+    "component": "com.BugBazaar.ui.Contact_us",
+    "component_type": "class",
+    "file": "smali/com/BugBazaar/ui/Contact_us.smali",
+    "line": 104,
+    "pattern": "webview_file_url_access",
+    "issue": "webview_file_url_access",
+    "cwe": "CWE-830",
+    "confidence": "high",
+    "evidence": "invoke-virtual {v0, v1}, Landroid/webkit/WebSettings;->setAllowUniversalAccessFromFileURLs(Z)V"
+  },
+  {
+    "component": "com.BugBazaar.ui.ContactsPack.ReferUs",
+    "component_type": "class",
+    "file": "smali/com/BugBazaar/ui/ContactsPack/ReferUs.smali",
+    "line": 171,
+    "pattern": "fragment_injection",
+    "issue": "fragment_injection",
+    "cwe": "CWE-470",
+    "confidence": "medium",
+    "evidence": "invoke-static {p0, p1, v2}, Landroidx/fragment/app/Fragment;->instantiate(Landroid/content/Context;Ljava/lang/String;Landroid/os/Bundle;)Landroidx/fragment/app/Fragment;"
+  },
+  {
+    "component": "com.BugBazaar.ui.Deeplink",
+    "component_type": "class",
+    "file": "smali/com/BugBazaar/ui/Deeplink.smali",
+    "line": 48,
+    "pattern": "js_enabled",
+    "issue": "js_enabled",
+    "cwe": "CWE-749",
+    "confidence": "medium",
+    "evidence": "invoke-virtual {v0, v1}, Landroid/webkit/WebSettings;->setJavaScriptEnabled(Z)V"
+  },
+  {
+    "component": "com.BugBazaar.ui.Deeplink",
+    "component_type": "class",
+    "file": "smali/com/BugBazaar/ui/Deeplink.smali",
+    "line": 55,
+    "pattern": "webview_file_url_access",
+    "issue": "webview_file_url_access",
+    "cwe": "CWE-830",
+    "confidence": "high",
+    "evidence": "invoke-virtual {p1, v1}, Landroid/webkit/WebSettings;->setAllowUniversalAccessFromFileURLs(Z)V"
+  },
+  {
+    "component": "com.BugBazaar.ui.TermsAndConditionsActivity",
+    "component_type": "class",
+    "file": "smali/com/BugBazaar/ui/TermsAndConditionsActivity.smali",
+    "line": 78,
+    "pattern": "js_enabled",
+    "issue": "js_enabled",
+    "cwe": "CWE-749",
+    "confidence": "medium",
+    "evidence": "invoke-virtual {v0, v1}, Landroid/webkit/WebSettings;->setJavaScriptEnabled(Z)V"
+  },
+  {
+    "component": "com.BugBazaar.ui.TermsAndConditionsActivity",
+    "component_type": "class",
+    "file": "smali/com/BugBazaar/ui/TermsAndConditionsActivity.smali",
+    "line": 85,
+    "pattern": "webview_file_url_access",
+    "issue": "webview_file_url_access",
+    "cwe": "CWE-830",
+    "confidence": "high",
+    "evidence": "invoke-virtual {p1, v1}, Landroid/webkit/WebSettings;->setAllowUniversalAccessFromFileURLs(Z)V"
+  },
+  {
+    "component": "com.BugBazaar.ui.addresses.AddressDatabaseHelper",
+    "component_type": "class",
+    "file": "smali/com/BugBazaar/ui/addresses/AddressDatabaseHelper.smali",
+    "line": 399,
+    "pattern": "sql_injection_raw",
+    "issue": "sql_injection_raw",
+    "cwe": "CWE-89",
+    "confidence": "high",
+    "evidence": "invoke-virtual {v1, p1, v2}, Landroid/database/sqlite/SQLiteDatabase;->rawQuery(Ljava/lang/String;[Ljava/lang/String;)Landroid/database/Cursor;"
+  },
+  {
+    "component": "com.BugBazaar.ui.cart.NotificationHelper",
+    "component_type": "class",
+    "file": "smali/com/BugBazaar/ui/cart/NotificationHelper.smali",
+    "line": 90,
+    "pattern": "pending_intent_empty",
+    "issue": "pending_intent_empty",
+    "cwe": "CWE-927",
+    "confidence": "high",
+    "evidence": "invoke-static {p0, v2, v0, v1}, Landroid/app/PendingIntent;->getActivity(Landroid/content/Context;ILandroid/content/Intent;I)Landroid/app/PendingIntent;"
+  },
+  {
+    "component": "com.BugBazaar.ui.components.CustomBR",
+    "component_type": "class",
+    "file": "smali/com/BugBazaar/ui/components/CustomBR.smali",
+    "line": 52,
+    "pattern": "no_validity_check",
+    "issue": "no_validity_check",
+    "cwe": "CWE-925",
+    "confidence": "medium",
+    "evidence": "invoke-virtual {p1, p2}, Landroid/content/Context;->startActivity(Landroid/content/Intent;)V"
+  },
+  {
+    "component": "com.BugBazaar.ui.myorders.OrderHistoryDatabaseHelper",
+    "component_type": "class",
+    "file": "smali/com/BugBazaar/ui/myorders/OrderHistoryDatabaseHelper.smali",
+    "line": 512,
+    "pattern": "sql_injection_raw",
+    "issue": "sql_injection_raw",
+    "cwe": "CWE-89",
+    "confidence": "high",
+    "evidence": "invoke-virtual {v1, p1, v2}, Landroid/database/sqlite/SQLiteDatabase;->rawQuery(Ljava/lang/String;[Ljava/lang/String;)Landroid/database/Cursor;"
+  },
+  {
+    "component": "com.BugBazaar.utils.DeviceDetails",
+    "component_type": "class",
+    "file": "smali/com/BugBazaar/utils/DeviceDetails.smali",
+    "line": 89,
+    "pattern": "unique_ids",
+    "issue": "unique_ids",
+    "cwe": "CWE-359",
+    "confidence": "high",
+    "evidence": "invoke-static {p0, v0}, Landroid/provider/Settings$Secure;->getString(Landroid/content/ContentResolver;Ljava/lang/String;)Ljava/lang/String;"
+  },
+  {
+    "component": "com.BugBazaar.utils.NotificationUtils",
+    "component_type": "class",
+    "file": "smali/com/BugBazaar/utils/NotificationUtils.smali",
+    "line": 82,
+    "pattern": "pending_intent_empty",
+    "issue": "pending_intent_empty",
+    "cwe": "CWE-927",
+    "confidence": "high",
+    "evidence": "invoke-static {p0, v2, v0, v1}, Landroid/app/PendingIntent;->getActivity(Landroid/content/Context;ILandroid/content/Intent;I)Landroid/app/PendingIntent;"
+  },
+  {
+    "component": "com.BugBazaar.utils.checkWorker",
+    "component_type": "class",
+    "file": "smali/com/BugBazaar/utils/checkWorker.smali",
+    "line": 91,
+    "pattern": "dynamic_code_load",
+    "issue": "dynamic_code_load",
+    "cwe": "CWE-494",
+    "confidence": "high",
+    "evidence": "invoke-direct {v0, p1, v1, v4, v2}, Ldalvik/system/DexClassLoader;-><init>(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/ClassLoader;)V"
+  },
+  {
+    "component": "com.bumptech.glide.manager.DefaultConnectivityMonitor",
+    "component_type": "class",
+    "file": "smali/com/bumptech/glide/manager/DefaultConnectivityMonitor.smali",
+    "line": 84,
+    "pattern": "dynamic_receiver_no_permission",
+    "issue": "dynamic_receiver_no_permission",
+    "cwe": "CWE-926",
+    "confidence": "high",
+    "evidence": "invoke-virtual {v0, v1, v2}, Landroid/content/Context;->registerReceiver(Landroid/content/BroadcastReceiver;Landroid/content/IntentFilter;)Landroid/content/Intent; [no broadcastPermission argument: any app can send this receiver a broadcast]"
+  },
+  {
+    "component": "com.evernote.android.job.JobStorage$JobOpenHelper",
+    "component_type": "class",
+    "file": "smali/com/evernote/android/job/JobStorage$JobOpenHelper.smali",
+    "line": 129,
+    "pattern": "sql_injection_raw",
+    "issue": "sql_injection_raw",
+    "cwe": "CWE-89",
+    "confidence": "medium",
+    "evidence": "invoke-virtual {p1, v0}, Landroid/database/sqlite/SQLiteDatabase;->execSQL(Ljava/lang/String;)V"
+  },
+  {
+    "component": "com.evernote.android.job.util.Device",
+    "component_type": "class",
+    "file": "smali/com/evernote/android/job/util/Device.smali",
+    "line": 28,
+    "pattern": "dynamic_receiver_no_permission",
+    "issue": "dynamic_receiver_no_permission",
+    "cwe": "CWE-926",
+    "confidence": "high",
+    "evidence": "invoke-virtual {p0, v1, v0}, Landroid/content/Context;->registerReceiver(Landroid/content/BroadcastReceiver;Landroid/content/IntentFilter;)Landroid/content/Intent; [no broadcastPermission argument: any app can send this receiver a broadcast]"
+  },
+  {
+    "component": "com.evernote.android.job.v21.TransientBundleCompat",
+    "component_type": "class",
+    "file": "smali/com/evernote/android/job/v21/TransientBundleCompat.smali",
+    "line": 56,
+    "pattern": "pending_intent_mutable",
+    "issue": "pending_intent_mutable",
+    "cwe": "CWE-927",
+    "confidence": "high",
+    "evidence": "invoke-static {p0, p1, p2, v0}, Landroid/app/PendingIntent;->getService(Landroid/content/Context;ILandroid/content/Intent;I)Landroid/app/PendingIntent; [flags 0x20000000: neither FLAG_IMMUTABLE nor FLAG_MUTABLE; required for apps targeting API 31+ (targetSdkVersion 32), a mutable PendingIntent lets the receiving app fill in its Intent]"
+  },
+  {
+    "component": "com.razorpay.BaseUtils",
+    "component_type": "class",
+    "file": "smali_classes2/com/razorpay/BaseUtils.smali",
+    "line": 483,
+    "pattern": "js_enabled",
+    "issue": "js_enabled",
+    "cwe": "CWE-749",
+    "confidence": "medium",
+    "evidence": "invoke-virtual {p0, v0}, Landroid/webkit/WebSettings;->setJavaScriptEnabled(Z)V"
+  },
+  {
+    "component": "com.razorpay.BaseUtils",
+    "component_type": "class",
+    "file": "smali_classes2/com/razorpay/BaseUtils.smali",
+    "line": 808,
+    "pattern": "unique_ids",
+    "issue": "unique_ids",
+    "cwe": "CWE-359",
+    "confidence": "high",
+    "evidence": "invoke-static {p0, v0}, Landroid/provider/Settings$Secure;->getString(Landroid/content/ContentResolver;Ljava/lang/String;)Ljava/lang/String;"
+  },
+  {
+    "component": "com.razorpay.CheckoutPresenterImpl",
+    "component_type": "class",
+    "file": "smali_classes2/com/razorpay/CheckoutPresenterImpl.smali",
+    "line": 874,
+    "pattern": "dynamic_receiver_no_permission",
+    "issue": "dynamic_receiver_no_permission",
+    "cwe": "CWE-926",
+    "confidence": "high",
+    "evidence": "invoke-virtual {v1, v2, v0}, Landroid/app/Activity;->registerReceiver(Landroid/content/BroadcastReceiver;Landroid/content/IntentFilter;)Landroid/content/Intent; [no broadcastPermission argument: any app can send this receiver a broadcast]"
+  },
+  {
+    "component": "com.razorpay.PrimaryWebViewClient",
+    "component_type": "class",
+    "file": "smali_classes2/com/razorpay/PrimaryWebViewClient.smali",
+    "line": 113,
+    "pattern": "webview_override_allows_all",
+    "issue": "webview_override_allows_all",
+    "cwe": "CWE-829",
+    "confidence": "low",
+    "evidence": ".method public shouldOverrideUrlLoading(Landroid/webkit/WebView;Ljava/lang/String;)Z"
+  },
+  {
+    "component": "com.razorpay.SecondaryWebViewClient",
+    "component_type": "class",
+    "file": "smali_classes2/com/razorpay/SecondaryWebViewClient.smali",
+    "line": 67,
+    "pattern": "webview_override_allows_all",
+    "issue": "webview_override_allows_all",
+    "cwe": "CWE-829",
+    "confidence": "low",
+    "evidence": ".method public shouldOverrideUrlLoading(Landroid/webkit/WebView;Ljava/lang/String;)Z"
+  },
+  {
+    "component": "com.razorpay.SmsReceiver",
+    "component_type": "class",
+    "file": "smali_classes2/com/razorpay/SmsReceiver.smali",
+    "line": 110,
+    "pattern": "implicit_broadcast",
+    "issue": "implicit_broadcast",
+    "cwe": "CWE-927",
+    "confidence": "medium",
+    "evidence": "invoke-virtual {p1, v2}, Landroid/content/Context;->sendBroadcast(Landroid/content/Intent;)V"
+  },
+  {
+    "component": "com.squareup.picasso.Dispatcher$NetworkBroadcastReceiver",
+    "component_type": "class",
+    "file": "smali_classes2/com/squareup/picasso/Dispatcher$NetworkBroadcastReceiver.smali",
+    "line": 151,
+    "pattern": "dynamic_receiver_no_permission",
+    "issue": "dynamic_receiver_no_permission",
+    "cwe": "CWE-926",
+    "confidence": "high",
+    "evidence": "invoke-virtual {v1, p0, v0}, Landroid/content/Context;->registerReceiver(Landroid/content/BroadcastReceiver;Landroid/content/IntentFilter;)Landroid/content/Intent; [no broadcastPermission argument: any app can send this receiver a broadcast]"
+  },
+  {
+    "component": "com.BugBazaar.ui.components.SMSService",
+    "component_type": "class",
+    "issue": "taint-flow",
+    "pattern": "taint:getStringExtra->sendTextMessage",
+    "cwe": "CWE-200",
+    "confidence": "high",
+    "file": "smali/com/BugBazaar/ui/components/SMSService.smali",
+    "line": 55,
+    "evidence": "source L32: invoke-virtual {p1, p2}, Landroid/content/Intent;->getStringExtra(Ljava/lang/String;)Ljava/lang/String; | sink L55: invoke-virtual/range {v0 .. v5}, Landroid/telephony/SmsManager;->sendTextMessage(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Landroid/app/PendingIntent;Landroid/app/PendingIntent;)V",
+    "source_line": 32,
+    "sink_line": 55
+  },
+  {
+    "component": "com.razorpay.CheckoutPresenterImpl",
+    "component_type": "class",
+    "issue": "taint-flow",
+    "pattern": "taint:getData->startActivity",
+    "cwe": "CWE-927",
+    "confidence": "high",
+    "file": "smali_classes2/com/razorpay/CheckoutPresenterImpl.smali",
+    "line": 2266,
+    "evidence": "source L2184: invoke-virtual {p3}, Landroid/content/Intent;->getData()Landroid/net/Uri; | sink L2266: invoke-virtual {p1, p2}, Landroid/app/Activity;->startActivity(Landroid/content/Intent;)V",
+    "source_line": 2184,
+    "sink_line": 2266
+  }
+]
