@@ -1,0 +1,98 @@
+[
+  {
+    "component": "de.dennisguse.opentracks.publicapi.StartRecording",
+    "component_type": "activity",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "de.dennisguse.opentracks.publicapi.StopRecording",
+    "component_type": "activity",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "de.dennisguse.opentracks.publicapi.CreateMarker",
+    "component_type": "activity",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "de.dennisguse.opentracks.HealthConnectPermissionsRationaleActivity",
+    "component_type": "activity",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "de.dennisguse.opentracks.io.file.importer.ImportActivity",
+    "component_type": "activity",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "de.dennisguse.opentracks.publicapi.ShowMarkerActivity",
+    "component_type": "activity",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "de.dennisguse.opentracks.publicapi.CreateMarkerActivity",
+    "component_type": "activity",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "de.dennisguse.opentracks.ShowErrorActivity",
+    "component_type": "activity",
+    "issue": "task-affinity-hijack",
+    "cwe": "CWE-1021",
+    "confidence": "medium",
+    "evidence": "android:launchMode=\"singleInstance\""
+  },
+  {
+    "component": "androidx.health.platform.client.impl.sdkservice.HealthDataSdkService",
+    "component_type": "service",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "(application)",
+    "component_type": "application",
+    "issue": "default-task-affinity",
+    "cwe": "CWE-1021",
+    "confidence": "low",
+    "evidence": "<application> has no android:taskAffinity and no activity sets one; launcher de.dennisguse.opentracks.introduction.IntroductionActivity uses the default affinity (the package name de.dennisguse.opentracks)"
+  },
+  {
+    "component": "de.dennisguse.opentracks.data.CustomContentProvider",
+    "component_type": "class",
+    "file": "smali_classes3/de/dennisguse/opentracks/data/CustomContentProvider.smali",
+    "line": 884,
+    "pattern": "sql_injection_raw",
+    "issue": "sql_injection_raw",
+    "cwe": "CWE-89",
+    "confidence": "medium",
+    "evidence": "invoke-virtual {p0, p1}, Landroid/database/sqlite/SQLiteDatabase;->execSQL(Ljava/lang/String;)V"
+  },
+  {
+    "component": "de.dennisguse.opentracks.ShowErrorActivity",
+    "component_type": "class",
+    "issue": "taint-flow",
+    "pattern": "taint:getText->startActivity",
+    "cwe": "CWE-927",
+    "confidence": "high",
+    "file": "smali_classes3/de/dennisguse/opentracks/ShowErrorActivity.smali",
+    "line": 89,
+    "evidence": "source L75: invoke-virtual {v1}, Landroid/widget/TextView;->getText()Ljava/lang/CharSequence; | sink L89: invoke-virtual {p0, v0}, Lde/dennisguse/opentracks/ShowErrorActivity;->startActivity(Landroid/content/Intent;)V",
+    "source_line": 75,
+    "sink_line": 89
+  }
+]

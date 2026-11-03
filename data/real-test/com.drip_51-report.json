@@ -1,0 +1,161 @@
+[
+  {
+    "component": "com.drip.MainActivity",
+    "component_type": "activity",
+    "issue": "task-affinity-hijack",
+    "cwe": "CWE-1021",
+    "confidence": "medium",
+    "evidence": "android:launchMode=\"singleTask\""
+  },
+  {
+    "component": "(application)",
+    "component_type": "application",
+    "issue": "default-task-affinity",
+    "cwe": "CWE-1021",
+    "confidence": "low",
+    "evidence": "<application> has no android:taskAffinity and no activity sets one; launcher com.drip.MainActivity uses the default affinity (the package name com.drip)"
+  },
+  {
+    "component": "(application)",
+    "component_type": "application",
+    "file": "AndroidManifest.xml",
+    "line": 28,
+    "pattern": "certificate_pinning_missing",
+    "issue": "certificate_pinning_missing",
+    "cwe": "CWE-295",
+    "confidence": "high",
+    "evidence": "no network security config, usesCleartextTraffic unset; network call invoke-interface {v0}, Lokhttp3/Call;->cancel()V"
+  },
+  {
+    "component": "cl.json.ShareFile",
+    "component_type": "class",
+    "file": "smali/cl/json/ShareFile.smali",
+    "line": 499,
+    "pattern": "external_storage_io",
+    "issue": "external_storage_io",
+    "cwe": "CWE-922",
+    "confidence": "medium",
+    "evidence": "invoke-direct {v0, v4}, Ljava/io/FileOutputStream;-><init>(Ljava/io/File;)V"
+  },
+  {
+    "component": "cl.json.ShareFiles",
+    "component_type": "class",
+    "file": "smali/cl/json/ShareFiles.smali",
+    "line": 690,
+    "pattern": "external_storage_io",
+    "issue": "external_storage_io",
+    "cwe": "CWE-922",
+    "confidence": "medium",
+    "evidence": "invoke-direct {v5, v6}, Ljava/io/FileOutputStream;-><init>(Ljava/io/File;)V"
+  },
+  {
+    "component": "cl.json.social.TargetChosenReceiver",
+    "component_type": "class",
+    "file": "smali/cl/json/social/TargetChosenReceiver.smali",
+    "line": 119,
+    "pattern": "dynamic_receiver_no_permission",
+    "issue": "dynamic_receiver_no_permission",
+    "cwe": "CWE-926",
+    "confidence": "high",
+    "evidence": "invoke-virtual {v2, v3, v4}, Landroid/content/Context;->registerReceiver(Landroid/content/BroadcastReceiver;Landroid/content/IntentFilter;)Landroid/content/Intent; [no broadcastPermission argument: any app can send this receiver a broadcast]"
+  },
+  {
+    "component": "cl.json.social.TargetChosenReceiver",
+    "component_type": "class",
+    "file": "smali/cl/json/social/TargetChosenReceiver.smali",
+    "line": 176,
+    "pattern": "pending_intent_mutable",
+    "issue": "pending_intent_mutable",
+    "cwe": "CWE-927",
+    "confidence": "high",
+    "evidence": "invoke-static {p0, v0, v1, v2}, Landroid/app/PendingIntent;->getBroadcast(Landroid/content/Context;ILandroid/content/Intent;I)Landroid/app/PendingIntent; [flags 0x50000000: neither FLAG_IMMUTABLE nor FLAG_MUTABLE; required for apps targeting API 31+ (targetSdkVersion 34), a mutable PendingIntent lets the receiving app fill in its Intent]"
+  },
+  {
+    "component": "com.dieam.reactnativepushnotification.modules.RNPushNotificationActions",
+    "component_type": "class",
+    "file": "smali/com/dieam/reactnativepushnotification/modules/RNPushNotificationActions.smali",
+    "line": 187,
+    "pattern": "implicit_broadcast",
+    "issue": "implicit_broadcast",
+    "cwe": "CWE-927",
+    "confidence": "medium",
+    "evidence": "invoke-virtual {p1, p2}, Landroid/content/Context;->sendBroadcast(Landroid/content/Intent;)V"
+  },
+  {
+    "component": "com.dieam.reactnativepushnotification.modules.RNPushNotificationHelper",
+    "component_type": "class",
+    "file": "smali/com/dieam/reactnativepushnotification/modules/RNPushNotificationHelper.smali",
+    "line": 720,
+    "pattern": "pending_intent_mutable",
+    "issue": "pending_intent_mutable",
+    "cwe": "CWE-927",
+    "confidence": "high",
+    "evidence": "invoke-static {v2, v0, v1, p1}, Landroid/app/PendingIntent;->getBroadcast(Landroid/content/Context;ILandroid/content/Intent;I)Landroid/app/PendingIntent; [flags 0x8000000: neither FLAG_IMMUTABLE nor FLAG_MUTABLE; required for apps targeting API 31+ (targetSdkVersion 34), a mutable PendingIntent lets the receiving app fill in its Intent]"
+  },
+  {
+    "component": "com.drip.MainApplication",
+    "component_type": "class",
+    "file": "smali/com/drip/MainApplication.smali",
+    "line": 102,
+    "pattern": "dynamic_receiver_no_permission",
+    "issue": "dynamic_receiver_no_permission",
+    "cwe": "CWE-926",
+    "confidence": "high",
+    "evidence": "invoke-super {p0, p1, p2, v0}, Landroid/app/Application;->registerReceiver(Landroid/content/BroadcastReceiver;Landroid/content/IntentFilter;I)Landroid/content/Intent; [no broadcastPermission argument: any app can send this receiver a broadcast]"
+  },
+  {
+    "component": "com.facebook.react.devsupport.DevSettingsActivity",
+    "component_type": "class",
+    "file": "smali/com/facebook/react/devsupport/DevSettingsActivity.smali",
+    "line": 2,
+    "pattern": "fragment_injection",
+    "issue": "fragment_injection",
+    "cwe": "CWE-470",
+    "confidence": "medium",
+    "evidence": ".super Landroid/preference/PreferenceActivity;"
+  },
+  {
+    "component": "com.facebook.react.devsupport.DevSupportManagerBase",
+    "component_type": "class",
+    "file": "smali/com/facebook/react/devsupport/DevSupportManagerBase.smali",
+    "line": 905,
+    "pattern": "dynamic_receiver_no_permission",
+    "issue": "dynamic_receiver_no_permission",
+    "cwe": "CWE-926",
+    "confidence": "high",
+    "evidence": "invoke-virtual {v2, v3, v0}, Landroid/content/Context;->registerReceiver(Landroid/content/BroadcastReceiver;Landroid/content/IntentFilter;)Landroid/content/Intent; [no broadcastPermission argument: any app can send this receiver a broadcast]"
+  },
+  {
+    "component": "com.facebook.react.modules.systeminfo.AndroidInfoModule",
+    "component_type": "class",
+    "file": "smali/com/facebook/react/modules/systeminfo/AndroidInfoModule.smali",
+    "line": 149,
+    "pattern": "unique_ids",
+    "issue": "unique_ids",
+    "cwe": "CWE-359",
+    "confidence": "high",
+    "evidence": "invoke-static {v0, v1}, Landroid/provider/Settings$Secure;->getString(Landroid/content/ContentResolver;Ljava/lang/String;)Ljava/lang/String;"
+  },
+  {
+    "component": "me.leolin.shortcutbadger.impl.SonyHomeBadger",
+    "component_type": "class",
+    "file": "smali/me/leolin/shortcutbadger/impl/SonyHomeBadger.smali",
+    "line": 147,
+    "pattern": "implicit_broadcast",
+    "issue": "implicit_broadcast",
+    "cwe": "CWE-927",
+    "confidence": "medium",
+    "evidence": "invoke-virtual {p0, v0}, Landroid/content/Context;->sendBroadcast(Landroid/content/Intent;)V"
+  },
+  {
+    "component": "me.leolin.shortcutbadger.impl.VivoHomeBadger",
+    "component_type": "class",
+    "file": "smali/me/leolin/shortcutbadger/impl/VivoHomeBadger.smali",
+    "line": 60,
+    "pattern": "implicit_broadcast",
+    "issue": "implicit_broadcast",
+    "cwe": "CWE-927",
+    "confidence": "medium",
+    "evidence": "invoke-virtual {p1, v0}, Landroid/content/Context;->sendBroadcast(Landroid/content/Intent;)V"
+  }
+]

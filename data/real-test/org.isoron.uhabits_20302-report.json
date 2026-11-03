@@ -1,0 +1,119 @@
+[
+  {
+    "component": "org.isoron.uhabits.activities.habits.edit.EditHabitActivity",
+    "component_type": "activity",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "org.isoron.uhabits.activities.habits.list.ListHabitsActivity",
+    "component_type": "activity",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "org.isoron.uhabits.widgets.activities.HabitPickerDialog",
+    "component_type": "activity",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "org.isoron.uhabits.widgets.activities.BooleanHabitPickerDialog",
+    "component_type": "activity",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "org.isoron.uhabits.widgets.activities.NumericalHabitPickerDialog",
+    "component_type": "activity",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "org.isoron.uhabits.notifications.SnoozeDelayPickerActivity",
+    "component_type": "activity",
+    "issue": "task-affinity-hijack",
+    "cwe": "CWE-1021",
+    "confidence": "medium",
+    "evidence": "android:launchMode=\"singleInstance\""
+  },
+  {
+    "component": "org.isoron.uhabits.automation.EditSettingActivity",
+    "component_type": "activity",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "org.isoron.uhabits.widgets.CheckmarkWidgetProvider",
+    "component_type": "receiver",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "org.isoron.uhabits.widgets.HistoryWidgetProvider",
+    "component_type": "receiver",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "org.isoron.uhabits.widgets.ScoreWidgetProvider",
+    "component_type": "receiver",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "org.isoron.uhabits.widgets.StreakWidgetProvider",
+    "component_type": "receiver",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "org.isoron.uhabits.widgets.FrequencyWidgetProvider",
+    "component_type": "receiver",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "org.isoron.uhabits.widgets.TargetWidgetProvider",
+    "component_type": "receiver",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "org.isoron.uhabits.receivers.ReminderReceiver",
+    "component_type": "receiver",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "org.isoron.uhabits.automation.FireSettingReceiver",
+    "component_type": "receiver",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "org.isoron.uhabits.receivers.ReminderController",
+    "component_type": "class",
+    "file": "smali/org/isoron/uhabits/receivers/ReminderController.smali",
+    "line": 106,
+    "pattern": "implicit_broadcast",
+    "issue": "implicit_broadcast",
+    "cwe": "CWE-927",
+    "confidence": "medium",
+    "evidence": "invoke-virtual {p2, v0}, Landroid/content/Context;->sendBroadcast(Landroid/content/Intent;)V"
+  }
+]

@@ -1,0 +1,120 @@
+[
+  {
+    "component": "net.gsantner.markor.activity.SettingsActivity",
+    "component_type": "activity",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "other.writeily.widget.WrWidgetConfigure",
+    "component_type": "activity",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "net.gsantner.markor.activity.DocumentActivity",
+    "component_type": "activity",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "net.gsantner.markor.AliasDocumentProcessText",
+    "component_type": "activity-alias",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "other.writeily.widget.WrMarkorWidgetProvider",
+    "component_type": "receiver",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "net.gsantner.markor.widget.TodoWidgetProvider",
+    "component_type": "receiver",
+    "issue": "exported-no-permission",
+    "cwe": "CWE-926",
+    "confidence": "high"
+  },
+  {
+    "component": "(application)",
+    "component_type": "application",
+    "issue": "default-task-affinity",
+    "cwe": "CWE-1021",
+    "confidence": "low",
+    "evidence": "<application> has no android:taskAffinity and no activity sets one; launcher net.gsantner.markor.activity.MainActivity uses the default affinity (the package name net.gsantner.markor)"
+  },
+  {
+    "component": "(application)",
+    "component_type": "application",
+    "file": "AndroidManifest.xml",
+    "line": 35,
+    "pattern": "certificate_pinning_missing",
+    "issue": "certificate_pinning_missing",
+    "cwe": "CWE-295",
+    "confidence": "high",
+    "evidence": "no network security config, usesCleartextTraffic =\"true\"; network call invoke-virtual {p0}, Ljava/net/URL;->openConnection()Ljava/net/URLConnection;"
+  },
+  {
+    "component": "net.gsantner.markor.activity.DocumentEditAndViewFragment",
+    "component_type": "class",
+    "file": "smali/net/gsantner/markor/activity/DocumentEditAndViewFragment.smali",
+    "line": 7330,
+    "pattern": "js_enabled",
+    "issue": "js_enabled",
+    "cwe": "CWE-749",
+    "confidence": "medium",
+    "evidence": "invoke-virtual {v1, v3}, Landroid/webkit/WebSettings;->setJavaScriptEnabled(Z)V"
+  },
+  {
+    "component": "net.gsantner.markor.activity.DocumentEditAndViewFragment",
+    "component_type": "class",
+    "file": "smali/net/gsantner/markor/activity/DocumentEditAndViewFragment.smali",
+    "line": 7345,
+    "pattern": "webview_file_access",
+    "issue": "webview_file_access",
+    "cwe": "CWE-829",
+    "confidence": "medium",
+    "evidence": "invoke-virtual {v1, v3}, Landroid/webkit/WebSettings;->setAllowFileAccess(Z)V"
+  },
+  {
+    "component": "net.gsantner.opoc.util.GsContextUtils",
+    "component_type": "class",
+    "file": "smali/net/gsantner/opoc/util/GsContextUtils.smali",
+    "line": 2048,
+    "pattern": "directory_traversal",
+    "issue": "directory_traversal",
+    "cwe": "CWE-22",
+    "confidence": "medium",
+    "evidence": "invoke-direct {v1, v3, p0}, Ljava/io/File;-><init>(Ljava/io/File;Ljava/lang/String;)V"
+  },
+  {
+    "component": "net.gsantner.opoc.util.GsContextUtils",
+    "component_type": "class",
+    "file": "smali/net/gsantner/opoc/util/GsContextUtils.smali",
+    "line": 13910,
+    "pattern": "pending_intent_mutable",
+    "issue": "pending_intent_mutable",
+    "cwe": "CWE-927",
+    "confidence": "high",
+    "evidence": "invoke-static {p1, v1, v0, p2}, Landroid/app/PendingIntent;->getActivity(Landroid/content/Context;ILandroid/content/Intent;I)Landroid/app/PendingIntent; [flags 0x10000000: neither FLAG_IMMUTABLE nor FLAG_MUTABLE; required for apps targeting API 31+ (targetSdkVersion 35), a mutable PendingIntent lets the receiving app fill in its Intent]"
+  },
+  {
+    "component": "net.gsantner.markor.frontend.AttachLinkOrFileDialog$$ExternalSyntheticLambda10",
+    "component_type": "class",
+    "issue": "taint-flow",
+    "pattern": "taint:getText->File.<init>",
+    "cwe": "CWE-22",
+    "confidence": "low",
+    "file": "smali/net/gsantner/markor/frontend/AttachLinkOrFileDialog$$ExternalSyntheticLambda10.smali",
+    "line": 108,
+    "evidence": "source L133: invoke-virtual {p2}, Landroid/widget/EditText;->getText()Landroid/text/Editable; | sink L108: invoke-direct {v0, p1}, Ljava/io/File;-><init>(Ljava/lang/String;)V [validated on the path: in a caller]",
+    "source_line": 133,
+    "sink_line": 108
+  }
+]
